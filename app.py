@@ -1,44 +1,21 @@
 import streamlit as st
 import pandas as pd
+import datetime as dt
 
 st.set_page_config(page_title="Pilot Expert Pro", layout="wide")
 
-# --- INITIALISATION SÉCURISÉE ---
-# On définit tous les paramètres par défaut pour éviter le KeyError
-default_config = {
-    'cours_max': 5, 
-    'J1': 1, 'J3': 3, 'J7': 7, 
-    'seuils': {'J1': 10, 'J3': 12, 'J7': 14}
-}
-
-if 'dossiers' not in st.session_state or not isinstance(st.session_state.dossiers, dict):
+# --- INITIALISATION ---
+if 'dossiers' not in st.session_state:
     st.session_state.dossiers = {"PASS": ["UE1", "UE2"]}
-    st.session_state.data = pd.DataFrame(columns=['Dossier', 'Matiere', 'Chapitre', 'Note'])
-    st.session_state.config = default_config
-else:
-    # On complète la configuration si certaines clés manquent (pour ne pas tout supprimer)
-    for key, value in default_config.items():
-        if key not in st.session_state.config:
-            st.session_state.config[key] = value
+    st.session_state.data = pd.DataFrame(columns=['Dossier', 'Matiere', 'Chapitre', 'Type', 'Date', 'Note'])
+    # Intervalles complets de la méthode DJ
+    st.session_state.intervalles = [1, 3, 7, 14, 30, 60, 90]
 
 # --- SIDEBAR ---
 st.sidebar.title("⚙️ Pilot Expert")
-with st.sidebar.expander("🛠️ Paramètres"):
-    st.session_state.config['cours_max'] = st.number_input("Max cours/jour", 1, 20, st.session_state.config['cours_max'])
-    st.write("---")
-    st.write("**Périodicité (Jours)**")
-    for j in ['J1', 'J3', 'J7']:
-        # Vérification pour éviter le KeyError
-        if j not in st.session_state.config: st.session_state.config[j] = default_config[j]
-        st.session_state.config[j] = st.number_input(f"Délai {j}", 1, 30, st.session_state.config[j])
-    
-    st.write("**Seuils (Notes)**")
-    for j in ['J1', 'J3', 'J7']:
-        if 'seuils' not in st.session_state.config: st.session_state.config['seuils'] = default_config['seuils']
-        st.session_state.config['seuils'][j] = st.slider(f"Seuil {j}", 0, 20, st.session_state.config['seuils'][j])
 
-st.sidebar.write("---")
-new_dos = st.sidebar.text_input("Créer Dossier", key="new_dos")
+# Gestion Dossiers
+new_dos = st.sidebar.text_input("Créer Dossier (ex: BAC)")
 if st.sidebar.button("Créer Dossier") and new_dos:
     if new_dos not in st.session_state.dossiers:
         st.session_state.dossiers[new_dos] = []
@@ -46,58 +23,67 @@ if st.sidebar.button("Créer Dossier") and new_dos:
 
 choix_dos = st.sidebar.selectbox("Choisir Dossier", list(st.session_state.dossiers.keys()))
 
+# Gestion Matières
 new_mat = st.sidebar.text_input("Ajouter Matière", key="new_mat")
 if st.sidebar.button("Ajouter Matière") and new_mat:
     st.session_state.dossiers[choix_dos].append(new_mat)
     st.rerun()
 
-# --- NAVIGATION ---
-page = st.sidebar.radio("Navigation", ["Dashboard", "Planning & Notes", "Suivi Graphique"])
+st.sidebar.write("---")
+page = st.sidebar.radio("Navigation", ["Dashboard", "Planning Hebdo & Saisie"])
+
+# --- LOGIQUE ---
 df = st.session_state.data[st.session_state.data['Dossier'] == choix_dos]
 
-# --- PAGES ---
 if page == "Dashboard":
-    st.title(f"🎯 Dashboard : {choix_dos}")
+    st.title(f"🎯 Pilotage : {choix_dos}")
     c1, c2, c3 = st.columns(3)
     c1.metric("Matières", len(st.session_state.dossiers[choix_dos]))
-    c2.metric("Chapitres", len(df))
+    c2.metric("Chapitres en cours", len(df['Chapitre'].unique()))
     c3.metric("Moyenne", f"{df[df['Note']>0]['Note'].mean():.1f}/20" if not df[df['Note']>0].empty else "0/20")
     
-    st.subheader("📁 Gestion des Matières")
+    st.subheader("📁 Matières créées")
     for mat in st.session_state.dossiers[choix_dos]:
         col1, col2 = st.columns([4, 1])
         col1.info(f"📘 {mat}")
-        if col2.button(f"Supprimer {mat}", key=f"del_{mat}"):
+        if col2.button(f"Supprimer", key=f"del_{mat}"):
             st.session_state.dossiers[choix_dos].remove(mat)
             st.session_state.data = st.session_state.data[st.session_state.data['Matiere'] != mat]
             st.rerun()
-    st.dataframe(df, use_container_width=True)
 
-elif page == "Planning & Notes":
-    st.title(f"🗓️ Planning - {choix_dos}")
-    with st.form("Ajout_Chapitre", clear_on_submit=True):
-        mats = st.session_state.dossiers[choix_dos]
-        mat = st.selectbox("Sélectionner la Matière", mats if mats else ["Aucune"])
-        nom = st.text_input("Nom du Chapitre")
-        if st.form_submit_button("Ajouter") and mat != "Aucune":
-            new_row = pd.DataFrame([{'Dossier': choix_dos, 'Matiere': mat, 'Chapitre': nom, 'Note': 0}])
-            st.session_state.data = pd.concat([st.session_state.data, new_row], ignore_index=True)
-            st.rerun()
+elif page == "Planning Hebdo & Saisie":
+    st.title("🗓️ Planning Hebdomadaire")
     
-    st.subheader("📋 Planning actuel")
-    if not df.empty:
-        st.dataframe(df, use_container_width=True)
-        idx = st.number_input("ID Ligne (voir tableau)", 0, len(df)-1)
-        note = st.number_input("Saisir Note", 0, 20)
+    with st.expander("➕ Ajouter un chapitre (Génère tout le planning DJ)"):
+        with st.form("Add", clear_on_submit=True):
+            mat = st.selectbox("Matière", st.session_state.dossiers[choix_dos] if st.session_state.dossiers[choix_dos] else ["Aucune"])
+            nom = st.text_input("Nom du Chapitre")
+            d0 = st.date_input("Date de début")
+            if st.form_submit_button("Lancer Planning"):
+                for delta in st.session_state.intervalles:
+                    new_row = pd.DataFrame([{
+                        'Dossier': choix_dos, 'Matiere': mat, 'Chapitre': nom, 
+                        'Type': f"J{delta}", 'Date': d0 + dt.timedelta(days=delta), 'Note': 0
+                    }])
+                    st.session_state.data = pd.concat([st.session_state.data, new_row], ignore_index=True)
+                st.rerun()
+
+    st.subheader("📋 Planning des 7 prochains jours")
+    today = dt.date.today()
+    next_week = today + dt.timedelta(days=7)
+    planning_hebdo = df[(df['Date'] >= today) & (df['Date'] <= next_week)].sort_values('Date')
+    
+    if not planning_hebdo.empty:
+        st.dataframe(planning_hebdo.reset_index(drop=True), use_container_width=True)
+        
+        st.subheader("✏️ Saisie des Notes")
+        idx = st.number_input("ID ligne (voir tableau ci-dessus)", 0, len(planning_hebdo)-1)
+        note = st.slider("Note", 0, 20, 10)
         if st.button("Valider la note"):
-            st.session_state.data.loc[df.index[idx], 'Note'] = note
+            # On cherche la ligne exacte par Date et Chapitre
+            sel_date = planning_hebdo.iloc[idx]['Date']
+            sel_chap = planning_hebdo.iloc[idx]['Chapitre']
+            st.session_state.data.loc[(st.session_state.data['Date']==sel_date) & (st.session_state.data['Chapitre']==sel_chap), 'Note'] = note
             st.rerun()
     else:
-        st.info("Aucun chapitre enregistré.")
-
-elif page == "Suivi Graphique":
-    st.title(f"📊 {choix_dos} - Détail")
-    for m in st.session_state.dossiers[choix_dos]:
-        st.subheader(f"Matière : {m}")
-        sub = df[df['Matiere'] == m]
-        if not sub.empty: st.line_chart(sub['Note'])
+        st.info("Aucun rappel prévu pour les 7 prochains jours.")
