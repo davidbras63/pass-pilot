@@ -10,7 +10,6 @@ DATA_FILE = "data.csv"
 def load_data():
     if os.path.exists(DATA_FILE):
         df = pd.read_csv(DATA_FILE)
-        # Sécurisation contre l'erreur rencontrée dans d2df3b77-45f7-4c8a-aaf5-9a9f384ef76b
         df['Date'] = pd.to_datetime(df['Date'], errors='coerce').dt.date
         if 'ID' not in df.columns: df.insert(0, 'ID', range(len(df)))
         return df
@@ -25,10 +24,12 @@ if 'dossiers' not in st.session_state:
 
 # --- SIDEBAR ---
 st.sidebar.title("⚙️ Pilot Expert")
-with st.sidebar.expander("🛠️ Réglages"):
+with st.sidebar.expander("🛠️ Réglages complets"):
     st.session_state.config['cours_max'] = st.number_input("Max cours/jour", 1, 20, st.session_state.config['cours_max'])
-    cad_str = st.text_input("Cadencier", ",".join(map(str, st.session_state.config['cadencier'])))
+    cad_str = st.text_input("Cadencier (ex: 1,3,7,14,30)", ",".join(map(str, st.session_state.config['cadencier'])))
     st.session_state.config['cadencier'] = [int(x.strip()) for x in cad_str.split(",")]
+    for j in st.session_state.config['cadencier']:
+        st.session_state.config['seuils'][j] = st.slider(f"Seuil note J{j}", 0, 20, st.session_state.config['seuils'].get(j, 10))
 
 new_dos = st.sidebar.text_input("Créer Dossier")
 if st.sidebar.button("Ajouter Dossier") and new_dos: 
@@ -41,14 +42,31 @@ if st.sidebar.button("Ajouter Matière") and new_mat:
 
 page = st.sidebar.radio("Navigation", ["Dashboard", "Planning & Saisie", "Graphiques"])
 df = st.session_state.data[st.session_state.data['Dossier'] == choix_dos].copy()
-df['Date'] = pd.to_datetime(df['Date'], errors='coerce').dt.date
 jours_fr = ["Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi", "Dimanche"]
 
 # --- PAGES ---
 if page == "Dashboard":
     st.title(f"🎯 Dashboard : {choix_dos}")
+    st.subheader("Matières suivies")
     for m in st.session_state.dossiers[choix_dos]:
-        st.info(f"{m} : {len(df[df['Matiere'] == m])} sessions")
+        col1, col2 = st.columns([4, 1])
+        col1.info(f"{m} : {len(df[df['Matiere'] == m])} sessions")
+        if col2.button("🗑️ Supprimer", key=f"del_{m}"):
+            st.session_state.dossiers[choix_dos].remove(m); st.rerun()
+            
+    st.subheader("⚠️ Tableau des Rattrapages")
+    rattrapages = []
+    for idx, row in df.iterrows():
+        notes = str(row['Note']).split(',')
+        if notes and notes[0] != '0':
+            j_num = int(row['J_Type'].replace('J', '')) if 'J' in str(row['J_Type']) else 0
+            if float(notes[-1]) < st.session_state.config['seuils'].get(j_num, 10):
+                rattrapages.append(row)
+    
+    if rattrapages:
+        st.table(pd.DataFrame(rattrapages)[['Matiere', 'Chapitre', 'J_Type', 'Note']])
+    else:
+        st.success("Aucun rattrapage nécessaire pour le moment.")
 
 elif page == "Planning & Saisie":
     st.title("🗓️ Planning & Saisie")
@@ -58,7 +76,7 @@ elif page == "Planning & Saisie":
             chap = st.text_input("Nom du Chapitre")
             d0 = st.date_input("Date J0", format="DD/MM/YYYY")
             date_exam = st.date_input("Date examen", value=None, format="DD/MM/YYYY")
-            if st.form_submit_button("Générer"):
+            if st.form_submit_button("Générer planning"):
                 for j in [0] + st.session_state.config['cadencier']:
                     d_sess = d0 + dt.timedelta(days=j)
                     if not date_exam or d_sess <= date_exam:
@@ -67,7 +85,7 @@ elif page == "Planning & Saisie":
                         st.session_state.data = pd.concat([st.session_state.data, pd.DataFrame([new_row])], ignore_index=True)
                 save_data(st.session_state.data); st.rerun()
 
-    st.subheader("Planning visuel")
+    st.subheader("Planning de la semaine")
     cols = st.columns(7)
     for i in range(7):
         day = dt.date.today() + dt.timedelta(days=i)
@@ -77,15 +95,12 @@ elif page == "Planning & Saisie":
                 st.caption(f"{r['Matiere']} - {r['Chapitre']}")
 
     st.markdown("---")
-    st.subheader("Saisie des notes")
-    selected_date = st.date_input("Jour de saisie", dt.date.today())
+    st.subheader("Saisie des notes par jour")
+    selected_date = st.date_input("Choisir le jour", dt.date.today())
     df_to_edit = df[df['Date'] == selected_date].copy()
     if not df_to_edit.empty:
         edited_df = st.data_editor(df_to_edit[['ID', 'Matiere', 'Chapitre', 'Note']], use_container_width=True, hide_index=True)
-        if st.button("Enregistrer tout"):
+        if st.button("Enregistrer toutes les notes"):
             for idx, row in edited_df.iterrows():
                 st.session_state.data.loc[st.session_state.data['ID'] == row['ID'], 'Note'] = row['Note']
             save_data(st.session_state.data); st.rerun()
-
-elif page == "Graphiques":
-    st.title("📊 Progression")
