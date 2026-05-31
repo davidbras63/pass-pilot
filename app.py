@@ -8,8 +8,12 @@ st.set_page_config(layout="wide")
 # --- PERSISTANCE ---
 DATA_FILE = "data.csv"
 def load_data():
-    if os.path.exists(DATA_FILE): return pd.read_csv(DATA_FILE, parse_dates=['Date'])
-    return pd.DataFrame(columns=['Dossier', 'Matiere', 'Chapitre', 'J_Type', 'Date', 'Note'])
+    if os.path.exists(DATA_FILE): 
+        df = pd.read_csv(DATA_FILE, parse_dates=['Date'])
+        if 'ID' not in df.columns: df.insert(0, 'ID', df.index)
+        return df
+    return pd.DataFrame(columns=['ID', 'Dossier', 'Matiere', 'Chapitre', 'J_Type', 'Date', 'Note'])
+
 def save_data(df): df.to_csv(DATA_FILE, index=False)
 
 if 'data' not in st.session_state: st.session_state.data = load_data()
@@ -43,7 +47,6 @@ jours_fr = ["Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi", "Dimanc
 if page == "Dashboard":
     st.title(f"🎯 Dashboard : {choix_dos}")
     st.subheader("Matières suivies")
-    # Retour des petites poubelles
     for m in st.session_state.dossiers[choix_dos]:
         col1, col2 = st.columns([4, 1])
         col1.info(f"{m} : {len(df[df['Matiere'] == m])} sessions")
@@ -56,8 +59,9 @@ if page == "Dashboard":
         if row['Note'] > 0:
             j_num = int(row['J_Type'].replace('J', '')) if 'J' in str(row['J_Type']) else 0
             if row['Note'] < st.session_state.config['seuils'].get(j_num, 10):
-                if st.button(f"Planifier rattrapage : {row['Chapitre']}", key=f"plan_{idx}"):
-                    new_r = {'Dossier': choix_dos, 'Matiere': row['Matiere'], 'Chapitre': row['Chapitre'], 'J_Type': 'Rattrapage', 'Date': dt.date.today() + dt.timedelta(days=1), 'Note': 0}
+                if st.button(f"Planifier rattrapage : {row['Chapitre']} (ID: {row['ID']})", key=f"plan_{idx}"):
+                    new_id = st.session_state.data['ID'].max() + 1 if not st.session_state.data.empty else 0
+                    new_r = {'ID': new_id, 'Dossier': choix_dos, 'Matiere': row['Matiere'], 'Chapitre': row['Chapitre'], 'J_Type': 'Rattrapage', 'Date': dt.date.today() + dt.timedelta(days=1), 'Note': 0}
                     st.session_state.data = pd.concat([st.session_state.data, pd.DataFrame([new_r])], ignore_index=True)
                     save_data(st.session_state.data); st.rerun()
 
@@ -75,7 +79,8 @@ elif page == "Planning & Saisie":
                     for j in [0] + st.session_state.config['cadencier']:
                         d_sess = d0 + dt.timedelta(days=j)
                         if d_sess <= date_exam and d_sess.weekday() != 6:
-                            new_row = {'Dossier': choix_dos, 'Matiere': mat, 'Chapitre': chap, 'J_Type': f"J{j}", 'Date': d_sess, 'Note': 0}
+                            new_id = st.session_state.data['ID'].max() + 1 if not st.session_state.data.empty else 0
+                            new_row = {'ID': new_id, 'Dossier': choix_dos, 'Matiere': mat, 'Chapitre': chap, 'J_Type': f"J{j}", 'Date': d_sess, 'Note': 0}
                             st.session_state.data = pd.concat([st.session_state.data, pd.DataFrame([new_row])], ignore_index=True)
                     save_data(st.session_state.data); st.rerun()
 
@@ -85,15 +90,19 @@ elif page == "Planning & Saisie":
         with cols[i]:
             st.write(f"**{jours_fr[day.weekday()]} {day.strftime('%d/%m')}**")
             for idx, r in df[df['Date'].astype(str) == str(day)].iterrows():
-                st.write(f"{r['Chapitre']} ({r['J_Type']})")
+                st.write(f"{r['Chapitre']} ({r['J_Type']} - ID: {r['ID']})")
                 new_date = st.date_input("Décaler au :", key=f"d_{idx}", label_visibility="collapsed", format="DD/MM/YYYY")
                 if st.button("Confirmer report", key=f"b_{idx}"):
                     st.session_state.data.at[idx, 'Date'] = new_date
                     save_data(st.session_state.data); st.rerun()
 
-    edited_df = st.data_editor(st.session_state.data, use_container_width=True)
-    if st.button("Enregistrer notes"):
-        st.session_state.data = edited_df; save_data(st.session_state.data); st.rerun()
+    st.markdown("---")
+    st.subheader("✏️ Saisie des Notes par ID")
+    edited_df = st.data_editor(st.session_state.data, use_container_width=True, hide_index=True)
+    if st.button("Enregistrer les notes"):
+        st.session_state.data = edited_df
+        save_data(st.session_state.data)
+        st.rerun()
 
 elif page == "Graphiques":
     st.title("📊 Progression")
