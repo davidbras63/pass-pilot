@@ -9,13 +9,13 @@ if 'dossiers' not in st.session_state or not isinstance(st.session_state.dossier
     st.session_state.data = pd.DataFrame(columns=['Dossier', 'Matiere', 'Chapitre', 'Note'])
     st.session_state.config = {'cours_max': 5, 'J1': 1}
 
-# --- SIDEBAR : PARAMÈTRES & GESTION ---
+# --- SIDEBAR ---
 st.sidebar.title("⚙️ Pilot Expert")
 with st.sidebar.expander("🛠️ Paramètres"):
     st.session_state.config['cours_max'] = st.number_input("Max cours/jour", 1, 20, st.session_state.config['cours_max'])
 
 st.sidebar.write("---")
-new_dos = st.sidebar.text_input("Ajouter Dossier (ex: BAC)")
+new_dos = st.sidebar.text_input("Ajouter Dossier")
 if st.sidebar.button("Créer Dossier") and new_dos:
     if new_dos not in st.session_state.dossiers:
         st.session_state.dossiers[new_dos] = []
@@ -36,18 +36,27 @@ df = st.session_state.data[st.session_state.data['Dossier'] == choix_dos]
 
 if page == "Dashboard":
     st.title(f"🎯 Dashboard : {choix_dos}")
-    # Rétablissement des 3 colonnes de métriques
+    # Métriques
     c1, c2, c3 = st.columns(3)
-    c1.metric("Matières", len(st.session_state.dossiers[choix_dos]))
-    c2.metric("Chapitres", len(df))
-    c3.metric("Moyenne", f"{df[df['Note']>0]['Note'].mean():.1f}/20" if not df[df['Note']>0].empty else "0/20")
+    c1.metric("Matières créées", len(st.session_state.dossiers[choix_dos]))
+    c2.metric("Chapitres enregistrés", len(df))
+    c3.metric("Moyenne Générale", f"{df[df['Note']>0]['Note'].mean():.1f}/20" if not df[df['Note']>0].empty else "0/20")
+    
+    st.write("---")
+    # Visualisation immédiate des matières
+    st.subheader("📁 Matières de ce dossier")
+    cols = st.columns(4)
+    for i, mat in enumerate(st.session_state.dossiers[choix_dos]):
+        cols[i % 4].success(f"📘 {mat}")
+    
+    st.subheader("📋 État global des chapitres")
     st.dataframe(df, use_container_width=True)
 
 elif page == "Planning & Notes":
     st.title(f"🗓️ Planning - {choix_dos}")
     with st.form("Ajout_Chapitre"):
         mats = st.session_state.dossiers[choix_dos]
-        mat = st.selectbox("Matière", mats if mats else ["Aucune"])
+        mat = st.selectbox("Sélectionner la Matière", mats if mats else ["Aucune"])
         nom = st.text_input("Nom du Chapitre")
         if st.form_submit_button("Ajouter") and mat != "Aucune":
             new_row = pd.DataFrame([{'Dossier': choix_dos, 'Matiere': mat, 'Chapitre': nom, 'Note': 0}])
@@ -65,6 +74,7 @@ elif page == "Planning & Notes":
 elif page == "Suivi Graphique":
     st.title(f"📊 {choix_dos} - Détail")
     for m in st.session_state.dossiers[choix_dos]:
-        st.subheader(m)
+        st.subheader(f"Matière : {m}")
         sub = df[df['Matiere'] == m]
         if not sub.empty: st.line_chart(sub['Note'])
+        else: st.info(f"Aucune note pour {m}")
