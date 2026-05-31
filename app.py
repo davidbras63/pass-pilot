@@ -1,82 +1,64 @@
 import streamlit as st
 import pandas as pd
 import datetime as dt
-import re
 
-st.set_page_config(page_title="PASS Pilot Expert", layout="wide")
+st.set_page_config(page_title="Pilot Universel", layout="wide")
 
-# Initialisation
+# --- INITIALISATION ---
 if 'data' not in st.session_state:
-    st.session_state.data = pd.DataFrame(columns=['UE', 'Chapitre_Complet', 'Chapitre_Base', 'Type', 'Date', 'Note', 'Nbre_QCM'])
-if 'seuils' not in st.session_state:
-    st.session_state.seuils = {'J1': 10, 'J3': 12, 'J7': 14, 'J14': 16, 'J30': 18, 'J60': 18, 'J90': 18, 'J120': 18}
-if 'intervalles' not in st.session_state:
-    st.session_state.intervalles = {'J1': 1, 'J3': 3, 'J7': 7, 'J14': 14, 'J30': 30, 'J60': 60, 'J90': 90, 'J120': 120}
-if 'limite_jour' not in st.session_state:
-    st.session_state.limite_jour = 5
+    st.session_state.data = pd.DataFrame(columns=['Dossier', 'Matiere', 'Chapitre', 'Type', 'Date', 'Note'])
+if 'dossiers' not in st.session_state:
+    st.session_state.dossiers = ["PASS"]
 
-# --- BARRE LATÉRALE (Épurée) ---
-st.sidebar.title("⚙️ Paramètres")
-with st.sidebar.expander("Réglages"):
-    st.session_state.limite_jour = st.number_input("Cours max/jour", 1, 20, st.session_state.limite_jour)
-    st.write("---")
-    for jour in st.session_state.seuils:
-        st.session_state.seuils[jour] = st.slider(f"Seuil {jour}", 0, 20, st.session_state.seuils[jour])
+# --- BARRE LATÉRALE : Gestion des dossiers ---
+st.sidebar.title("📁 Mes Dossiers")
+new_dossier = st.sidebar.text_input("Créer un nouveau dossier (ex: BAC)")
+if st.sidebar.button("Ajouter dossier") and new_dossier:
+    if new_dossier not in st.session_state.dossiers:
+        st.session_state.dossiers.append(new_dossier)
+        st.rerun()
 
-st.sidebar.title("Navigation")
-page = st.sidebar.radio("Aller à :", ["Dashboard", "Planning (Saisie)", "UE1", "UE2", "UE3", "UE4", "UE5", "UE6", "UE7"])
+choix_dossier = st.sidebar.selectbox("Sélectionner un dossier", st.session_state.dossiers)
 
-# --- DASHBOARD ---
+# --- NAVIGATION DANS LE DOSSIER ---
+st.sidebar.write("---")
+st.sidebar.header(f"Espace {choix_dossier}")
+page = st.sidebar.radio("Navigation", ["Dashboard", "Planning & Matières", "Saisie Notes"])
+
+# --- FILTRAGE DONNÉES ---
+df = st.session_state.data[st.session_state.data['Dossier'] == choix_dossier]
+
+# --- PAGES ---
 if page == "Dashboard":
-    st.title("🎯 Dashboard")
-    c1, c2, c3 = st.columns(3)
-    c1.metric("Chapitres", len(st.session_state.data['Chapitre_Base'].unique()))
-    c2.metric("QCM total", int(st.session_state.data['Nbre_QCM'].sum()))
-    c3.metric("Moyenne", f"{st.session_state.data[st.session_state.data['Note']>0]['Note'].mean():.1f}/20")
-    
-    st.subheader("⚠️ Alertes Rattrapage")
-    df_temp = st.session_state.data.copy()
-    df_temp['Seuil'] = df_temp['Type'].map(st.session_state.seuils)
-    alertes = df_temp[(df_temp['Note'] > 0) & (df_temp['Note'] < df_temp['Seuil'])]
-    st.dataframe(alertes[['UE', 'Chapitre_Complet', 'Note', 'Seuil']], use_container_width=True)
+    st.title(f"🎯 Dashboard - {choix_dossier}")
+    if not df.empty:
+        c1, c2 = st.columns(2)
+        c1.metric("Chapitres suivis", len(df['Chapitre'].unique()))
+        c2.metric("Note moyenne", f"{df[df['Note']>0]['Note'].mean():.1f}/20" if not df[df['Note']>0].empty else "N/A")
+        st.line_chart(df.groupby('Date')['Note'].mean())
+    else:
+        st.info("Aucune donnée pour ce dossier.")
 
-# --- PLANNING ---
-elif page == "Planning (Saisie)":
-    st.title("🗓️ Mon Planning")
-    with st.expander("➕ Ajouter un chapitre"):
-        with st.form("Saisie_Simple", clear_on_submit=True):
-            c1, c2, c3 = st.columns(3)
-            ue = c1.selectbox("UE", ["UE1", "UE2", "UE3", "UE4", "UE5", "UE6", "UE7"])
-            nom = c2.text_input("Nom du Chapitre")
-            d0 = c3.date_input("Date de début")
-            if st.form_submit_button("Lancer les rappels"):
-                base = re.sub(r'\s*\d+$', '', nom.strip())
-                for t, delta in st.session_state.intervalles.items():
-                    st.session_state.data = pd.concat([st.session_state.data, pd.DataFrame([{
-                        'UE': ue, 'Chapitre_Complet': nom, 'Chapitre_Base': base, 
-                        'Type': t, 'Date': d0 + dt.timedelta(days=delta), 'Note': 0, 'Nbre_QCM': 0}])])
+elif page == "Planning & Matières":
+    st.title("🗓️ Planning")
+    with st.expander("➕ Ajouter un élément"):
+        with st.form("Ajout"):
+            mat = st.text_input("Matière (ex: Anatomie)")
+            nom = st.text_input("Chapitre")
+            d0 = st.date_input("Date")
+            if st.form_submit_button("Ajouter au planning"):
+                new_row = pd.DataFrame([{'Dossier': choix_dossier, 'Matiere': mat, 'Chapitre': nom, 'Type': 'Révision', 'Date': d0, 'Note': 0}])
+                st.session_state.data = pd.concat([st.session_state.data, new_row])
                 st.rerun()
+    st.dataframe(df, use_container_width=True)
 
-    st.subheader("📅 Calendrier")
-    st.dataframe(st.session_state.data.sort_values('Date'), use_container_width=True)
-    
-    st.subheader("📈 Saisie des Notes")
-    if not st.session_state.data.empty:
-        idx = st.number_input("ID Ligne", 0, len(st.session_state.data)-1)
-        saisie = st.text_input("Notes (ex: 11, 15, 18)")
-        if st.button("Valider"):
-            try:
-                n = [float(x.strip()) for x in saisie.split(',')]
-                st.session_state.data.at[idx, 'Note'] = round(sum(n)/len(n), 1)
-                st.session_state.data.at[idx, 'Nbre_QCM'] = len(n)
-                st.rerun()
-            except: st.error("Format invalide")
-
-# --- PAGES UE ---
-elif page.startswith("UE"):
-    st.title(f"📊 {page}")
-    df_ue = st.session_state.data[st.session_state.data['UE'] == page]
-    for base in df_ue['Chapitre_Base'].unique():
-        st.write(f"### {base}")
-        sub = df_ue[df_ue['Chapitre_Base'] == base].sort_values('Date')
-        st.line_chart(sub.set_index('Date')['Note'])
+elif page == "Saisie Notes":
+    st.title("✏️ Saisir Notes")
+    if not df.empty:
+        idx = st.number_input("ID Ligne (voir tableau Planning)", 0, len(df)-1)
+        note = st.number_input("Note obtenue", 0, 20)
+        if st.button("Valider la note"):
+            st.session_state.data.loc[df.index[idx], 'Note'] = note
+            st.rerun()
+    else:
+        st.info("Ajoutez des chapitres dans l'onglet 'Planning' pour saisir des notes.")
