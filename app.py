@@ -17,7 +17,7 @@ if 'dossiers' not in st.session_state:
     st.session_state.dossiers = {"PASS": ["UE1", "UE2"]}
     st.session_state.config = {'cours_max': 5, 'cadencier': [1, 3, 7, 14, 30], 'seuils': {1: 10, 3: 12, 7: 14, 14: 15, 30: 16}}
 
-# --- SIDEBAR ---
+# --- SIDEBAR (Avec création de dossier) ---
 st.sidebar.title("⚙️ Pilot Expert")
 with st.sidebar.expander("🛠️ Réglages complets"):
     st.session_state.config['cours_max'] = st.number_input("Max cours/jour", 1, 20, st.session_state.config['cours_max'])
@@ -25,6 +25,12 @@ with st.sidebar.expander("🛠️ Réglages complets"):
     st.session_state.config['cadencier'] = [int(x.strip()) for x in cad_str.split(",")]
     for j in st.session_state.config['cadencier']:
         st.session_state.config['seuils'][j] = st.slider(f"Seuil J{j}", 0, 20, st.session_state.config['seuils'].get(j, 10))
+
+# Création de dossier
+new_dos = st.sidebar.text_input("Créer Dossier")
+if st.sidebar.button("Ajouter Dossier") and new_dos: 
+    st.session_state.dossiers[new_dos] = []
+    st.rerun()
 
 choix_dos = st.sidebar.selectbox("Dossier", list(st.session_state.dossiers.keys()))
 new_mat = st.sidebar.text_input("Ajouter Matière")
@@ -37,6 +43,11 @@ jours_fr = ["Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi", "Dimanc
 # --- PAGES ---
 if page == "Dashboard":
     st.title(f"🎯 Dashboard : {choix_dos}")
+    # Réaffichage des matières suivies
+    st.subheader("Matières suivies")
+    for m in st.session_state.dossiers[choix_dos]:
+        st.info(f"{m} : {len(df[df['Matiere'] == m])} sessions")
+        
     st.subheader("⚠️ Alertes Rattrapage")
     for idx, row in df.iterrows():
         if row['Note'] > 0:
@@ -65,13 +76,11 @@ elif page == "Planning & Saisie":
                             st.session_state.data = pd.concat([st.session_state.data, pd.DataFrame([new_row])], ignore_index=True)
                     save_data(st.session_state.data); st.rerun()
 
-    # --- ZONE DE PLANNING AVEC DÉCALAGE ---
     cols = st.columns(7)
     for i in range(7):
         day = dt.date.today() + dt.timedelta(days=i)
         with cols[i]:
             st.write(f"**{jours_fr[day.weekday()]} {day.strftime('%d/%m')}**")
-            # Boucle pour afficher chaque cours et son option de report
             for idx, r in df[df['Date'].astype(str) == str(day)].iterrows():
                 st.write(f"{r['Chapitre']} ({r['J_Type']})")
                 new_date = st.date_input("Décaler au :", key=f"d_{idx}", label_visibility="collapsed", format="DD/MM/YYYY")
