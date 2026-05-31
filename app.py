@@ -10,8 +10,7 @@ DATA_FILE = "data.csv"
 def load_data():
     if os.path.exists(DATA_FILE):
         df = pd.read_csv(DATA_FILE, parse_dates=['Date'])
-        if 'ID' not in df.columns:
-            df.insert(0, 'ID', range(len(df)))
+        if 'ID' not in df.columns: df.insert(0, 'ID', range(len(df)))
         return df
     return pd.DataFrame(columns=['ID', 'Dossier', 'Matiere', 'Chapitre', 'J_Type', 'Date', 'Note'])
 
@@ -60,8 +59,8 @@ if page == "Dashboard":
         if row['Note'] > 0:
             j_num = int(row['J_Type'].replace('J', '')) if 'J' in str(row['J_Type']) else 0
             if row['Note'] < st.session_state.config['seuils'].get(j_num, 10):
-                if st.button(f"Planifier rattrapage : {row['Chapitre']}", key=f"plan_{idx}"):
-                    new_id = st.session_state.data['ID'].max() + 1 if not st.session_state.data.empty else 0
+                if st.button(f"Planifier rattrapage : {row['Chapitre']} (ID: {row['ID']})", key=f"plan_{idx}"):
+                    new_id = int(st.session_state.data['ID'].max()) + 1 if not st.session_state.data.empty else 0
                     new_r = {'ID': new_id, 'Dossier': choix_dos, 'Matiere': row['Matiere'], 'Chapitre': row['Chapitre'], 'J_Type': 'Rattrapage', 'Date': dt.date.today() + dt.timedelta(days=1), 'Note': 0}
                     st.session_state.data = pd.concat([st.session_state.data, pd.DataFrame([new_r])], ignore_index=True)
                     save_data(st.session_state.data); st.rerun()
@@ -75,12 +74,12 @@ elif page == "Planning & Saisie":
             d0 = st.date_input("Date J0", format="DD/MM/YYYY")
             date_exam = st.date_input("Date de l'examen", value=None, format="DD/MM/YYYY")
             if st.form_submit_button("Générer planning"):
-                if date_exam is None: st.error("⚠️ La date de l'examen est obligatoire !")
+                if date_exam is None: st.error("⚠️ Date examen obligatoire !")
                 else:
                     for j in [0] + st.session_state.config['cadencier']:
                         d_sess = d0 + dt.timedelta(days=j)
                         if d_sess <= date_exam and d_sess.weekday() != 6:
-                            new_id = st.session_state.data['ID'].max() + 1 if not st.session_state.data.empty else 0
+                            new_id = int(st.session_state.data['ID'].max()) + 1 if not st.session_state.data.empty else 0
                             new_row = {'ID': new_id, 'Dossier': choix_dos, 'Matiere': mat, 'Chapitre': chap, 'J_Type': f"J{j}", 'Date': d_sess, 'Note': 0}
                             st.session_state.data = pd.concat([st.session_state.data, pd.DataFrame([new_row])], ignore_index=True)
                     save_data(st.session_state.data); st.rerun()
@@ -89,29 +88,29 @@ elif page == "Planning & Saisie":
     for i in range(7):
         day = dt.date.today() + dt.timedelta(days=i)
         with cols[i]:
-            st.markdown(f"**{jours_fr[day.weekday()]} {day.strftime('%d/%m')}**")
-            st.divider()
+            st.write(f"**{jours_fr[day.weekday()]} {day.strftime('%d/%m')}**")
             for idx, r in df[df['Date'].astype(str) == str(day)].iterrows():
-                st.write(f"{r['Chapitre']} ({r['J_Type']} - ID:{r['ID']})")
-                new_date = st.date_input("Report :", key=f"d_{idx}", label_visibility="collapsed", format="DD/MM/YYYY")
-                if st.button("Confirmer", key=f"b_{idx}"):
+                st.write(f"{r['Chapitre']} ({r['J_Type']} - ID: {r['ID']})")
+                new_date = st.date_input("Décaler au :", key=f"d_{idx}", label_visibility="collapsed", format="DD/MM/YYYY")
+                if st.button("Confirmer report", key=f"b_{idx}"):
                     st.session_state.data.at[idx, 'Date'] = new_date
                     save_data(st.session_state.data); st.rerun()
 
     st.markdown("---")
-    st.subheader("✏️ Saisie des Notes")
-    
-    # Saisie simplifiée et robuste
+    st.subheader("✏️ Saisie des Notes (ID au début)")
+    # Configuration du tableau pour afficher l'ID en premier et Note à la fin
     edited_df = st.data_editor(
-        st.session_state.data, 
+        st.session_state.data[['ID', 'Dossier', 'Matiere', 'Chapitre', 'J_Type', 'Date', 'Note']],
         use_container_width=True, 
-        hide_index=True
+        hide_index=True,
+        column_config={
+            "ID": st.column_config.NumberColumn("ID", disabled=True),
+            "Note": st.column_config.NumberColumn("Note", min_value=0.0, max_value=20.0, step=0.5)
+        }
     )
-    
     if st.button("Enregistrer les notes"):
         st.session_state.data = edited_df
         save_data(st.session_state.data)
-        st.success("Enregistré !")
         st.rerun()
 
 elif page == "Graphiques":
