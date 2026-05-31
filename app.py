@@ -101,17 +101,18 @@ elif page == "Planning & Saisie":
     st.markdown("---")
     st.subheader("✏️ Saisie des Notes")
     
-    # Configuration explicite pour rendre l'ID et la Note éditables
-    column_config = {
-        "ID": st.column_config.NumberColumn("ID", format="%d", step=1),
-        "Note": st.column_config.NumberColumn("Note", format="%.1f", min_value=0.0, max_value=20.0, step=0.5)
-    }
+    # Ordonnancement : ID au début, Note à la fin
+    cols_order = ['ID', 'Dossier', 'Matiere', 'Chapitre', 'J_Type', 'Date', 'Note']
+    df_ordered = st.session_state.data[cols_order]
     
     edited_df = st.data_editor(
-        st.session_state.data, 
+        df_ordered, 
         use_container_width=True, 
-        column_config=column_config,
-        hide_index=True
+        hide_index=True,
+        column_config={
+            "ID": st.column_config.NumberColumn("ID", disabled=False),
+            "Note": st.column_config.NumberColumn("Note", min_value=0.0, max_value=20.0, step=0.5)
+        }
     )
     
     if st.button("Enregistrer les notes"):
