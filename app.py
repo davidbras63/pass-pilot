@@ -1,14 +1,25 @@
 import streamlit as st
 import pandas as pd
-import datetime as dt
 
 st.set_page_config(page_title="Pilot Expert Pro", layout="wide")
 
-# --- INITIALISATION ---
-if 'dossiers' not in st.session_state:
+# --- INITIALISATION SÉCURISÉE ---
+# On définit tous les paramètres par défaut pour éviter le KeyError
+default_config = {
+    'cours_max': 5, 
+    'J1': 1, 'J3': 3, 'J7': 7, 
+    'seuils': {'J1': 10, 'J3': 12, 'J7': 14}
+}
+
+if 'dossiers' not in st.session_state or not isinstance(st.session_state.dossiers, dict):
     st.session_state.dossiers = {"PASS": ["UE1", "UE2"]}
     st.session_state.data = pd.DataFrame(columns=['Dossier', 'Matiere', 'Chapitre', 'Note'])
-    st.session_state.config = {'cours_max': 5, 'J1': 1, 'J3': 3, 'J7': 7, 'seuils': {'J1': 10, 'J3': 12, 'J7': 14}}
+    st.session_state.config = default_config
+else:
+    # On complète la configuration si certaines clés manquent (pour ne pas tout supprimer)
+    for key, value in default_config.items():
+        if key not in st.session_state.config:
+            st.session_state.config[key] = value
 
 # --- SIDEBAR ---
 st.sidebar.title("⚙️ Pilot Expert")
@@ -17,9 +28,13 @@ with st.sidebar.expander("🛠️ Paramètres"):
     st.write("---")
     st.write("**Périodicité (Jours)**")
     for j in ['J1', 'J3', 'J7']:
+        # Vérification pour éviter le KeyError
+        if j not in st.session_state.config: st.session_state.config[j] = default_config[j]
         st.session_state.config[j] = st.number_input(f"Délai {j}", 1, 30, st.session_state.config[j])
+    
     st.write("**Seuils (Notes)**")
     for j in ['J1', 'J3', 'J7']:
+        if 'seuils' not in st.session_state.config: st.session_state.config['seuils'] = default_config['seuils']
         st.session_state.config['seuils'][j] = st.slider(f"Seuil {j}", 0, 20, st.session_state.config['seuils'][j])
 
 st.sidebar.write("---")
@@ -61,7 +76,8 @@ if page == "Dashboard":
 elif page == "Planning & Notes":
     st.title(f"🗓️ Planning - {choix_dos}")
     with st.form("Ajout_Chapitre", clear_on_submit=True):
-        mat = st.selectbox("Sélectionner la Matière", st.session_state.dossiers[choix_dos] if st.session_state.dossiers[choix_dos] else ["Aucune"])
+        mats = st.session_state.dossiers[choix_dos]
+        mat = st.selectbox("Sélectionner la Matière", mats if mats else ["Aucune"])
         nom = st.text_input("Nom du Chapitre")
         if st.form_submit_button("Ajouter") and mat != "Aucune":
             new_row = pd.DataFrame([{'Dossier': choix_dos, 'Matiere': mat, 'Chapitre': nom, 'Note': 0}])
@@ -71,7 +87,6 @@ elif page == "Planning & Notes":
     st.subheader("📋 Planning actuel")
     if not df.empty:
         st.dataframe(df, use_container_width=True)
-        st.write("---")
         idx = st.number_input("ID Ligne (voir tableau)", 0, len(df)-1)
         note = st.number_input("Saisir Note", 0, 20)
         if st.button("Valider la note"):
