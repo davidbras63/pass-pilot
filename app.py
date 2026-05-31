@@ -10,7 +10,6 @@ DATA_FILE = "data.csv"
 def load_data():
     if os.path.exists(DATA_FILE):
         df = pd.read_csv(DATA_FILE, parse_dates=['Date'])
-        # On s'assure que la colonne ID existe
         if 'ID' not in df.columns:
             df.insert(0, 'ID', range(len(df)))
         return df
@@ -86,13 +85,12 @@ elif page == "Planning & Saisie":
                             st.session_state.data = pd.concat([st.session_state.data, pd.DataFrame([new_row])], ignore_index=True)
                     save_data(st.session_state.data); st.rerun()
 
-    # Planning visuel séparé
     cols = st.columns(7)
     for i in range(7):
         day = dt.date.today() + dt.timedelta(days=i)
         with cols[i]:
             st.markdown(f"**{jours_fr[day.weekday()]} {day.strftime('%d/%m')}**")
-            st.divider() # Ligne de séparation
+            st.divider()
             for idx, r in df[df['Date'].astype(str) == str(day)].iterrows():
                 st.write(f"{r['Chapitre']} ({r['J_Type']} - ID:{r['ID']})")
                 new_date = st.date_input("Report :", key=f"d_{idx}", label_visibility="collapsed", format="DD/MM/YYYY")
@@ -101,9 +99,21 @@ elif page == "Planning & Saisie":
                     save_data(st.session_state.data); st.rerun()
 
     st.markdown("---")
-    st.subheader("✏️ Saisie des Notes (ID requis)")
-    # Tableau d'édition simple avec ID visible
-    edited_df = st.data_editor(st.session_state.data, use_container_width=True)
+    st.subheader("✏️ Saisie des Notes")
+    
+    # Configuration explicite pour rendre l'ID et la Note éditables
+    column_config = {
+        "ID": st.column_config.NumberColumn("ID", format="%d", step=1),
+        "Note": st.column_config.NumberColumn("Note", format="%.1f", min_value=0.0, max_value=20.0, step=0.5)
+    }
+    
+    edited_df = st.data_editor(
+        st.session_state.data, 
+        use_container_width=True, 
+        column_config=column_config,
+        hide_index=True
+    )
+    
     if st.button("Enregistrer les notes"):
         st.session_state.data = edited_df
         save_data(st.session_state.data)
