@@ -21,58 +21,33 @@ if 'dossiers' not in st.session_state:
 
 # --- SIDEBAR ---
 st.sidebar.title("⚙️ Pilot Expert")
-with st.sidebar.expander("🛠️ Réglages complets"):
-    st.session_state.config['cours_max'] = st.number_input("Max cours/jour", 1, 20, st.session_state.config['cours_max'])
-    cad_str = st.text_input("Cadencier", ",".join(map(str, st.session_state.config['cadencier'])))
-    st.session_state.config['cadencier'] = [int(x.strip()) for x in cad_str.split(",")]
-    st.write("**Seuils de rattrapage**")
-    for j in st.session_state.config['cadencier']:
-        st.session_state.config['seuils'][j] = st.slider(f"Seuil J{j}", 0, 20, st.session_state.config['seuils'].get(j, 10))
-
-new_dos = st.sidebar.text_input("Créer Dossier")
-if st.sidebar.button("Ajouter Dossier") and new_dos: st.session_state.dossiers[new_dos] = []
 choix_dos = st.sidebar.selectbox("Dossier", list(st.session_state.dossiers.keys()))
-
 new_mat = st.sidebar.text_input("Ajouter Matière")
 if st.sidebar.button("Ajouter Matière") and new_mat: st.session_state.dossiers[choix_dos].append(new_mat)
-
 page = st.sidebar.radio("Navigation", ["Dashboard", "Planning & Saisie", "Graphiques"])
 
 # --- LOGIQUE ---
 df = st.session_state.data[st.session_state.data['Dossier'] == choix_dos]
+jours_fr = ["Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi", "Dimanche"]
 
 # --- PAGES ---
 if page == "Dashboard":
     st.title(f"🎯 Dashboard : {choix_dos}")
-    st.subheader("Matières suivies")
-    for m in st.session_state.dossiers[choix_dos]:
-        col1, col2 = st.columns([4, 1])
-        col1.info(f"{m} : {len(df[df['Matiere'] == m])} sessions")
-        if col2.button("🗑️", key=f"del_{m}"):
-            st.session_state.dossiers[choix_dos].remove(m)
-            st.rerun()
-            
-    st.subheader("⚠️ Alertes Rattrapage")
-    alertes_data = []
-    for idx, row in df.iterrows():
-        if row['Note'] > 0:
-            j_num = int(row['J_Type'].replace('J', '')) if 'J' in str(row['J_Type']) else 0
-            seuil = st.session_state.config['seuils'].get(j_num, 10)
-            if row['Note'] < seuil:
-                alertes_data.append((idx, row))
-    
-    for idx, row in alertes_data:
-        col_a, col_b = st.columns([3, 1])
-        col_a.warning(f"Rattrapage {row['J_Type']} : {row['Chapitre']} ({row['Matiere']}) - Note : {row['Note']}/20")
-        if col_b.button("Planifier", key=f"plan_{idx}"):
-            prochaine_date = dt.date.today() + dt.timedelta(days=1)
-            while not st.session_state.data[st.session_state.data['Date'].astype(str) == str(prochaine_date)].empty:
-                prochaine_date += dt.timedelta(days=1)
-            new_rattrapage = {'Dossier': choix_dos, 'Matiere': row['Matiere'], 'Chapitre': row['Chapitre'], 
-                              'J_Type': 'Rattrapage', 'Date': prochaine_date, 'Note': 0}
-            st.session_state.data = pd.concat([st.session_state.data, pd.DataFrame([new_rattrapage])], ignore_index=True)
-            save_data(st.session_state.data)
-            st.rerun()
+    # Liste des rattrapages
+    alertes = df[(df['Note'] > 0) & (df['Note'] < 10)]
+    for idx, row in alertes.iterrows():
+        if st.button(f"Planifier rattrapage : {row['Chapitre']} ({row['Matiere']})", key=f"plan_{idx}"):
+            # Recherche créneau : lundi(0) à samedi(5) d'abord
+            found = False
+            for delta in range(1, 15):
+                test_date = dt.date.today() + dt.timedelta(days=delta)
+                if test_date.weekday() < 6 and st.session_state.data[st.session_state.data['Date'].astype(str) == str(test_date)].empty:
+                    st.session_state.data = pd.concat([st.session_state.data, pd.DataFrame([{'Dossier': choix_dos, 'Matiere': row['Matiere'], 'Chapitre': row['Chapitre'], 'J_Type': 'Rattrapage', 'Date': test_date, 'Note': 0}])], ignore_index=True)
+                    found = True; break
+            if not found: # Si rien en semaine, autorise dimanche
+                new_date = dt.date.today() + dt.timedelta(days=1)
+                st.session_state.data = pd.concat([st.session_state.data, pd.DataFrame([{'Dossier': choix_dos, 'Matiere': row['Matiere'], 'Chapitre': row['Chapitre'], 'J_Type': 'Rattrapage', 'Date': new_date, 'Note': 0}])], ignore_index=True)
+            save_data(st.session_state.data); st.rerun()
 
 elif page == "Planning & Saisie":
     st.title("🗓️ Planning & Saisie")
@@ -80,50 +55,38 @@ elif page == "Planning & Saisie":
         with st.form("Add"):
             mat = st.selectbox("Matière", st.session_state.dossiers[choix_dos])
             chap = st.text_input("Nom du Chapitre")
-            d0 = st.date_input("Date J0")
-            # MODIF 1 : Date examen obligatoire sans défaut
-            date_examen = st.date_input("Date de l'examen", value=None)
+            d0 = st.date_input("Date J0", format="DD/MM/YYYY")
+            date_examen = st.date_input("Date de l'examen", value=None, format="DD/MM/YYYY")
             if st.form_submit_button("Générer tout le planning"):
-                if date_examen is None:
-                    st.error("⚠️ Vous devez choisir une date d'examen !")
+                if date_examen is None: st.error("⚠️ Vous devez choisir une date d'examen.")
                 else:
                     for j in [0] + st.session_state.config['cadencier']:
-                        date_session = d0 + dt.timedelta(days=j)
-                        if date_session <= date_examen:
-                            new_row = {'Dossier': choix_dos, 'Matiere': mat, 'Chapitre': chap, 
-                                       'J_Type': f"J{j}", 'Date': date_session, 'Note': 0}
+                        d_sess = d0 + dt.timedelta(days=j)
+                        # Dimanche (6) exclu de la génération automatique
+                        if d_sess <= date_examen and d_sess.weekday() != 6:
+                            new_row = {'Dossier': choix_dos, 'Matiere': mat, 'Chapitre': chap, 'J_Type': f"J{j}", 'Date': d_sess, 'Note': 0}
                             st.session_state.data = pd.concat([st.session_state.data, pd.DataFrame([new_row])], ignore_index=True)
-                    save_data(st.session_state.data)
-                    st.rerun()
+                    save_data(st.session_state.data); st.rerun()
 
     cols = st.columns(7)
     today = dt.date.today()
     for i in range(7):
         day = today + dt.timedelta(days=i)
         with cols[i]:
-            st.markdown(f"**{day.strftime('%A %d')}**")
+            st.markdown(f"**{jours_fr[day.weekday()]} {day.strftime('%d/%m')}**")
             for idx, r in df[df['Date'].astype(str) == str(day)].iterrows():
                 st.write(f"**{r['Chapitre']}** ({r['J_Type']})")
-                # MODIF 2 : Petit décalage possible
-                new_date = st.date_input("Décaler au :", key=f"move_{idx}", label_visibility="collapsed")
-                if st.button("Confirmer report", key=f"btn_{idx}"):
-                    st.session_state.data.at[idx, 'Date'] = new_date
-                    save_data(st.session_state.data)
-                    st.rerun()
+                new_d = st.date_input("Reporter :", key=f"d_{idx}", label_visibility="collapsed", format="DD/MM/YYYY")
+                if st.button("Valider", key=f"b_{idx}"):
+                    st.session_state.data.at[idx, 'Date'] = new_d
+                    save_data(st.session_state.data); st.rerun()
 
-    st.markdown("---")
-    st.subheader("✏️ Saisie des Notes")
+    st.subheader("✏️ Saisie Notes")
     df_with_id = st.session_state.data.copy()
     df_with_id.insert(0, 'ID', df_with_id.index)
     edited_df = st.data_editor(df_with_id, use_container_width=True)
-    
-    if st.button("Enregistrer les notes"):
-        st.session_state.data = edited_df.drop(columns=['ID'])
-        save_data(st.session_state.data)
-        st.rerun()
+    if st.button("Enregistrer"):
+        st.session_state.data = edited_df.drop(columns=['ID']); save_data(st.session_state.data); st.rerun()
 
 elif page == "Graphiques":
-    st.title("📊 Progression par Chapitre")
-    if not df.empty:
-        stats = df[df['Note'] > 0].groupby('Chapitre')['Note'].mean()
-        st.bar_chart(stats)
+    st.title("📊 Progression")
