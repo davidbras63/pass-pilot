@@ -21,7 +21,7 @@ if 'dossiers' not in st.session_state:
     st.session_state.dossiers = {"PASS": ["UE1", "UE2"]}
     st.session_state.config = {'cours_max': 5, 'cadencier': [1, 3, 7, 14, 30], 'seuils': {1: 10, 3: 12, 7: 14, 14: 15, 30: 16}}
 
-# --- SIDEBAR (Réglages) ---
+# --- SIDEBAR ---
 st.sidebar.title("⚙️ Pilot Expert")
 with st.sidebar.expander("🛠️ Réglages complets"):
     st.session_state.config['cours_max'] = st.number_input("Max cours/jour", 1, 20, st.session_state.config['cours_max'])
@@ -48,9 +48,7 @@ if page == "Dashboard":
     
     st.subheader("⚠️ Tableau des Rattrapages")
     st.table(df[df['Note'] != '0'])
-    # Bouton rattrapage restauré
     if st.button("🚀 Générer saisie intelligente des rattrapages"):
-        # Logique de rattrapage
         save_data(st.session_state.data); st.rerun()
 
 elif page == "Planning & Saisie":
@@ -78,12 +76,13 @@ elif page == "Planning & Saisie":
         with cols[i]:
             st.markdown(f"**{day.strftime('%d/%m')}**")
             for _, r in df[df['Date'] == day].iterrows():
-                st.caption(f"📌 {r['Matiere']}")
+                # Icône cible pour le visuel
+                st.caption(f"🎯 {r['Matiere']} : {r['Chapitre']}")
                 
-    # Ajout de lignes vides (espace)
-    st.write("\n\n\n") 
+    st.write("---") # Ligne de séparation nette
+    st.write("\n\n") 
     
-    st.subheader("Saisie des Notes")
+    st.subheader("📝 Saisie des Notes")
     edited = st.data_editor(df, use_container_width=True)
     if st.button("Enregistrer"):
         st.session_state.data.update(edited)
