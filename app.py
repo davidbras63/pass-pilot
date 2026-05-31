@@ -1,13 +1,22 @@
 import streamlit as st
 import pandas as pd
 import datetime as dt
+import os
 
 st.set_page_config(layout="wide")
 
+# --- GESTION PERSISTANCE ---
+DATA_FILE = "data.csv"
+def load_data():
+    if os.path.exists(DATA_FILE): return pd.read_csv(DATA_FILE, parse_dates=['Date'])
+    return pd.DataFrame(columns=['Dossier', 'Matiere', 'Chapitre', 'J_Type', 'Date', 'Note'])
+
+def save_data(df): df.to_csv(DATA_FILE, index=False)
+
 # --- INITIALISATION ---
+if 'data' not in st.session_state: st.session_state.data = load_data()
 if 'dossiers' not in st.session_state:
     st.session_state.dossiers = {"PASS": ["UE1", "UE2"]}
-    st.session_state.data = pd.DataFrame(columns=['Dossier', 'Matiere', 'Chapitre', 'J_Type', 'Date', 'Note'])
     st.session_state.config = {'cours_max': 5, 'cadencier': [1, 3, 7, 14, 30], 'seuils': {1: 10, 3: 12, 7: 14, 14: 15, 30: 16}}
 
 # --- SIDEBAR ---
@@ -44,7 +53,6 @@ if page == "Dashboard":
             st.rerun()
             
     st.subheader("⚠️ Alertes Rattrapage")
-    # Logique dynamique avec seuils par J
     alertes_data = []
     for idx, row in df.iterrows():
         if row['Note'] > 0:
@@ -58,11 +66,12 @@ if page == "Dashboard":
         col_a.warning(f"Rattrapage {row['J_Type']} : {row['Chapitre']} ({row['Matiere']}) - Note : {row['Note']}/20")
         if col_b.button("Planifier", key=f"plan_{idx}"):
             prochaine_date = dt.date.today() + dt.timedelta(days=1)
-            while not st.session_state.data[st.session_state.data['Date'] == prochaine_date].empty:
+            while not st.session_state.data[st.session_state.data['Date'].astype(str) == str(prochaine_date)].empty:
                 prochaine_date += dt.timedelta(days=1)
             new_rattrapage = {'Dossier': choix_dos, 'Matiere': row['Matiere'], 'Chapitre': row['Chapitre'], 
                               'J_Type': 'Rattrapage', 'Date': prochaine_date, 'Note': 0}
             st.session_state.data = pd.concat([st.session_state.data, pd.DataFrame([new_rattrapage])], ignore_index=True)
+            save_data(st.session_state.data)
             st.rerun()
 
 elif page == "Planning & Saisie":
@@ -77,6 +86,7 @@ elif page == "Planning & Saisie":
                     new_row = {'Dossier': choix_dos, 'Matiere': mat, 'Chapitre': chap, 
                                'J_Type': f"J{j}", 'Date': d0 + dt.timedelta(days=j), 'Note': 0}
                     st.session_state.data = pd.concat([st.session_state.data, pd.DataFrame([new_row])], ignore_index=True)
+                save_data(st.session_state.data)
                 st.rerun()
 
     cols = st.columns(7)
@@ -85,7 +95,7 @@ elif page == "Planning & Saisie":
         day = today + dt.timedelta(days=i)
         with cols[i]:
             st.markdown(f"**{day.strftime('%A %d')}**")
-            for idx, r in df[df['Date'] == day].iterrows():
+            for idx, r in df[df['Date'].astype(str) == str(day)].iterrows():
                 st.write(f"ID {idx}: {r['Chapitre']} ({r['J_Type']})")
 
     st.markdown("---")
@@ -96,6 +106,7 @@ elif page == "Planning & Saisie":
     
     if st.button("Enregistrer les notes"):
         st.session_state.data = edited_df.drop(columns=['ID'])
+        save_data(st.session_state.data)
         st.rerun()
 
 elif page == "Graphiques":
