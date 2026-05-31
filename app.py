@@ -5,7 +5,7 @@ import os
 
 st.set_page_config(layout="wide")
 
-# --- PERSISTANCE (Rien à faire, tout est sauvegardé automatiquement) ---
+# --- PERSISTANCE ---
 DATA_FILE = "data.csv"
 def load_data():
     if os.path.exists(DATA_FILE): return pd.read_csv(DATA_FILE, parse_dates=['Date'])
@@ -43,7 +43,7 @@ elif page == "Planning & Saisie":
             d0 = st.date_input("Date J0")
             date_exam = st.date_input("Date Examen", value=None)
             if st.form_submit_button("Valider"):
-                if not date_exam: st.error("Saisir date examen !")
+                if not date_exam: st.error("Saisir la date de l'examen !")
                 else:
                     for j in [0] + st.session_state.config['cadencier']:
                         d_sess = d0 + dt.timedelta(days=j)
@@ -53,7 +53,6 @@ elif page == "Planning & Saisie":
                             st.session_state.data = pd.concat([st.session_state.data, pd.DataFrame([new])], ignore_index=True)
                     save_data(st.session_state.data); st.rerun()
 
-    # Planning visuel et simple
     cols = st.columns(7)
     for i in range(7):
         day = dt.date.today() + dt.timedelta(days=i)
@@ -61,7 +60,6 @@ elif page == "Planning & Saisie":
             st.write(f"**{day.strftime('%d/%m')}**")
             for idx, r in df[df['Date'].astype(str) == str(day)].iterrows():
                 st.info(f"{r['Matiere']} - {r['Chapitre']}")
-                # Décalage ultra-simple
                 new_d = st.date_input("Décaler au :", key=f"d_{idx}", label_visibility="collapsed")
                 if st.button("Confirmer", key=f"b_{idx}"):
                     st.session_state.data.at[idx, 'Date'] = new_d
