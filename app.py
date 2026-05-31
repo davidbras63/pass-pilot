@@ -17,7 +17,7 @@ if 'dossiers' not in st.session_state:
     st.session_state.dossiers = {"PASS": ["UE1", "UE2"]}
     st.session_state.config = {'cours_max': 5, 'cadencier': [1, 3, 7, 14, 30], 'seuils': {1: 10, 3: 12, 7: 14, 14: 15, 30: 16}}
 
-# --- SIDEBAR (Avec création de dossier) ---
+# --- SIDEBAR ---
 st.sidebar.title("⚙️ Pilot Expert")
 with st.sidebar.expander("🛠️ Réglages complets"):
     st.session_state.config['cours_max'] = st.number_input("Max cours/jour", 1, 20, st.session_state.config['cours_max'])
@@ -26,7 +26,6 @@ with st.sidebar.expander("🛠️ Réglages complets"):
     for j in st.session_state.config['cadencier']:
         st.session_state.config['seuils'][j] = st.slider(f"Seuil J{j}", 0, 20, st.session_state.config['seuils'].get(j, 10))
 
-# Création de dossier
 new_dos = st.sidebar.text_input("Créer Dossier")
 if st.sidebar.button("Ajouter Dossier") and new_dos: 
     st.session_state.dossiers[new_dos] = []
@@ -43,10 +42,14 @@ jours_fr = ["Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi", "Dimanc
 # --- PAGES ---
 if page == "Dashboard":
     st.title(f"🎯 Dashboard : {choix_dos}")
-    # Réaffichage des matières suivies
     st.subheader("Matières suivies")
+    # Retour des petites poubelles
     for m in st.session_state.dossiers[choix_dos]:
-        st.info(f"{m} : {len(df[df['Matiere'] == m])} sessions")
+        col1, col2 = st.columns([4, 1])
+        col1.info(f"{m} : {len(df[df['Matiere'] == m])} sessions")
+        if col2.button("🗑️", key=f"del_{m}"):
+            st.session_state.dossiers[choix_dos].remove(m)
+            st.rerun()
         
     st.subheader("⚠️ Alertes Rattrapage")
     for idx, row in df.iterrows():
