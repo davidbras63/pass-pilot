@@ -54,10 +54,10 @@ elif page == "Planning & Saisie":
             nom = st.text_input("Chapitre")
             d0 = st.date_input("Date")
             if st.form_submit_button("Ajouter"):
-                st.session_state.data = pd.concat([st.session_state.data, pd.DataFrame([{'Dossier': choix_dos, 'Matiere': mat, 'Chapitre': nom, 'Date': d0, 'Note': 0}])])
+                new_row = pd.DataFrame([{'Dossier': choix_dos, 'Matiere': mat, 'Chapitre': nom, 'Date': d0, 'Note': 0}])
+                st.session_state.data = pd.concat([st.session_state.data, new_row], ignore_index=True)
                 st.rerun()
     
-    # Grille Planning
     cols = st.columns(7)
     today = dt.date.today()
     for i in range(7):
@@ -85,4 +85,6 @@ elif page == "Graphiques":
     st.title("📊 Évolution Moyenne")
     for m in st.session_state.dossiers[choix_dos]:
         st.subheader(m)
-        if not df[df['Matiere'] == m].empty: st.line_chart(df[df['Matiere'] == m].set
+        m_df = df[df['Matiere'] == m]
+        if not m_df.empty: 
+            st.line_chart(m_df.set_index('Date')['Note'])
