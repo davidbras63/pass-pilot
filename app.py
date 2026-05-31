@@ -57,4 +57,4 @@ elif page == "Planning (Saisie)":
         saisie = st.text_input("Notes (ex: 11, 15, 18)")
         if st.button("Valider la saisie"):
             try:
-                n = [float(x.strip()) for x in saisie.
+                n = [float(x.strip()) for x in saisie.split(',')]
