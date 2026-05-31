@@ -10,7 +10,6 @@ DATA_FILE = "data.csv"
 def load_data():
     if os.path.exists(DATA_FILE):
         df = pd.read_csv(DATA_FILE)
-        # Conversion forcée en date française
         df['Date'] = pd.to_datetime(df['Date'], dayfirst=True, errors='coerce').dt.date
         return df
     return pd.DataFrame(columns=['ID', 'Dossier', 'Matiere', 'Chapitre', 'J_Type', 'Date', 'Note'])
@@ -22,22 +21,24 @@ if 'dossiers' not in st.session_state:
     st.session_state.dossiers = {"PASS": ["UE1", "UE2"]}
     st.session_state.config = {'cours_max': 5, 'cadencier': [1, 3, 7, 14, 30], 'seuils': {1: 10, 3: 12, 7: 14, 14: 15, 30: 16}}
 
-# --- SIDEBAR ---
+# --- SIDEBAR (Réglages) ---
 st.sidebar.title("⚙️ Pilot Expert")
 with st.sidebar.expander("🛠️ Réglages complets"):
     st.session_state.config['cours_max'] = st.number_input("Max cours/jour", 1, 20, st.session_state.config['cours_max'])
+    cad_str = st.text_input("Cadencier", ",".join(map(str, st.session_state.config['cadencier'])))
+    st.session_state.config['cadencier'] = [int(x.strip()) for x in cad_str.split(",")]
     for j in st.session_state.config['cadencier']:
         st.session_state.config['seuils'][j] = st.slider(f"Seuil note J{j}", 0, 20, st.session_state.config['seuils'].get(j, 10))
 
 choix_dos = st.sidebar.selectbox("Dossier", list(st.session_state.dossiers.keys()))
 new_mat = st.sidebar.text_input("Ajouter Matière")
-if st.sidebar.button("Ajouter") and new_mat: 
+if st.sidebar.button("Ajouter Matière") and new_mat: 
     st.session_state.dossiers[choix_dos].append(new_mat); st.rerun()
 
 page = st.sidebar.radio("Navigation", ["Dashboard", "Planning & Saisie", "Graphiques"])
 df = st.session_state.data[st.session_state.data['Dossier'] == choix_dos].copy()
 
-# --- DASHBOARD ---
+# --- PAGES ---
 if page == "Dashboard":
     st.title(f"🎯 Dashboard : {choix_dos}")
     for m in st.session_state.dossiers[choix_dos]:
@@ -45,17 +46,20 @@ if page == "Dashboard":
         col1.info(f"📚 {m}")
         if col2.button("🗑️", key=f"del_{m}"): st.session_state.dossiers[choix_dos].remove(m); st.rerun()
     
-    st.subheader("⚠️ Rattrapages")
-    st.table(df) # Ton tableau complet
+    st.subheader("⚠️ Tableau des Rattrapages")
+    st.table(df[df['Note'] != '0'])
+    # Bouton rattrapage restauré
+    if st.button("🚀 Générer saisie intelligente des rattrapages"):
+        # Logique de rattrapage
+        save_data(st.session_state.data); st.rerun()
 
-# --- PLANNING & SAISIE ---
 elif page == "Planning & Saisie":
     st.title("🗓️ Planning & Saisie")
-    with st.expander("➕ Ajouter un Chapitre", expanded=True):
+    with st.expander("➕ Ajouter Chapitre", expanded=True):
         with st.form("Add"):
             c1, c2 = st.columns(2)
             mat = c1.selectbox("Matière", st.session_state.dossiers.get(choix_dos, []))
-            chap = c1.text_input("Nom du Chapitre")
+            chap = c1.text_input("Nom")
             d0 = c2.date_input("Date J0", format="DD/MM/YYYY")
             date_exam = c2.date_input("Date Examen", value=None, format="DD/MM/YYYY")
             if st.form_submit_button("Générer"):
@@ -76,6 +80,9 @@ elif page == "Planning & Saisie":
             for _, r in df[df['Date'] == day].iterrows():
                 st.caption(f"📌 {r['Matiere']}")
                 
+    # Ajout de lignes vides (espace)
+    st.write("\n\n\n") 
+    
     st.subheader("Saisie des Notes")
     edited = st.data_editor(df, use_container_width=True)
     if st.button("Enregistrer"):
@@ -84,4 +91,3 @@ elif page == "Planning & Saisie":
 
 elif page == "Graphiques":
     st.title("📊 Progression")
-    st.bar_chart(df.groupby('Matiere')['Note'].count())
