@@ -16,6 +16,9 @@ with st.sidebar.expander("🛠️ Réglages complets"):
     st.session_state.config['cours_max'] = st.number_input("Max cours/jour", 1, 20, st.session_state.config['cours_max'])
     cad_str = st.text_input("Cadencier", ",".join(map(str, st.session_state.config['cadencier'])))
     st.session_state.config['cadencier'] = [int(x.strip()) for x in cad_str.split(",")]
+    st.write("**Seuils de rattrapage**")
+    for j in st.session_state.config['cadencier']:
+        st.session_state.config['seuils'][j] = st.slider(f"Seuil J{j}", 0, 20, st.session_state.config['seuils'].get(j, 10))
 
 new_dos = st.sidebar.text_input("Créer Dossier")
 if st.sidebar.button("Ajouter Dossier") and new_dos: st.session_state.dossiers[new_dos] = []
@@ -32,28 +35,19 @@ df = st.session_state.data[st.session_state.data['Dossier'] == choix_dos]
 # --- PAGES ---
 if page == "Dashboard":
     st.title(f"🎯 Dashboard : {choix_dos}")
+    st.subheader("Matières suivies")
     for m in st.session_state.dossiers[choix_dos]:
         col1, col2 = st.columns([4, 1])
-        col1.info(f"{m} : {len(df[df['Matiere'] == m])} sessions planifiées")
+        col1.info(f"{m} : {len(df[df['Matiere'] == m])} sessions")
         if col2.button("🗑️", key=f"del_{m}"):
             st.session_state.dossiers[choix_dos].remove(m)
             st.rerun()
+    st.subheader("⚠️ Alertes Rattrapage")
     st.dataframe(df[(df['Note'] > 0) & (df['Note'] < 10)], use_container_width=True)
 
 elif page == "Planning & Saisie":
-    st.title("🗓️ Planning Hebdomadaire & Saisie")
-    
-    # 1. Planning Hebdo visuel
-    cols = st.columns(7)
-    today = dt.date.today()
-    for i in range(7):
-        day = today + dt.timedelta(days=i)
-        with cols[i]:
-            st.markdown(f"**{day.strftime('%A %d')}**")
-            for idx, r in df[df['Date'] == day].iterrows():
-                st.write(f"ID {idx}: {r['Chapitre']} ({r['J_Type']})")
-
-    # 2. Ajout Chapitre
+    st.title("🗓️ Planning & Saisie")
+    # Ajout au-dessus (Expander)
     with st.expander("➕ Ajouter Chapitre"):
         with st.form("Add"):
             mat = st.selectbox("Matière", st.session_state.dossiers[choix_dos])
@@ -66,16 +60,24 @@ elif page == "Planning & Saisie":
                     st.session_state.data = pd.concat([st.session_state.data, pd.DataFrame([new_row])], ignore_index=True)
                 st.rerun()
 
-    # 3. Saisie directe par tableau (Data Editor)
-    st.subheader("✏️ Saisie des Notes (Cliquez sur la colonne 'Note')")
+    # Planning Hebdo (Colonnes)
+    cols = st.columns(7)
+    today = dt.date.today()
+    for i in range(7):
+        day = today + dt.timedelta(days=i)
+        with cols[i]:
+            st.markdown(f"**{day.strftime('%A %d')}**")
+            for idx, r in df[df['Date'] == day].iterrows():
+                st.write(f"ID {idx}: {r['Chapitre']} ({r['J_Type']})")
+
+    st.markdown("---")
+    st.subheader("✏️ Saisie des Notes")
+    # Tableau éditable avec ID en première colonne
     df_with_id = st.session_state.data.copy()
     df_with_id.insert(0, 'ID', df_with_id.index)
-    
-    # Éditeur interactif
     edited_df = st.data_editor(df_with_id, use_container_width=True)
     
     if st.button("Enregistrer les notes"):
-        # On met à jour le dataframe global avec les modifs faites dans l'éditeur
         st.session_state.data = edited_df.drop(columns=['ID'])
         st.rerun()
 
