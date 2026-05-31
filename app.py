@@ -2,11 +2,10 @@ import streamlit as st
 import pandas as pd
 import datetime as dt
 import re
-import plotly.graph_objects as go
 
 st.set_page_config(page_title="PASS Pilot Expert", layout="wide")
 
-# Initialisation
+# Initialisation des données
 if 'data' not in st.session_state:
     st.session_state.data = pd.DataFrame(columns=['UE', 'Chapitre_Complet', 'Chapitre_Base', 'Type', 'Date', 'Note', 'Nbre_QCM'])
 if 'seuils' not in st.session_state:
@@ -16,7 +15,7 @@ if 'intervalles' not in st.session_state:
 
 page = st.sidebar.radio("Navigation", ["Dashboard", "Planning (Saisie)", "UE1", "UE2", "UE3", "UE4", "UE5", "UE6", "UE7"])
 
-# --- DASHBOARD COMPACT ---
+# --- DASHBOARD ---
 if page == "Dashboard":
     st.title("🎯 Dashboard")
     c1, c2, c3 = st.columns(3)
@@ -31,7 +30,7 @@ if page == "Dashboard":
     alertes = df_temp[(df_temp['Note'] > 0) & (df_temp['Note'] < df_temp['Seuil'])]
     st.dataframe(alertes[['UE', 'Chapitre_Complet', 'Note', 'Seuil']], use_container_width=True)
 
-# --- PLANNING VISUEL ---
+# --- PLANNING (SAISIE) ---
 elif page == "Planning (Saisie)":
     st.title("🗓️ Mon Planning")
     with st.expander("➕ Ajouter un nouveau chapitre"):
@@ -58,3 +57,22 @@ elif page == "Planning (Saisie)":
         if st.button("Valider la saisie"):
             try:
                 n = [float(x.strip()) for x in saisie.split(',')]
+                st.session_state.data.at[idx, 'Note'] = round(sum(n)/len(n), 1)
+                st.session_state.data.at[idx, 'Nbre_QCM'] = len(n)
+                st.rerun()
+            except: 
+                st.error("Format invalide, utilisez des virgules")
+    else: 
+        st.info("Ajoutez un chapitre pour commencer.")
+
+# --- PAGES UE ---
+elif page.startswith("UE"):
+    st.title(f"📊 {page}")
+    df_ue = st.session_state.data[st.session_state.data['UE'] == page]
+    if not df_ue.empty:
+        for base in df_ue['Chapitre_Base'].unique():
+            st.write(f"### {base}")
+            sub = df_ue[df_ue['Chapitre_Base'] == base].sort_values('Date')
+            st.line_chart(sub.set_index('Date')['Note'])
+    else:
+        st.write("Aucune donnée pour cette UE.")
