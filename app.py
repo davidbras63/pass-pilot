@@ -5,7 +5,7 @@ import re
 
 st.set_page_config(page_title="PASS Pilot Expert", layout="wide")
 
-# Initialisation des données
+# Initialisation des états
 if 'data' not in st.session_state:
     st.session_state.data = pd.DataFrame(columns=['UE', 'Chapitre_Complet', 'Chapitre_Base', 'Type', 'Date', 'Note', 'Nbre_QCM'])
 if 'seuils' not in st.session_state:
@@ -13,10 +13,24 @@ if 'seuils' not in st.session_state:
 if 'intervalles' not in st.session_state:
     st.session_state.intervalles = {'J1': 1, 'J3': 3, 'J7': 7, 'J14': 14, 'J30': 30, 'J60': 60, 'J90': 90, 'J120': 120}
 
-page = st.sidebar.radio("Navigation", ["Dashboard", "Planning (Saisie)", "UE1", "UE2", "UE3", "UE4", "UE5", "UE6", "UE7"])
+page = st.sidebar.radio("Navigation", ["Dashboard", "Planning (Saisie)", "⚙️ Paramètres", "UE1", "UE2", "UE3", "UE4", "UE5", "UE6", "UE7"])
+
+# --- PARAMÈTRES ---
+if page == "⚙️ Paramètres":
+    st.title("⚙️ Réglages Personnalisés")
+    col1, col2 = st.columns(2)
+    with col1:
+        st.subheader("Seuils d'alerte (Note min)")
+        for jour in st.session_state.seuils:
+            st.session_state.seuils[jour] = st.number_input(f"Seuil {jour}", 0, 20, st.session_state.seuils[jour])
+    with col2:
+        st.subheader("Intervalles (Jours)")
+        for jour in st.session_state.intervalles:
+            st.session_state.intervalles[jour] = st.number_input(f"Délai {jour}", 0, 365, st.session_state.intervalles[jour])
+    st.success("Modifications prises en compte !")
 
 # --- DASHBOARD ---
-if page == "Dashboard":
+elif page == "Dashboard":
     st.title("🎯 Dashboard")
     c1, c2, c3 = st.columns(3)
     c1.metric("Chapitres", len(st.session_state.data['Chapitre_Base'].unique()))
