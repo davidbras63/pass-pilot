@@ -44,11 +44,18 @@ if page == "Dashboard":
             st.rerun()
             
     st.subheader("⚠️ Alertes Rattrapage")
-    alertes = df[(df['Note'] > 0) & (df['Note'] < 10)]
+    # Logique dynamique avec seuils par J
+    alertes_data = []
+    for idx, row in df.iterrows():
+        if row['Note'] > 0:
+            j_num = int(row['J_Type'].replace('J', '')) if 'J' in str(row['J_Type']) else 0
+            seuil = st.session_state.config['seuils'].get(j_num, 10)
+            if row['Note'] < seuil:
+                alertes_data.append((idx, row))
     
-    for idx, row in alertes.iterrows():
+    for idx, row in alertes_data:
         col_a, col_b = st.columns([3, 1])
-        col_a.warning(f"Rattrapage : {row['Chapitre']} ({row['Matiere']}) - Note : {row['Note']}")
+        col_a.warning(f"Rattrapage {row['J_Type']} : {row['Chapitre']} ({row['Matiere']}) - Note : {row['Note']}/20")
         if col_b.button("Planifier", key=f"plan_{idx}"):
             prochaine_date = dt.date.today() + dt.timedelta(days=1)
             while not st.session_state.data[st.session_state.data['Date'] == prochaine_date].empty:
@@ -57,8 +64,6 @@ if page == "Dashboard":
                               'J_Type': 'Rattrapage', 'Date': prochaine_date, 'Note': 0}
             st.session_state.data = pd.concat([st.session_state.data, pd.DataFrame([new_rattrapage])], ignore_index=True)
             st.rerun()
-            
-    st.dataframe(alertes, use_container_width=True)
 
 elif page == "Planning & Saisie":
     st.title("🗓️ Planning & Saisie")
