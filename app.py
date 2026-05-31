@@ -42,12 +42,26 @@ if page == "Dashboard":
         if col2.button("🗑️", key=f"del_{m}"):
             st.session_state.dossiers[choix_dos].remove(m)
             st.rerun()
+            
     st.subheader("⚠️ Alertes Rattrapage")
-    st.dataframe(df[(df['Note'] > 0) & (df['Note'] < 10)], use_container_width=True)
+    alertes = df[(df['Note'] > 0) & (df['Note'] < 10)]
+    
+    for idx, row in alertes.iterrows():
+        col_a, col_b = st.columns([3, 1])
+        col_a.warning(f"Rattrapage : {row['Chapitre']} ({row['Matiere']}) - Note : {row['Note']}")
+        if col_b.button("Planifier", key=f"plan_{idx}"):
+            prochaine_date = dt.date.today() + dt.timedelta(days=1)
+            while not st.session_state.data[st.session_state.data['Date'] == prochaine_date].empty:
+                prochaine_date += dt.timedelta(days=1)
+            new_rattrapage = {'Dossier': choix_dos, 'Matiere': row['Matiere'], 'Chapitre': row['Chapitre'], 
+                              'J_Type': 'Rattrapage', 'Date': prochaine_date, 'Note': 0}
+            st.session_state.data = pd.concat([st.session_state.data, pd.DataFrame([new_rattrapage])], ignore_index=True)
+            st.rerun()
+            
+    st.dataframe(alertes, use_container_width=True)
 
 elif page == "Planning & Saisie":
     st.title("🗓️ Planning & Saisie")
-    # Ajout au-dessus (Expander)
     with st.expander("➕ Ajouter Chapitre"):
         with st.form("Add"):
             mat = st.selectbox("Matière", st.session_state.dossiers[choix_dos])
@@ -60,7 +74,6 @@ elif page == "Planning & Saisie":
                     st.session_state.data = pd.concat([st.session_state.data, pd.DataFrame([new_row])], ignore_index=True)
                 st.rerun()
 
-    # Planning Hebdo (Colonnes)
     cols = st.columns(7)
     today = dt.date.today()
     for i in range(7):
@@ -72,7 +85,6 @@ elif page == "Planning & Saisie":
 
     st.markdown("---")
     st.subheader("✏️ Saisie des Notes")
-    # Tableau éditable avec ID en première colonne
     df_with_id = st.session_state.data.copy()
     df_with_id.insert(0, 'ID', df_with_id.index)
     edited_df = st.data_editor(df_with_id, use_container_width=True)
