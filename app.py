@@ -36,18 +36,24 @@ df = st.session_state.data[st.session_state.data['Dossier'] == choix_dos]
 
 if page == "Dashboard":
     st.title(f"🎯 Dashboard : {choix_dos}")
+    
     # Métriques
     c1, c2, c3 = st.columns(3)
-    c1.metric("Matières créées", len(st.session_state.dossiers[choix_dos]))
-    c2.metric("Chapitres enregistrés", len(df))
-    c3.metric("Moyenne Générale", f"{df[df['Note']>0]['Note'].mean():.1f}/20" if not df[df['Note']>0].empty else "0/20")
+    c1.metric("Matières", len(st.session_state.dossiers[choix_dos]))
+    c2.metric("Chapitres", len(df))
+    c3.metric("Moyenne", f"{df[df['Note']>0]['Note'].mean():.1f}/20" if not df[df['Note']>0].empty else "0/20")
     
     st.write("---")
-    # Visualisation immédiate des matières
-    st.subheader("📁 Matières de ce dossier")
-    cols = st.columns(4)
-    for i, mat in enumerate(st.session_state.dossiers[choix_dos]):
-        cols[i % 4].success(f"📘 {mat}")
+    st.subheader("📁 Gérer les Matières")
+    # Affichage des matières avec bouton de suppression
+    for mat in st.session_state.dossiers[choix_dos]:
+        col1, col2 = st.columns([4, 1])
+        col1.write(f"📘 **{mat}**")
+        if col2.button(f"Supprimer {mat}", key=f"del_{mat}"):
+            st.session_state.dossiers[choix_dos].remove(mat)
+            # Optionnel : supprimer aussi les données associées
+            st.session_state.data = st.session_state.data[st.session_state.data['Matiere'] != mat]
+            st.rerun()
     
     st.subheader("📋 État global des chapitres")
     st.dataframe(df, use_container_width=True)
