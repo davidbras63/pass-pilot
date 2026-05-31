@@ -10,8 +10,7 @@ DATA_FILE = "data.csv"
 def load_data():
     if os.path.exists(DATA_FILE):
         df = pd.read_csv(DATA_FILE, parse_dates=['Date'])
-        if 'ID' not in df.columns:
-            df.insert(0, 'ID', range(len(df)))
+        if 'ID' not in df.columns: df.insert(0, 'ID', range(len(df)))
         return df
     return pd.DataFrame(columns=['ID', 'Dossier', 'Matiere', 'Chapitre', 'J_Type', 'Date', 'Note'])
 
@@ -24,22 +23,12 @@ if 'dossiers' not in st.session_state:
 
 # --- SIDEBAR ---
 st.sidebar.title("⚙️ Pilot Expert")
-with st.sidebar.expander("🛠️ Réglages complets"):
+with st.sidebar.expander("🛠️ Réglages"):
     st.session_state.config['cours_max'] = st.number_input("Max cours/jour", 1, 20, st.session_state.config['cours_max'])
     cad_str = st.text_input("Cadencier", ",".join(map(str, st.session_state.config['cadencier'])))
     st.session_state.config['cadencier'] = [int(x.strip()) for x in cad_str.split(",")]
-    for j in st.session_state.config['cadencier']:
-        st.session_state.config['seuils'][j] = st.slider(f"Seuil J{j}", 0, 20, st.session_state.config['seuils'].get(j, 10))
-
-new_dos = st.sidebar.text_input("Créer Dossier")
-if st.sidebar.button("Ajouter Dossier") and new_dos: 
-    st.session_state.dossiers[new_dos] = []
-    st.rerun()
 
 choix_dos = st.sidebar.selectbox("Dossier", list(st.session_state.dossiers.keys()))
-new_mat = st.sidebar.text_input("Ajouter Matière")
-if st.sidebar.button("Ajouter Matière") and new_mat: st.session_state.dossiers[choix_dos].append(new_mat)
-
 page = st.sidebar.radio("Navigation", ["Dashboard", "Planning & Saisie", "Graphiques"])
 df = st.session_state.data[st.session_state.data['Dossier'] == choix_dos]
 jours_fr = ["Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi", "Dimanche"]
@@ -47,59 +36,64 @@ jours_fr = ["Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi", "Dimanc
 # --- PAGES ---
 if page == "Dashboard":
     st.title(f"🎯 Dashboard : {choix_dos}")
-    st.subheader("Matières suivies")
-    for m in st.session_state.dossiers[choix_dos]:
-        col1, col2 = st.columns([4, 1])
-        col1.info(f"{m} : {len(df[df['Matiere'] == m])} sessions")
-        if col2.button("🗑️", key=f"del_{m}"):
-            st.session_state.dossiers[choix_dos].remove(m)
-            st.rerun()
-        
     st.subheader("⚠️ Alertes Rattrapage")
     for idx, row in df.iterrows():
-        if row['Note'] > 0:
-            j_num = int(row['J_Type'].replace('J', '')) if 'J' in str(row['J_Type']) else 0
-            if row['Note'] < st.session_state.config['seuils'].get(j_num, 10):
-                if st.button(f"Planifier rattrapage : {row['Chapitre']}", key=f"plan_{idx}"):
-                    new_id = int(st.session_state.data['ID'].max()) + 1 if not st.session_state.data.empty else 0
-                    new_r = {'ID': new_id, 'Dossier': choix_dos, 'Matiere': row['Matiere'], 'Chapitre': row['Chapitre'], 'J_Type': 'Rattrapage', 'Date': dt.date.today() + dt.timedelta(days=1), 'Note': 0.0}
-                    st.session_state.data = pd.concat([st.session_state.data, pd.DataFrame([new_r])], ignore_index=True)
-                    save_data(st.session_state.data); st.rerun()
+        if row['Note'] != '0' and str(row['Note']).replace(',', '.').replace(' ', '').replace('.', '').isdigit():
+            # Logique d'alerte simplifiée
+            if float(str(row['Note']).split(',')[-1]) < 10:
+                st.warning(f"Rattrapage conseillé pour : {row['Chapitre']}")
 
 elif page == "Planning & Saisie":
     st.title("🗓️ Planning & Saisie")
-    with st.expander("➕ Ajouter Chapitre"):
+    
+    # 1. Ajout de chapitres
+    with st.expander("➕ Ajouter un nouveau chapitre"):
         with st.form("Add"):
             mat = st.selectbox("Matière", st.session_state.dossiers[choix_dos])
             chap = st.text_input("Nom du Chapitre")
-            d0 = st.date_input("Date J0", format="DD/MM/YYYY")
-            date_exam = st.date_input("Date de l'examen", value=None, format="DD/MM/YYYY")
-            if st.form_submit_button("Générer planning"):
-                if date_exam is None: st.error("⚠️ Date examen obligatoire !")
-                else:
-                    for j in [0] + st.session_state.config['cadencier']:
-                        d_sess = d0 + dt.timedelta(days=j)
-                        if d_sess <= date_exam and d_sess.weekday() != 6:
-                            new_id = int(st.session_state.data['ID'].max()) + 1 if not st.session_state.data.empty else 0
-                            new_row = {'ID': new_id, 'Dossier': choix_dos, 'Matiere': mat, 'Chapitre': chap, 'J_Type': f"J{j}", 'Date': d_sess, 'Note': 0.0}
-                            st.session_state.data = pd.concat([st.session_state.data, pd.DataFrame([new_row])], ignore_index=True)
-                    save_data(st.session_state.data); st.rerun()
+            d0 = st.date_input("Date", format="DD/MM/YYYY")
+            if st.form_submit_button("Ajouter"):
+                new_id = int(st.session_state.data['ID'].max()) + 1 if not st.session_state.data.empty else 0
+                new_row = {'ID': new_id, 'Dossier': choix_dos, 'Matiere': mat, 'Chapitre': chap, 'J_Type': 'J0', 'Date': d0, 'Note': '0'}
+                st.session_state.data = pd.concat([st.session_state.data, pd.DataFrame([new_row])], ignore_index=True)
+                save_data(st.session_state.data); st.rerun()
 
+    # 2. Planning visuel
+    st.subheader("Planning de la semaine")
     cols = st.columns(7)
     for i in range(7):
         day = dt.date.today() + dt.timedelta(days=i)
         with cols[i]:
             st.markdown(f"**{jours_fr[day.weekday()]}**")
-            st.caption(f"{day.strftime('%d/%m')}")
-            for idx, r in df[df['Date'].astype(str) == str(day)].iterrows():
-                st.markdown("---")
-                st.write(f"**{r['Chapitre']}**")
-                st.write(f"ID: `{r['ID']}` | {r['Matiere']} ({r['J_Type']})")
-                val_note = st.number_input(f"Note ({r['ID']})", 0.0, 20.0, float(r['Note']), step=0.5, key=f"n_{idx}", label_visibility="collapsed")
-                if st.button("Valider note", key=f"b_{idx}"):
-                    st.session_state.data.at[idx, 'Note'] = val_note
-                    save_data(st.session_state.data); st.rerun()
+            for _, r in df[df['Date'].dt.date == day].iterrows():
+                st.caption(f"{r['Matiere']} - {r['Chapitre']}")
+
+    # 3. Tableau de saisie dynamique
+    st.markdown("---")
+    st.subheader("Saisie des notes par jour")
+    selected_date = st.date_input("Sélectionner le jour pour la saisie", dt.date.today())
+    
+    mask = st.session_state.data['Date'].dt.date == selected_date
+    df_to_edit = st.session_state.data[mask].copy()
+
+    if not df_to_edit.empty:
+        edited_df = st.data_editor(
+            df_to_edit[['ID', 'Matiere', 'Chapitre', 'Note']],
+            use_container_width=True,
+            hide_index=True,
+            column_config={
+                "ID": st.column_config.NumberColumn(disabled=True),
+                "Matiere": st.column_config.TextColumn(disabled=True),
+                "Chapitre": st.column_config.TextColumn(disabled=True),
+                "Note": st.column_config.TextColumn("Notes (ex: 12, 14, 15)")
+            }
+        )
+        if st.button("Enregistrer les notes"):
+            for idx, row in edited_df.iterrows():
+                st.session_state.data.loc[st.session_state.data['ID'] == row['ID'], 'Note'] = row['Note']
+            save_data(st.session_state.data)
+            st.rerun()
 
 elif page == "Graphiques":
     st.title("📊 Progression")
-    if not df.empty: st.bar_chart(df[df['Note'] > 0].groupby('Chapitre')['Note'].mean())
+    st.write("Graphiques de suivi des notes.")
