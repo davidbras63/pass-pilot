@@ -54,7 +54,7 @@ if page == "Dashboard":
         if col2.button("🗑️", key=f"del_{m}"):
             st.session_state.dossiers[choix_dos].remove(m); st.rerun()
             
-    st.subheader("⚠️ Alertes Rattrapage")
+    st.subheader("⚠️ Tableau des Rattrapages")
     rattrapages = []
     for idx, row in df.iterrows():
         notes = str(row['Note']).split(',')
@@ -62,7 +62,19 @@ if page == "Dashboard":
             j_num = int(row['J_Type'].replace('J', '')) if 'J' in str(row['J_Type']) else 0
             if float(notes[-1]) < st.session_state.config['seuils'].get(j_num, 10):
                 rattrapages.append(row)
-    if rattrapages: st.table(pd.DataFrame(rattrapages)[['Matiere', 'Chapitre', 'J_Type', 'Note']])
+    
+    if rattrapages:
+        st.table(pd.DataFrame(rattrapages)[['Matiere', 'Chapitre', 'J_Type', 'Note']])
+        if st.button("🚀 Placer rattrapages dans les trous"):
+            for r in rattrapages:
+                found = False
+                for i in range(1, 8):
+                    test_date = dt.date.today() + dt.timedelta(days=i)
+                    if test_date.weekday() < 6 and len(df[df['Date'] == test_date]) < st.session_state.config['cours_max']:
+                        st.session_state.data.loc[st.session_state.data['ID'] == r['ID'], 'Date'] = test_date
+                        found = True; break
+                if not found: st.session_state.data.loc[st.session_state.data['ID'] == r['ID'], 'Date'] = dt.date.today() + dt.timedelta(days=7)
+            save_data(st.session_state.data); st.rerun()
 
 elif page == "Planning & Saisie":
     st.title("🗓️ Planning & Saisie")
@@ -77,32 +89,24 @@ elif page == "Planning & Saisie":
                 else:
                     for j in [0] + st.session_state.config['cadencier']:
                         d_sess = d0 + dt.timedelta(days=j)
-                        # Règle : pas de dimanche
                         if d_sess.weekday() != 6 and d_sess <= date_exam:
                             new_id = int(st.session_state.data['ID'].max()) + 1 if not st.session_state.data.empty else 0
                             new_row = {'ID': new_id, 'Dossier': choix_dos, 'Matiere': mat, 'Chapitre': chap, 'J_Type': f"J{j}", 'Date': d_sess, 'Note': '0'}
                             st.session_state.data = pd.concat([st.session_state.data, pd.DataFrame([new_row])], ignore_index=True)
                     save_data(st.session_state.data); st.rerun()
 
-    st.subheader("Planning visuel")
-    cols = st.columns(7)
-    for i in range(7):
-        day = dt.date.today() + dt.timedelta(days=i)
-        with cols[i]:
-            st.markdown(f"**{jours_fr[day.weekday()]}**")
-            for _, r in df[df['Date'] == day].iterrows():
-                st.caption(f"{r['Matiere']} - {r['Chapitre']}")
-
-    st.markdown("---")
-    st.subheader("Saisie des notes par jour")
-    selected_date = st.date_input("Choisir le jour", dt.date.today())
-    df_to_edit = df[df['Date'] == selected_date].copy()
-    if not df_to_edit.empty:
-        edited_df = st.data_editor(df_to_edit[['ID', 'Matiere', 'Chapitre', 'Note']], use_container_width=True, hide_index=True)
-        if st.button("Enregistrer tout"):
-            for idx, row in edited_df.iterrows():
-                st.session_state.data.loc[st.session_state.data['ID'] == row['ID'], 'Note'] = row['Note']
-            save_data(st.session_state.data); st.rerun()
+    st.subheader("Planning visuel et modifiable")
+    edited_planning = st.data_editor(
+        df[['ID', 'Date', 'Matiere', 'Chapitre', 'Note']],
+        column_config={"Date": st.column_config.DateColumn("Date", format="DD/MM/YYYY"),
+                       "Note": st.column_config.TextColumn("Notes (ex: 12,14)")},
+        use_container_width=True, hide_index=True
+    )
+    if st.button("Enregistrer les modifications"):
+        for idx, row in edited_planning.iterrows():
+            st.session_state.data.loc[st.session_state.data['ID'] == row['ID'], 'Date'] = row['Date']
+            st.session_state.data.loc[st.session_state.data['ID'] == row['ID'], 'Note'] = row['Note']
+        save_data(st.session_state.data); st.rerun()
 
 elif page == "Graphiques":
     st.title("📊 Progression")
