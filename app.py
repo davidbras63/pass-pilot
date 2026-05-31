@@ -58,15 +58,19 @@ elif page == "Planning (Saisie)":
             st.rerun()
 
     st.subheader("📝 Enregistrer des résultats QCM")
-    idx = st.number_input("ID ligne", 0, len(st.session_state.data)-1)
-    saisie = st.text_input("Tapez les notes (ex: 11, 15, 18)")
-    if st.button("Calculer et Enregistrer"):
-        try:
-            n = [float(x.strip()) for x in saisie.split(',')]
-            st.session_state.data.at[idx, 'Note'] = round(sum(n)/len(n), 1)
-            st.session_state.data.at[idx, 'Nbre_QCM'] = len(n)
-            st.rerun()
-        except: st.error("Format invalide")
+    if not st.session_state.data.empty:
+        idx = st.number_input("ID ligne", 0, len(st.session_state.data)-1)
+        saisie = st.text_input("Tapez les notes (ex: 11, 15, 18)")
+        if st.button("Calculer et Enregistrer"):
+            try:
+                n = [float(x.strip()) for x in saisie.split(',')]
+                st.session_state.data.at[idx, 'Note'] = round(sum(n)/len(n), 1)
+                st.session_state.data.at[idx, 'Nbre_QCM'] = len(n)
+                st.rerun()
+            except: st.error("Format invalide")
+    else:
+        st.info("Le planning est vide. Ajoutez des cours dans la partie 'Lancer les rappels' pour voir les lignes apparaître ici.")
+    
     st.dataframe(st.session_state.data)
 
 # --- PAGES UE ---
