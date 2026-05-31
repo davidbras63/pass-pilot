@@ -30,6 +30,13 @@ with st.sidebar.expander("🛠️ Réglages complets"):
     for j in st.session_state.config['cadencier']:
         st.session_state.config['seuils'][j] = st.slider(f"Seuil note J{j}", 0, 20, st.session_state.config['seuils'].get(j, 10))
 
+# --- AJOUT DOSSIER ---
+new_folder = st.sidebar.text_input("Créer un Dossier")
+if st.sidebar.button("➕ Créer Dossier") and new_folder:
+    if new_folder not in st.session_state.dossiers:
+        st.session_state.dossiers[new_folder] = []
+        st.rerun()
+
 choix_dos = st.sidebar.selectbox("Dossier", list(st.session_state.dossiers.keys()))
 new_mat = st.sidebar.text_input("Ajouter Matière")
 if st.sidebar.button("Ajouter Matière") and new_mat: 
@@ -47,7 +54,8 @@ if page == "Dashboard":
         if col2.button("🗑️", key=f"del_{m}"): st.session_state.dossiers[choix_dos].remove(m); st.rerun()
     
     st.subheader("⚠️ Tableau des Rattrapages")
-    st.table(df[df['Note'] != '0'])
+    rattrapages = df[df['Note'] != '0']
+    st.table(rattrapages)
     if st.button("🚀 Générer saisie intelligente des rattrapages"):
         save_data(st.session_state.data); st.rerun()
 
@@ -65,6 +73,7 @@ elif page == "Planning & Saisie":
                 else:
                     for j in [0] + st.session_state.config['cadencier']:
                         d = d0 + dt.timedelta(days=j)
+                        # Sécurité : Pas dimanche, et avant date_exam
                         if d.weekday() != 6 and d <= date_exam:
                             new_row = {'Dossier': choix_dos, 'Matiere': mat, 'Chapitre': chap, 'J_Type': f"J{j}", 'Date': d, 'Note': '0'}
                             st.session_state.data = pd.concat([st.session_state.data, pd.DataFrame([new_row])], ignore_index=True)
@@ -76,10 +85,9 @@ elif page == "Planning & Saisie":
         with cols[i]:
             st.markdown(f"**{day.strftime('%d/%m')}**")
             for _, r in df[df['Date'] == day].iterrows():
-                # Icône cible pour le visuel
                 st.caption(f"🎯 {r['Matiere']} : {r['Chapitre']}")
                 
-    st.write("---") # Ligne de séparation nette
+    st.write("---") 
     st.write("\n\n") 
     
     st.subheader("📝 Saisie des Notes")
