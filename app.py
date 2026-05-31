@@ -101,23 +101,17 @@ elif page == "Planning & Saisie":
     st.markdown("---")
     st.subheader("✏️ Saisie des Notes")
     
-    # Ordonnancement : ID au début, Note à la fin
-    cols_order = ['ID', 'Dossier', 'Matiere', 'Chapitre', 'J_Type', 'Date', 'Note']
-    df_ordered = st.session_state.data[cols_order]
-    
+    # Saisie simplifiée et robuste
     edited_df = st.data_editor(
-        df_ordered, 
+        st.session_state.data, 
         use_container_width=True, 
-        hide_index=True,
-        column_config={
-            "ID": st.column_config.NumberColumn("ID", disabled=False),
-            "Note": st.column_config.NumberColumn("Note", min_value=0.0, max_value=20.0, step=0.5)
-        }
+        hide_index=True
     )
     
     if st.button("Enregistrer les notes"):
         st.session_state.data = edited_df
         save_data(st.session_state.data)
+        st.success("Enregistré !")
         st.rerun()
 
 elif page == "Graphiques":
