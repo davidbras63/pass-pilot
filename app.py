@@ -8,82 +8,69 @@ st.set_page_config(layout="wide")
 if 'dossiers' not in st.session_state:
     st.session_state.dossiers = {"PASS": ["UE1", "UE2"]}
     st.session_state.data = pd.DataFrame(columns=['Dossier', 'Matiere', 'Chapitre', 'Date', 'Note'])
-    st.session_state.config = {'cours_max': 5, 'cadencier': [1, 3, 7, 14, 30], 'seuils': {1: 10, 3: 12, 7: 14, 14: 15, 30: 16}}
+    st.session_state.cadencier = [1, 3, 7, 14, 30]
+    st.session_state.seuils = {1: 10, 3: 12, 7: 14, 14: 15, 30: 16}
 
-# --- SIDEBAR : RÉGLAGES ---
-st.sidebar.title("⚙️ Pilot Expert")
-with st.sidebar.expander("🛠️ Réglages (Fixes)"):
-    st.session_state.config['cours_max'] = st.number_input("Max cours/jour", 1, 20, st.session_state.config['cours_max'])
-    cad_str = st.text_input("Jours", ",".join(map(str, st.session_state.config['cadencier'])))
-    st.session_state.config['cadencier'] = [int(x.strip()) for x in cad_str.split(",")]
-
-st.sidebar.divider()
-# Gestion Dossiers
+# --- SIDEBAR ---
+st.sidebar.title("⚙️ Réglages")
+# Dossiers et Matières
 new_dos = st.sidebar.text_input("Nouveau Dossier")
-if st.sidebar.button("Créer Dossier") and new_dos:
-    st.session_state.dossiers[new_dos] = []
-    st.rerun()
+if st.sidebar.button("Créer Dossier") and new_dos: st.session_state.dossiers[new_dos] = []
+choix_dos = st.sidebar.selectbox("Dossier", list(st.session_state.dossiers.keys()))
 
-choix_dos = st.sidebar.selectbox("Sélectionner Dossier", list(st.session_state.dossiers.keys()))
+new_mat = st.sidebar.text_input("Nouvelle Matière")
+if st.sidebar.button("Ajouter Matière") and new_mat: st.session_state.dossiers[choix_dos].append(new_mat)
 
-# Gestion Matières du dossier actif
-with st.sidebar.expander("Gestion Matières"):
-    new_mat = st.text_input("Ajouter Matière")
-    if st.button("Ajouter") and new_mat:
-        st.session_state.dossiers[choix_dos].append(new_mat)
-        st.rerun()
-    for m in st.session_state.dossiers[choix_dos]:
-        c1, c2 = st.columns([3, 1])
-        c1.write(m)
-        if c2.button("X", key=f"del_{m}"):
-            st.session_state.dossiers[choix_dos].remove(m)
-            st.rerun()
-
-page = st.sidebar.radio("Navigation", ["Dashboard", "Planning & Saisie", "Graphiques"])
+# Cadencier et Seuils
+with st.sidebar.expander("Réglages Jours & Seuils"):
+    cad_input = st.text_input("Cadencier (ex: 1,3,7)", ",".join(map(str, st.session_state.cadencier)))
+    st.session_state.cadencier = [int(x.strip()) for x in cad_input.split(",")]
+    for j in st.session_state.cadencier:
+        st.session_state.seuils[j] = st.slider(f"Seuil J{j}", 0, 20, st.session_state.seuils.get(j, 10))
 
 # --- LOGIQUE ---
 df = st.session_state.data[st.session_state.data['Dossier'] == choix_dos]
 
 # --- PAGES ---
+page = st.sidebar.radio("Navigation", ["Dashboard", "Planning & Saisie", "Graphiques"])
+
 if page == "Dashboard":
     st.title(f"🎯 Dashboard : {choix_dos}")
+    # Résumé Matières + Compteur Chapitres
+    st.subheader("État des matières")
+    for mat in st.session_state.dossiers[choix_dos]:
+        nb = len(df[df['Matiere'] == mat])
+        st.write(f"**{mat}** : {nb} chapitre(s) suivi(s)")
+    
     st.subheader("⚠️ Alertes Rattrapage")
     st.dataframe(df[(df['Note'] > 0) & (df['Note'] < 10)], use_container_width=True)
 
 elif page == "Planning & Saisie":
     st.title("🗓️ Planning & Saisie")
     
-    # 1. Planning Hebdo
-    st.subheader("Planning de la semaine")
-    cols = st.columns(7)
-    today = dt.date.today()
-    for i in range(7):
-        jour = today + dt.timedelta(days=i)
-        with cols[i]:
-            st.markdown(f"**{jour.strftime('%A %d')}**")
-            for _, r in df[df['Date'] == jour].iterrows():
-                st.write(f"- {r['Matiere']}: {r['Chapitre']}")
-
-    # 2. Ajout Chapitre
+    # Ajout Chapitre
     with st.expander("➕ Ajouter un chapitre"):
         with st.form("Add"):
             mat = st.selectbox("Matière", st.session_state.dossiers[choix_dos])
             nom = st.text_input("Chapitre")
             d0 = st.date_input("Date")
-            if st.form_submit_button("Valider"):
-                new_row = pd.DataFrame([{'Dossier': choix_dos, 'Matiere': mat, 'Chapitre': nom, 'Date': d0, 'Note': 0}])
-                st.session_state.data = pd.concat([st.session_state.data, new_row], ignore_index=True)
+            if st.form_submit_button("Ajouter"):
+                st.session_state.data = pd.concat([st.session_state.data, pd.DataFrame([{'Dossier': choix_dos, 'Matiere': mat, 'Chapitre': nom, 'Date': d0, 'Note': 0}])], ignore_index=True)
                 st.rerun()
-
-    # 3. Saisie Notes
-    st.subheader("✏️ Saisie des Notes")
-    with st.expander("Voir le tableau des chapitres pour les ID"):
-        st.dataframe(df, use_container_width=True)
     
-    id_l = st.number_input("Entrer l'ID de la ligne à noter", 0, len(df)-1 if not df.empty else 0)
-    note = st.slider("Note", 0, 20)
-    if st.button("Valider Note"):
-        st.session_state.data.loc[df.index[id_l], 'Note'] = note
+    # Grille Planning
+    cols = st.columns(7)
+    for i, day in enumerate([dt.date.today() + dt.timedelta(days=i) for i in range(7)]):
+        with cols[i]:
+            st.markdown(f"**{day.strftime('%A %d')}**")
+            for _, r in df[df['Date'] == day].iterrows():
+                st.write(f"- {r['Matiere']}: {r['Chapitre']}")
+    
+    # Saisie Notes par tableau
+    st.subheader("✏️ Saisie des Notes")
+    edited_df = st.data_editor(df, num_rows="fixed")
+    if st.button("Enregistrer les notes"):
+        st.session_state.data.update(edited_df)
         st.rerun()
 
 elif page == "Graphiques":
