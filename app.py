@@ -2,13 +2,13 @@ import streamlit as st
 import pandas as pd
 import datetime as dt
 import os
-import json
+import pickle
 
 st.set_page_config(layout="wide")
 
-# --- GESTION DES DONNÉES ET CONFIG ---
+# --- CHARGEMENT ROBUSTE ---
 DATA_FILE = "data.csv"
-CONFIG_FILE = "config.json"
+CONFIG_FILE = "config.pkl"
 
 def load_data():
     if os.path.exists(DATA_FILE):
@@ -19,54 +19,48 @@ def load_data():
 
 def save_data(df): df.to_csv(DATA_FILE, index=False)
 
-def load_config():
-    if os.path.exists(CONFIG_FILE):
-        with open(CONFIG_FILE, "r") as f: return json.load(f)
-    return {'cours_max': 5, 'cadencier': [1, 3, 7, 14, 30], 'seuils': {1: 10, 3: 12, 7: 14, 14: 15, 30: 16}, 'dossiers': {"PASS": ["UE1", "UE2"]}}
-
-def save_config(config):
-    with open(CONFIG_FILE, "w") as f: json.dump(config, f)
+# Chargement simple des réglages
+if os.path.exists(CONFIG_FILE):
+    with open(CONFIG_FILE, 'rb') as f: config_load = pickle.load(f)
+else:
+    config_load = {'dossiers': {"PASS": ["UE1", "UE2"]}, 'cours_max': 5, 'cadencier': [1, 3, 7, 14, 30], 'seuils': {1: 10, 3: 12, 7: 14, 14: 15, 30: 16}}
 
 if 'data' not in st.session_state: st.session_state.data = load_data()
-if 'config' not in st.session_state: st.session_state.config = load_config()
+if 'config' not in st.session_state: st.session_state.config = config_load
+
+def save_all_config():
+    with open(CONFIG_FILE, 'wb') as f: pickle.dump(st.session_state.config, f)
 
 # --- SIDEBAR ---
 st.sidebar.title("⚙️ Pilot Expert")
-
 with st.sidebar.expander("🛠️ Réglages complets"):
     st.session_state.config['cours_max'] = st.number_input("Max cours/jour", 1, 20, st.session_state.config['cours_max'])
-    cad_str = st.text_input("Cadencier (ex: 1,3,7,14,30)", ",".join(map(str, st.session_state.config['cadencier'])))
+    cad_str = st.text_input("Cadencier", ",".join(map(str, st.session_state.config['cadencier'])))
     st.session_state.config['cadencier'] = [int(x.strip()) for x in cad_str.split(",")]
-    for j in st.session_state.config['cadencier']:
-        st.session_state.config['seuils'][j] = st.slider(f"Seuil note J{j}", 0, 20, st.session_state.config['seuils'].get(str(j), 10))
-    if st.button("💾 Sauvegarder les réglages"):
-        save_config(st.session_state.config); st.rerun()
+    if st.button("Sauvegarder Réglages"): save_all_config(); st.rerun()
 
-# --- GESTION DOSSIERS ---
+# --- GESTION DOSSIERS & MATIÈRES ---
 new_folder = st.sidebar.text_input("Créer un Dossier")
 if st.sidebar.button("➕ Créer Dossier") and new_folder:
-    if new_folder not in st.session_state.config['dossiers']:
-        st.session_state.config['dossiers'][new_folder] = []
-        save_config(st.session_state.config); st.rerun()
+    st.session_state.config['dossiers'][new_folder] = []
+    save_all_config(); st.rerun()
 
 choix_dos = st.sidebar.selectbox("Dossier", list(st.session_state.config['dossiers'].keys()))
 new_mat = st.sidebar.text_input("Ajouter Matière")
 if st.sidebar.button("Ajouter Matière") and new_mat: 
     st.session_state.config['dossiers'][choix_dos].append(new_mat)
-    save_config(st.session_state.config); st.rerun()
+    save_all_config(); st.rerun()
 
 page = st.sidebar.radio("Navigation", ["Dashboard", "Planning & Saisie", "Graphiques"])
 df = st.session_state.data[st.session_state.data['Dossier'] == choix_dos].copy()
 
-# --- PAGES ---
+# --- PAGES (Le reste ne bouge pas) ---
 if page == "Dashboard":
     st.title(f"🎯 Dashboard : {choix_dos}")
     for m in st.session_state.config['dossiers'][choix_dos]:
         col1, col2 = st.columns([4, 1])
         col1.info(f"📚 {m}")
-        if col2.button("🗑️", key=f"del_{m}"): 
-            st.session_state.config['dossiers'][choix_dos].remove(m)
-            save_config(st.session_state.config); st.rerun()
+        if col2.button("🗑️", key=f"del_{m}"): st.session_state.config['dossiers'][choix_dos].remove(m); save_all_config(); st.rerun()
     
     st.subheader("⚠️ Tableau des Rattrapages")
     st.table(df[df['Note'] != '0'])
@@ -99,9 +93,7 @@ elif page == "Planning & Saisie":
             st.markdown(f"**{day.strftime('%d/%m')}**")
             for _, r in df[df['Date'] == day].iterrows():
                 st.caption(f"🎯 {r['Matiere']} : {r['Chapitre']}")
-    st.write("---") 
-    st.write("\n\n") 
-    
+    st.write("---")
     st.subheader("📝 Saisie des Notes")
     edited = st.data_editor(df, use_container_width=True)
     if st.button("Enregistrer"):
