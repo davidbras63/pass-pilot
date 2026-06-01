@@ -77,42 +77,40 @@ if page == "Dashboard":
 elif page == "Planning & Saisie":
     import uuid
 
-    # --- 1. AJOUT SÉCURISÉ ---
+    # --- 1. AJOUT SÉCURISÉ (Le seul endroit où on nettoie) ---
     with st.expander("✍️ Ajouter Chapitre", expanded=False):
-        # On utilise st.form avec un key pour forcer la réinitialisation
         with st.form("Add_Form", clear_on_submit=True):
             mat = st.selectbox("Matière", st.session_state.config['dossiers'].get(choix_dos, []))
             chap = st.text_input("Titre")
             d0 = st.date_input("Date J0")
-            dex = st.date_input("Date Examen", value=None) # Vierge par défaut
+            dex = st.date_input("Date Examen", value=None)
             
             if st.form_submit_button("Générer Planning"):
                 if dex:
-                    # Nettoyage strict des doublons existants avant génération
-                    st.session_state.data = st.session_state.data.drop_duplicates()
-                    
+                    # 1. On charge, on ajoute, on nettoie, on sauvegarde
                     new_rows = []
                     for j in [0] + st.session_state.config['cadencier']:
                         date_j = d0 + dt.timedelta(days=j)
-                        # Bloquant : on arrête si date_j dépasse la date d'examen
                         if date_j <= dex:
                             new_rows.append({
                                 'ID': str(uuid.uuid4()), 'Dossier': choix_dos, 'Matiere': mat, 
                                 'Chapitre': chap, 'J_Type': f'J{j}', 'Date': str(date_j), 
                                 'Note': 0, 'Statut': 'À faire'
                             })
+                    
                     st.session_state.data = pd.concat([st.session_state.data, pd.DataFrame(new_rows)])
-                    # Nettoyage après ajout pour garantir zéro doublon
-                    st.session_state.data = st.session_state.data.drop_duplicates(subset=['Dossier', 'Chapitre', 'J_Type', 'Date'])
+                    
+                    # Nettoyage strict UNIQUEMENT au moment de l'ajout
+                    cols_to_check = ['Dossier', 'Matiere', 'Chapitre', 'J_Type', 'Date']
+                    st.session_state.data = st.session_state.data.drop_duplicates(subset=cols_to_check, keep='first')
+                    
                     save_data(st.session_state.data)
                     st.rerun()
 
-    # --- 2. PLANNING HORIZONTAL (Semaine en cours) ---
+    # --- 2. PLANNING HEBDOMADAIRE (Lecture seule) ---
     st.subheader("🗓️ Planning Hebdomadaire")
     cols = st.columns(7)
     jours = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"]
-    
-    # Calcul début semaine (lundi)
     today = dt.date.today()
     start_week = today - dt.timedelta(days=today.weekday())
     
@@ -120,7 +118,7 @@ elif page == "Planning & Saisie":
         day = start_week + dt.timedelta(days=i)
         with col:
             st.markdown(f"**{jours[i]}**\n{day.strftime('%d/%m')}")
-            # Filtre pour ce jour précis
+            # Lecture simple, sans aucune modification
             df_day = st.session_state.data[
                 (pd.to_datetime(st.session_state.data['Date']).dt.date == day) & 
                 (st.session_state.data['Dossier'] == choix_dos)
@@ -128,7 +126,7 @@ elif page == "Planning & Saisie":
             for _, r in df_day.iterrows():
                 st.caption(f"{r['Chapitre']} ({r['J_Type']})")
 
-    # --- 3. TABLEAU DE SAISIE NOTES (Aujourd'hui uniquement, large) ---
+    # --- 3. TABLEAU DE SAISIE NOTES (Aujourd'hui uniquement) ---
     st.divider()
     st.subheader(f"Saisie Notes - Aujourd'hui ({today.strftime('%d/%m')})")
     
@@ -140,8 +138,7 @@ elif page == "Planning & Saisie":
     if not df_today.empty:
         edited = st.data_editor(
             df_today[['ID', 'Chapitre', 'J_Type', 'Statut', 'Note']],
-            column_config={"ID": None, "Chapitre": st.column_config.TextColumn(disabled=True), 
-                           "J_Type": st.column_config.TextColumn(disabled=True)},
+            column_config={"ID": None, "Chapitre": None, "J_Type": None}, # ID caché
             hide_index=True, use_container_width=True
         )
         if st.button("💾 Enregistrer"):
@@ -150,8 +147,6 @@ elif page == "Planning & Saisie":
                 st.session_state.data.loc[st.session_state.data['ID'] == row['ID'], 'Statut'] = row['Statut']
             save_data(st.session_state.data)
             st.rerun()
-    else:
-        st.info("Rien de prévu aujourd'hui.")
 
 
 # --- GRAPHIQUES ---
