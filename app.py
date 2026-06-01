@@ -1,8 +1,4 @@
 
-david bras <bdavid0801@gmail.com>
-02:20 (il y a 0 minute)
-À moi
-
 import streamlit as st
 import pandas as pd
 import datetime as dt
