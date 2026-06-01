@@ -79,17 +79,17 @@ if page == "Dashboard":
         st.table(disp[['Matiere', 'Chapitre', 'J_Type', 'Date', 'Note']])
     else: st.write("Aucun rattrapage nécessaire.")
 
-# --- PLANNING ---
+# --- PLANNING & SAISIE ---
 elif page == "Planning & Saisie":
     st.title("🗓️ Planning & Saisie")
-    with st.expander("➕ Ajouter Chapitre"):
+    with st.expander("➕ Ajouter & Générer Planning"):
         with st.form("Add"):
             mat = st.selectbox("Matière", st.session_state.config['dossiers'].get(choix_dos, []))
-            chap = st.text_input("Nom")
+            chap = st.text_input("Nom Chapitre")
             d0 = st.date_input("Date J0")
             ex = st.date_input("Date Examen", value=None)
-            if st.form_submit_button("Générer"):
-                if not ex: st.error("Date examen obligatoire !")
+            if st.form_submit_button("Générer Planning Intelligent"):
+                if not ex: st.error("Date examen obligatoire pour générer !")
                 else:
                     for j in [0] + st.session_state.config['cadencier']:
                         d = d0 + dt.timedelta(days=j)
@@ -104,9 +104,11 @@ elif page == "Planning & Saisie":
         with cols[i]:
             st.markdown(f"**{day.strftime('%d/%m')}**")
             for idx, r in df[df['Date'] == day].iterrows():
-                st.caption(f"{r['Matiere']} ({r['J_Type']})")
+                with st.expander(f"{r['Matiere']} : {r['Chapitre']}"):
+                    st.write(f"Type: {r['J_Type']}")
+                    if st.button("Valider", key=f"val_{idx}"): st.rerun()
 
-    st.subheader("📝 Saisie")
+    st.subheader("📝 Saisie des notes")
     df_today = df[df['Date'] == dt.date.today()]
     if not df_today.empty:
         edited = st.data_editor(df_today)
