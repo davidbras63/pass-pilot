@@ -99,14 +99,21 @@ elif page == "Planning & Saisie":
                             }])])
                     save_data(st.session_state.data); st.rerun()
 
-    cols = st.columns(7)
+     cols = st.columns(7)
     for i, day in enumerate([dt.date.today() + dt.timedelta(days=x) for x in range(7)]):
         with cols[i]:
             st.markdown(f"**{day.strftime('%d/%m')}**")
-            for idx, r in st.session_state.data[(st.session_state.data['Date'] == day) & (st.session_state.data['Dossier'] == choix_dos)].iterrows():
+            # On récupère les indices des lignes correspondant au jour et dossier
+            mask = (st.session_state.data['Date'] == day) & (st.session_state.data['Dossier'] == choix_dos)
+            for idx, r in st.session_state.data[mask].iterrows():
                 with st.expander(f"{r['Matiere']} ({r['J_Type']})"):
                     st.write(f"📖 **{r['Chapitre']}**")
-                    if st.button("✅ Fait", key=f"f_{idx}"): st.session_state.data.at[idx, 'Statut'] = 'Fait'; save_data(st.session_state.data); st.rerun()
+                    # Correction ici : Utilisation de l'index 'idx' directement pour modifier la ligne globale
+                    if st.button("✅ Fait", key=f"f_{idx}"): 
+                        st.session_state.data.loc[idx, 'Statut'] = 'Fait'
+                        save_data(st.session_state.data)
+                        st.rerun()
+
 
     st.subheader("📝 Saisie Notes")
     edited = st.data_editor(st.session_state.data[st.session_state.data['Dossier'] == choix_dos][['Matiere', 'Chapitre', 'J_Type', 'Note']])
