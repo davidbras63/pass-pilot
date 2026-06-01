@@ -80,6 +80,12 @@ if page == "Dashboard":
         disp = final.copy()
         disp['Date'] = disp['Date'].apply(lambda x: x.strftime('%d/%m/%Y'))
         st.table(disp[['Matiere', 'Chapitre', 'J_Type', 'Date', 'Note']])
+        if st.button("🔄 Réintégrer Rattrapages au planning"):
+            for _, row in final.iterrows():
+                new_r = {'Dossier': choix_dos, 'Matiere': row['Matiere'], 'Chapitre': f"Rattrapage : {row['Chapitre']}", 
+                         'J_Type': 'RAT', 'Date': dt.date.today(), 'Note': 0}
+                st.session_state.data = pd.concat([st.session_state.data, pd.DataFrame([new_r])], ignore_index=True)
+            save_data(st.session_state.data); st.rerun()
     else: st.write("Pas de rattrapage pour l'instant.")
     
     if st.button("🔄 Recalculer Rattrapages"): st.rerun()
@@ -96,13 +102,16 @@ elif page == "Planning & Saisie":
             if st.form_submit_button("Générer Planning"):
                 if not ex: st.error("Date examen obligatoire !")
                 else:
-                    for j in [0] + st.session_state.config['cadencier']:
-                        d = d0 + dt.timedelta(days=j)
-                        if d.weekday() == 6: d += dt.timedelta(days=1)
-                        if d <= ex:
-                            new_row = {'Dossier': choix_dos, 'Matiere': mat, 'Chapitre': chap, 'J_Type': f"J{j}", 'Date': d, 'Note': 0}
-                            st.session_state.data = pd.concat([st.session_state.data, pd.DataFrame([new_row])], ignore_index=True)
-                    save_data(st.session_state.data); st.rerun()
+                    doublon = not st.session_state.data[(st.session_state.data['Matiere'] == mat) & (st.session_state.data['Chapitre'] == chap)].empty
+                    if doublon: st.error("Ce chapitre existe déjà !")
+                    else:
+                        for j in [0] + st.session_state.config['cadencier']:
+                            d = d0 + dt.timedelta(days=j)
+                            if d.weekday() == 6: d += dt.timedelta(days=1)
+                            if d <= ex:
+                                new_row = {'Dossier': choix_dos, 'Matiere': mat, 'Chapitre': chap, 'J_Type': f"J{j}", 'Date': d, 'Note': 0}
+                                st.session_state.data = pd.concat([st.session_state.data, pd.DataFrame([new_row])], ignore_index=True)
+                        save_data(st.session_state.data); st.rerun()
     
     st.subheader("Planning Visuel")
     df_dos = st.session_state.data[st.session_state.data['Dossier'] == choix_dos]
@@ -129,7 +138,6 @@ elif page == "Graphiques":
     st.title("📊 Progression par Matière")
     df_graph = st.session_state.data[(st.session_state.data['Dossier'] == choix_dos) & 
                                      (pd.to_numeric(st.session_state.data['Note'], errors='coerce') > 0)].copy()
-    
     if not df_graph.empty:
         matieres = df_graph['Matiere'].unique()
         cols = st.columns(3)
@@ -140,4 +148,4 @@ elif page == "Graphiques":
                 df_display = df_mat[['Date', 'Note']].copy()
                 df_display['Date'] = df_display['Date'].apply(lambda x: x.strftime('%d/%m'))
                 st.table(df_display.reset_index(drop=True))
-    else: st.write("Pas encore assez de notes saisies pour afficher la progression.")
+    else: st.write("Pas encore assez de notes saisies.")
