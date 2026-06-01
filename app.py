@@ -34,20 +34,19 @@ if 'data' not in st.session_state: st.session_state.data = load_data()
 
 # --- SIDEBAR ---
 st.sidebar.title("⚙️ Pilot Expert")
-with st.sidebar.expander("🛠️ Réglages"):
+with st.sidebar.expander("🛠️ Réglages", expanded=True):
     st.session_state.config['cours_max'] = st.number_input("Max cours/jour", 1, 20, st.session_state.config.get('cours_max', 5))
     cad_str = st.text_input("Cadencier (jours)", ",".join(map(str, st.session_state.config['cadencier'])))
     st.session_state.config['cadencier'] = [int(x.strip()) for x in cad_str.split(",")]
+    # Rétablissement des paliers de notes
+    for j in st.session_state.config['cadencier']:
+        st.session_state.config['seuils'][str(j)] = st.slider(f"Seuil Note J{j}", 10, 20, int(st.session_state.config['seuils'].get(str(j), 12)))
     if st.button("💾 Enregistrer"): save_config(st.session_state.config); st.rerun()
 
-nom_dossier = st.sidebar.text_input("Nouveau Dossier")
-if st.sidebar.button("➕ Créer Dossier") and nom_dossier:
-    st.session_state.config['dossiers'][nom_dossier] = []; save_config(st.session_state.config); st.rerun()
-
 choix_dos = st.sidebar.selectbox("Dossier", list(st.session_state.config['dossiers'].keys()))
-nom_matiere = st.sidebar.text_input("Nom Matière")
-if st.sidebar.button("➕ Ajouter Matière") and nom_matiere:
-    st.session_state.config['dossiers'][choix_dos].append(nom_matiere); save_config(st.session_state.config); st.rerun()
+if st.sidebar.button("➕ Ajouter Matière"): 
+    mat = st.sidebar.text_input("Nom Matière")
+    if mat: st.session_state.config['dossiers'][choix_dos].append(mat); save_config(st.session_state.config); st.rerun()
 
 page = st.sidebar.radio("Navigation", ["Dashboard", "Planning & Saisie", "Graphiques"])
 
@@ -56,25 +55,33 @@ if page == "Dashboard":
     st.title(f"🎯 Dashboard : {choix_dos}")
     st.subheader("⚠️ Rattrapages")
     df_dos = st.session_state.data[st.session_state.data['Dossier'] == choix_dos]
-    # Filtrer les notes faibles ET qui ne sont pas déjà "Purger"
-    rattrapages = df_dos[(df_dos['Note'] > 0) & (df_dos['Note'] < 12) & (df_dos['Statut'] != 'Purger')]
+    
+    # Identification des rattrapages selon seuils dynamiques
+    rattrapages_idx = []
+    for idx, row in df_dos.iterrows():
+        seuil = int(st.session_state.config['seuils'].get(row['J_Type'][1:] if row['J_Type'].startswith('J') else '0', 12))
+        if 0 < row['Note'] < seuil: rattrapages_idx.append(idx)
+    
+    rattrapages = df_dos.loc[rattrapages_idx]
     
     if not rattrapages.empty:
         st.table(rattrapages[['Matiere', 'Chapitre', 'J_Type', 'Date', 'Note']])
-        if st.button("🔄 Réintégrer Rattrapages"):
+        if st.button("🔄 Réintégrer et purger"):
             for idx, row in rattrapages.iterrows():
                 new_r = row.copy()
                 new_r['Date'] = dt.date.today()
                 new_r['J_Type'] = 'RAT'
-                new_r['Statut'] = 'À faire'
+                new_r['Note'] = 0
                 st.session_state.data = pd.concat([st.session_state.data, pd.DataFrame([new_r])], ignore_index=True)
-                st.session_state.data.at[idx, 'Statut'] = 'Purger' # Marqué pour disparaître du dashboard
+                # Purge radicale : suppression de la ligne fautive
+                st.session_state.data = st.session_state.data.drop(idx)
             save_data(st.session_state.data); st.rerun()
+    else: st.write("Aucun rattrapage.")
 
 # --- PLANNING & SAISIE ---
 elif page == "Planning & Saisie":
     st.markdown("### ✍️ Ajouter un nouveau chapitre")
-    with st.expander("Cliquez pour configurer le chapitre"):
+    with st.expander("Configuration"):
         with st.form("Add"):
             mat = st.selectbox("Matière", st.session_state.config['dossiers'].get(choix_dos, []))
             chap = st.text_input("Chapitre")
@@ -91,22 +98,11 @@ elif page == "Planning & Saisie":
     for i, day in enumerate([dt.date.today() + dt.timedelta(days=x) for x in range(7)]):
         with cols[i]:
             st.markdown(f"**{day.strftime('%d/%m')}**")
-            df_day = st.session_state.data[(st.session_state.data['Date'] == day) & (st.session_state.data['Dossier'] == choix_dos) & (st.session_state.data['Statut'] != 'Purger')]
+            df_day = st.session_state.data[(st.session_state.data['Date'] == day) & (st.session_state.data['Dossier'] == choix_dos)]
             for idx, r in df_day.iterrows():
                 u_key = f"{idx}_{r['Matiere']}_{r['J_Type']}"
                 with st.expander(f"{r['Matiere']} ({r['J_Type']})"):
-                    st.write(f"Chapitre: {r['Chapitre']}")
+                    st.write(f"📖 **{r['Chapitre']}**") # Affichage du titre du chapitre
                     if st.button("✅ Fait", key=f"f_{u_key}"): st.session_state.data.at[idx, 'Statut'] = 'Fait'; save_data(st.session_state.data); st.rerun()
                     new_d = st.date_input("Reporter", key=f"d_{u_key}")
                     if st.button("Déplacer", key=f"m_{u_key}"): st.session_state.data.at[idx, 'Date'] = new_d; save_data(st.session_state.data); st.rerun()
-
-    st.subheader("📝 Saisie Notes")
-    df_today = st.session_state.data[(st.session_state.data['Date'] == dt.date.today()) & (st.session_state.data['Dossier'] == choix_dos) & (st.session_state.data['Statut'] != 'Purger')]
-    edited = st.data_editor(df_today[['Matiere', 'Chapitre', 'Note']], key="editor_saisie")
-    if st.button("Enregistrer"): st.session_state.data.update(edited); save_data(st.session_state.data); st.rerun()
-
-# --- GRAPHIQUES ---
-elif page == "Graphiques":
-    for mat in st.session_state.config['dossiers'].get(choix_dos, []):
-        st.subheader(f"📚 {mat}")
-        st.table(st.session_state.data[(st.session_state.data['Matiere'] == mat) & (st.session_state.data['Note'] > 0)][['Date', 'Note']].tail(3))
