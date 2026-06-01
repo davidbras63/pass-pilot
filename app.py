@@ -13,8 +13,9 @@ CONFIG_FILE = "config.json"
 def load_data():
     cols = ['Dossier', 'Matiere', 'Chapitre', 'J_Type', 'Date', 'Note']
     if os.path.exists(DATA_FILE):
+        # On force la lecture des dates en français
         df = pd.read_csv(DATA_FILE)
-        df['Date'] = pd.to_datetime(df['Date'], errors='coerce').dt.date
+        df['Date'] = pd.to_datetime(df['Date'], dayfirst=True, errors='coerce').dt.date
         df['Note'] = pd.to_numeric(df['Note'], errors='coerce').fillna(0)
         return df
     return pd.DataFrame(columns=cols)
@@ -37,7 +38,6 @@ if 'config' not in st.session_state: st.session_state.config = load_config()
 # --- SIDEBAR ---
 st.sidebar.title("⚙️ Pilot Expert")
 
-# Réglages
 with st.sidebar.expander("🛠️ Réglages Seuils"):
     cad_str = ",".join(map(str, st.session_state.config.get('cadencier', [1,3,7])))
     cad_input = st.text_input("Cadencier (jours)", cad_str)
@@ -46,13 +46,11 @@ with st.sidebar.expander("🛠️ Réglages Seuils"):
         st.session_state.config['seuils'][str(j)] = st.slider(f"Seuil J{j}", 10, 20, int(st.session_state.config['seuils'].get(str(j), 12)))
     if st.button("💾 Enregistrer"): save_config(st.session_state.config); st.rerun()
 
-# Gestion Dossiers / Matières
 new_folder = st.sidebar.text_input("Nouveau Dossier")
 if st.sidebar.button("➕ Créer Dossier") and new_folder:
     st.session_state.config['dossiers'][new_folder] = []; save_config(st.session_state.config); st.rerun()
 
 choix_dos = st.sidebar.selectbox("Dossier", list(st.session_state.config['dossiers'].keys()))
-
 new_mat = st.sidebar.text_input("Ajouter Matière")
 if st.sidebar.button("➕ Ajouter Matière") and new_mat:
     st.session_state.config['dossiers'][choix_dos].append(new_mat); save_config(st.session_state.config); st.rerun()
@@ -63,7 +61,6 @@ df = st.session_state.data[st.session_state.data['Dossier'] == choix_dos].copy()
 # --- PAGES ---
 if page == "Dashboard":
     st.title(f"🎯 Dashboard : {choix_dos}")
-    # Liste des matières avec poubelles
     for m in st.session_state.config['dossiers'].get(choix_dos, []):
         c1, c2 = st.columns([4, 1])
         c1.info(f"📚 {m}")
@@ -75,7 +72,10 @@ if page == "Dashboard":
     for j in st.session_state.config['cadencier']:
         mask = (df['J_Type'] == f"J{j}") & (df['Note'] > 0) & (df['Note'] < st.session_state.config['seuils'].get(str(j), 12))
         rattrapages = pd.concat([rattrapages, df[mask]])
-    st.table(rattrapages[['Matiere', 'Chapitre', 'J_Type', 'Date', 'Note']])
+    # Formatage date français pour l'affichage
+    if not rattrapages.empty:
+        rattrapages['Date'] = rattrapages['Date'].apply(lambda x: x.strftime('%d/%m/%Y'))
+        st.table(rattrapages[['Matiere', 'Chapitre', 'J_Type', 'Date', 'Note']])
 
 elif page == "Planning & Saisie":
     st.title("🗓️ Planning & Saisie")
@@ -108,11 +108,14 @@ elif page == "Planning & Saisie":
                         save_data(st.session_state.data); st.rerun()
 
     st.subheader("📝 Saisie")
-    if not df[df['Date'] == dt.date.today()].empty:
-        edited = st.data_editor(df[df['Date'] == dt.date.today()])
+    df_today = df[df['Date'] == dt.date.today()]
+    if not df_today.empty:
+        edited = st.data_editor(df_today)
         if st.button("Enregistrer"): st.session_state.data.update(edited); save_data(st.session_state.data); st.rerun()
 
 elif page == "Graphiques":
     st.title("📊 Progression")
     if not df.empty:
-        st.line_chart(df[df['Note'] > 0].pivot(index='Date', columns='Matiere', values='Note'))
+        df_clean = df[df['Note'] > 0].copy()
+        df_clean['Date'] = df_clean['Date'].astype(str) # Force format pour graph
+        st.line_chart(df_clean.pivot(index='Date', columns='Matiere', values='Note'))
