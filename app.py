@@ -119,29 +119,30 @@ elif page == "Planning & Saisie":
                     st.session_state.data.at[idx, 'Statut'] = 'Fait'
                     save_data(st.session_state.data); st.rerun()
             
-              # Saisie Notes : Mise à jour forcée avec ID conservé
+               # Saisie Notes : Correction syntaxe et sauvegarde robuste
             if not df_day.empty:
                 st.caption("Notes")
                 
-                # 1. On prépare le tableau en incluant l'ID (colonne nécessaire pour retrouver la ligne)
-                df_to_edit = df_day[['ID', 'Chapitre', 'J_Type', 'Note']].copy()
-                
-                # 2. On affiche l'éditeur (on cache l'ID via la configuration de colonne)
+                # On prépare le tableau pour l'édition
+                # On garde 'ID' mais on ne l'affiche pas avec column_config
                 edited = st.data_editor(
-                    df_to_edit, 
-                    key=f"edit_{day}", 
-                    column_config={"ID": st.column_config.Column(disabled=True, hidden=True)},
-                    use_container_width=True
+                    df_day[['ID', 'Chapitre', 'J_Type', 'Note']], 
+                    key=f"edit_{day}",
+                    column_config={
+                        "ID": None, # 'None' cache totalement la colonne ID
+                        "Chapitre": st.column_config.TextColumn(disabled=True),
+                        "J_Type": st.column_config.TextColumn(disabled=True)
+                    }
                 )
                 
-                # 3. Sauvegarde : on utilise l'ID pour mettre à jour la source de vérité
                 if st.button("💾", key=f"save_{day}"):
-                    for _, row_edited in edited.iterrows():
-                        # On met à jour directement le DataFrame global
-                        st.session_state.data.loc[st.session_state.data['ID'] == row_edited['ID'], 'Note'] = row_edited['Note']
+                    # On met à jour le DataFrame global st.session_state.data
+                    for _, row in edited.iterrows():
+                        # On trouve la ligne par l'ID et on met à jour la note
+                        st.session_state.data.loc[st.session_state.data['ID'] == row['ID'], 'Note'] = row['Note']
                     
                     save_data(st.session_state.data)
-                    st.success("Enregistré !")
+                    st.success("Note enregistrée !")
                     st.rerun()
 
 # --- GRAPHIQUES ---
