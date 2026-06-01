@@ -9,22 +9,20 @@ st.set_page_config(layout="wide")
 DATA_FILE = "data.csv"
 CONFIG_FILE = "config.json"
 
-# --- GESTION PERSISTANCE ---
-def save_config(config):
-    with open(CONFIG_FILE, "w") as f: json.dump(config, f)
-
+# --- CORE ---
 def load_config():
     if os.path.exists(CONFIG_FILE):
-        try:
-            with open(CONFIG_FILE, "r") as f: return json.load(f)
-        except: pass
+        with open(CONFIG_FILE, "r") as f: return json.load(f)
     return {'cours_max': 5, 'cadencier': [1, 3, 7, 14, 30], 'seuils': {'1': 12, '3': 12, '7': 14, '14': 14, '30': 16}, 'dossiers': {"PASS": []}}
+
+def save_config(config):
+    with open(CONFIG_FILE, "w") as f: json.dump(config, f)
 
 def load_data():
     if os.path.exists(DATA_FILE):
         df = pd.read_csv(DATA_FILE)
         df['Date'] = pd.to_datetime(df['Date']).dt.date
-        return df.drop_duplicates()
+        return df
     return pd.DataFrame(columns=['Dossier', 'Matiere', 'Chapitre', 'J_Type', 'Date', 'Note', 'Statut', 'Date_Examen'])
 
 def save_data(df):
@@ -36,7 +34,7 @@ if 'data' not in st.session_state: st.session_state.data = load_data()
 
 # --- SIDEBAR ---
 st.sidebar.title("⚙️ Pilot Expert")
-with st.sidebar.expander("🛠️ Réglages", expanded=False):
+with st.sidebar.expander("🛠️ Réglages"):
     st.session_state.config['cours_max'] = st.number_input("Max cours/jour", 1, 20, st.session_state.config.get('cours_max', 5))
     cad_str = st.text_input("Cadencier (jours)", ",".join(map(str, st.session_state.config['cadencier'])))
     st.session_state.config['cadencier'] = [int(x.strip()) for x in cad_str.split(",")]
@@ -57,7 +55,7 @@ page = st.sidebar.radio("Navigation", ["Dashboard", "Planning & Saisie", "Graphi
 
 # --- DASHBOARD ---
 if page == "Dashboard":
-    st.title(f"🎯 {choix_dos}")
+    st.title(f"🎯 Dashboard : {choix_dos}")
     for m in st.session_state.config['dossiers'].get(choix_dos, []):
         c1, c2 = st.columns([4, 1])
         c1.info(f"📚 {m}")
@@ -67,16 +65,15 @@ if page == "Dashboard":
     df_dos = st.session_state.data[st.session_state.data['Dossier'] == choix_dos]
     rattrapages = df_dos[(df_dos['Note'] > 0) & (df_dos['Note'] < 12)]
     if not rattrapages.empty:
-        st.table(rattrapages[['Matiere', 'Chapitre', 'J_Type', 'Note']])
-        if st.button("🔄 Réintégrer Rattrapages"):
+        st.table(rattrapages[['Matiere', 'Chapitre', 'J_Type', 'Date', 'Note']])
+        if st.button("🔄 Réintégrer Rattrapages", key="reinteg_btn"):
             for idx, row in rattrapages.iterrows():
-                row_copy = row.copy()
-                row_copy['Date'] = dt.date.today(); row_copy['J_Type'] = 'RAT'; row_copy['Statut'] = 'À faire'
-                st.session_state.data = pd.concat([st.session_state.data, pd.DataFrame([row_copy])])
-            st.session_state.data.at[idx, 'Statut'] = 'Fait'
+                new_r = row.copy(); new_r['Date'] = dt.date.today(); new_r['J_Type'] = 'RAT'; new_r['Statut'] = 'À faire'
+                st.session_state.data = pd.concat([st.session_state.data, pd.DataFrame([new_r])])
+                st.session_state.data.at[idx, 'Statut'] = 'Fait'
             save_data(st.session_state.data); st.rerun()
 
-# --- PLANNING & SAISIE ---
+# --- PLANNING ---
 elif page == "Planning & Saisie":
     with st.expander("➕ Ajouter Chapitre"):
         with st.form("Add"):
@@ -95,18 +92,21 @@ elif page == "Planning & Saisie":
     for i, day in enumerate([dt.date.today() + dt.timedelta(days=x) for x in range(7)]):
         with cols[i]:
             st.markdown(f"**{day.strftime('%d/%m')}**")
-            for idx, r in st.session_state.data[st.session_state.data['Date'] == day].iterrows():
+            df_day = st.session_state.data[(st.session_state.data['Date'] == day) & (st.session_state.data['Dossier'] == choix_dos)]
+            for idx, r in df_day.iterrows():
+                u_key = f"{idx}_{r['Matiere']}_{r['Chapitre']}"
                 color = "green" if r['Statut'] == 'Fait' else "red"
                 with st.expander(f":{color}[{r['Matiere']}]"):
-                    if st.button("✅ Fait", key=f"v_{idx}"): st.session_state.data.at[idx, 'Statut'] = 'Fait'; save_data(st.session_state.data); st.rerun()
+                    if st.button("✅ Fait", key=f"v_{u_key}"): st.session_state.data.at[idx, 'Statut'] = 'Fait'; save_data(st.session_state.data); st.rerun()
+                    new_d = st.date_input("Déplacer", key=f"d_{u_key}")
+                    if st.button("Valider déplace", key=f"m_{u_key}"): st.session_state.data.at[idx, 'Date'] = new_d; save_data(st.session_state.data); st.rerun()
 
-    st.subheader("📝 Saisie")
-    df_today = st.session_state.data[st.session_state.data['Date'] == dt.date.today()]
+    st.subheader("📝 Saisie Notes")
+    df_today = st.session_state.data[(st.session_state.data['Date'] == dt.date.today()) & (st.session_state.data['Dossier'] == choix_dos)]
     edited = st.data_editor(df_today[['Matiere', 'Chapitre', 'Note']])
     if st.button("Enregistrer"): st.session_state.data.update(edited); save_data(st.session_state.data); st.rerun()
 
 # --- GRAPHIQUES ---
 elif page == "Graphiques":
     for mat in st.session_state.config['dossiers'].get(choix_dos, []):
-        st.subheader(f"📚 {mat}")
-        st.table(st.session_state.data[st.session_state.data['Matiere'] == mat][['Date', 'Note']].tail(5))
+        st.subheader(f"📚 {mat}"); st.table(st.session_state.data[(st.session_state.data['Matiere'] == mat) & (st.session_state.data['Note'] > 0)][['Date', 'Note']].tail(5))
