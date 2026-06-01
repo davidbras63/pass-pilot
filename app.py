@@ -76,8 +76,7 @@ if page == "Dashboard":
 # --- PLANNING & SAISIE ---
 elif page == "Planning & Saisie":
     import uuid
-    
-    # SÉCURITÉ : Vérifier si la colonne ID existe, sinon la créer pour toutes les lignes
+    # Sécurité ID
     if 'ID' not in st.session_state.data.columns:
         st.session_state.data['ID'] = [str(uuid.uuid4()) for _ in range(len(st.session_state.data))]
         save_data(st.session_state.data)
@@ -95,33 +94,36 @@ elif page == "Planning & Saisie":
                     for j in [0] + st.session_state.config['cadencier']:
                         date_j = d0 + dt.timedelta(days=j)
                         if date_j <= dex:
-                            # Ajout de l'ID ici aussi
-                            row = {
-                                'ID': str(uuid.uuid4()),
-                                'Dossier': choix_dos, 'Matiere': mat, 'Chapitre': chap, 
-                                'J_Type': f'J{j}', 'Date': str(date_j), 'Note': 0, 
-                                'Statut': 'À faire', 'Date_Examen': str(dex)
-                            }
+                            row = {'ID': str(uuid.uuid4()), 'Dossier': choix_dos, 'Matiere': mat, 'Chapitre': chap, 
+                                   'J_Type': f'J{j}', 'Date': str(date_j), 'Note': 0, 'Statut': 'À faire', 'Date_Examen': str(dex)}
                             st.session_state.data = pd.concat([st.session_state.data, pd.DataFrame([row])])
                     save_data(st.session_state.data); st.rerun()
 
+    # PLANNING ET SAISIE NOTES INTÉGRÉS PAR JOUR
     cols = st.columns(7)
-    for i, day in enumerate([dt.date.today() + dt.timedelta(days=x) for x in range(7)]):
+    current_dates = [dt.date.today() + dt.timedelta(days=x) for x in range(7)]
+    
+    for i, day in enumerate(current_dates):
         with cols[i]:
             st.markdown(f"**{day.strftime('%d/%m')}**")
             mask = (pd.to_datetime(st.session_state.data['Date']).dt.date == day) & (st.session_state.data['Dossier'] == choix_dos)
+            
+            # Affichage Planning
             for idx, r in st.session_state.data[mask].iterrows():
-                # Maintenant r['ID'] existera toujours grâce à la sécurité au début
-                if st.button(f"✅ {r['Chapitre']}", key=f"btn_{r['ID']}"):
-                    st.session_state.data.at[idx, 'Statut'] = 'Fait'
-                    save_data(st.session_state.data)
-                    st.rerun()
-
-    st.subheader("📝 Saisie Notes")
-    edited = st.data_editor(st.session_state.data[st.session_state.data['Dossier'] == choix_dos][['Matiere', 'Chapitre', 'J_Type', 'Note']])
-    if st.button("Enregistrer"):
-        st.session_state.data.update(edited)
-        save_data(st.session_state.data); st.rerun()
+                with st.expander(f"{r['Matiere']} ({r['J_Type']})"):
+                    st.write(f"📖 {r['Chapitre']}")
+                    if st.button("✅ Fait", key=f"btn_{r['ID']}"):
+                        st.session_state.data.at[idx, 'Statut'] = 'Fait'
+                        save_data(st.session_state.data); st.rerun()
+            
+            # Saisie Notes filtrée par jour
+            df_day = st.session_state.data[mask].copy()
+            if not df_day.empty:
+                st.caption("Notes")
+                edited = st.data_editor(df_day[['Matiere', 'Chapitre', 'Note']], key=f"edit_{day}")
+                if st.button("💾", key=f"save_{day}"):
+                    st.session_state.data.update(edited)
+                    save_data(st.session_state.data); st.rerun()
 
 # --- GRAPHIQUES ---
 elif page == "Graphiques":
