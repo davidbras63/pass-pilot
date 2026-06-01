@@ -66,12 +66,55 @@ if page == "Dashboard":
     
     if not rattrapages.empty:
         st.table(rattrapages[['Matiere', 'Chapitre', 'J_Type', 'Date', 'Note']])
-        if st.button("🔄 Réintégrer et purger"):
-            for idx, row in rattrapages.iterrows():
-                new_r = row.copy(); new_r['Date'] = dt.date.today(); new_r['J_Type'] = 'RAT'; new_r['Note'] = 0
-                st.session_state.data = pd.concat([st.session_state.data, pd.DataFrame([new_r])])
-            st.session_state.data = st.session_state.data.drop(rattrapages.index)
-            save_data(st.session_state.data); st.rerun()
+         # Ton code actuel affiche déjà : matiere, chapitre, etc.
+        # Colle ce bouton juste en dessous :
+        
+        if st.button(f"Réintégrer et Purger {chapitre}", key=f"btn_rap_{row['ID']}"):
+            # 1. Recherche de place (14 jours, évite dimanche, respecte max_cours)
+            max_cours = st.session_state.config.get('max_cours_par_jour', 3)
+            today = dt.date.today()
+            date_trouvee = None
+            
+            for i in range(1, 15):
+                d = today + dt.timedelta(days=i)
+                if d.weekday() == 6: continue # Skip dimanche
+                
+                # Vérifie le nombre de cours déjà prévus
+                count = len(st.session_state.data[
+                    (pd.to_datetime(st.session_state.data['Date']).dt.date == d) & 
+                    (st.session_state.data['Dossier'] == choix_dos)
+                ])
+                
+                if count < max_cours:
+                    date_trouvee = d
+                    break
+            
+            # Si aucune place, on prend le lendemain
+            if not date_trouvee:
+                date_trouvee = today + dt.timedelta(days=1)
+            
+            # 2. Ajout du cours RAP
+            new_rap = {
+                'ID': str(uuid.uuid4()), 
+                'Dossier': choix_dos, 
+                'Matiere': matiere, 
+                'Chapitre': chapitre, 
+                'J_Type': 'RAP', 
+                'Date': str(date_trouvee), 
+                'Note': 0, 
+                'Statut': 'À faire'
+            }
+            
+            st.session_state.data = pd.concat([st.session_state.data, pd.DataFrame([new_rap])])
+            
+            # 3. Purge de l'ancien rattrapage
+            st.session_state.data = st.session_state.data[
+                ~((st.session_state.data['ID'] == row['ID']))
+            ]
+            
+            save_data(st.session_state.data)
+            st.rerun()
+
 
 # --- PLANNING & SAISIE ---
 elif page == "Planning & Saisie":
