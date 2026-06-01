@@ -1,4 +1,4 @@
- import streamlit as st
+import streamlit as st
 import pandas as pd
 import datetime as dt
 import os
@@ -19,21 +19,15 @@ def save_data(df): df.to_csv(DATA_FILE, index=False)
 if 'data' not in st.session_state: st.session_state.data = load_data()
 if 'dossiers' not in st.session_state:
     st.session_state.dossiers = {"PASS": ["UE1", "UE2"]}
-    st.session_state.config = {
-        'cours_max': 5, 
-        'cadencier': [1, 3, 7, 14, 30], 
-        'seuils': {1: 10, 3: 12, 7: 14, 14: 15, 30: 16}
-    }
+    st.session_state.config = {'cours_max': 5, 'cadencier': [1, 3, 7, 14, 30]}
 
 # --- SIDEBAR ---
 st.sidebar.title("⚙️ Pilot Expert")
 
-with st.sidebar.expander("🛠️ Réglages complets"):
+with st.sidebar.expander("🛠️ Réglages"):
     st.session_state.config['cours_max'] = st.number_input("Max cours/jour", 1, 20, st.session_state.config['cours_max'])
-    cad_str = st.text_input("Cadencier", ",".join(map(str, st.session_state.config['cadencier'])))
-    st.session_state.config['cadencier'] = [int(x.strip()) for x in cad_str.split(",")]
-    for j in st.session_state.config['cadencier']:
-        st.session_state.config['seuils'][j] = st.slider(f"Seuil note J{j}", 0, 20, st.session_state.config['seuils'].get(j, 10))
+    cad_input = st.text_input("Cadencier (ex: 1,3,7,14,30)", ",".join(map(str, st.session_state.config['cadencier'])))
+    st.session_state.config['cadencier'] = [int(x.strip()) for x in cad_input.split(",")]
 
 new_folder = st.sidebar.text_input("Nouveau Dossier")
 if st.sidebar.button("➕ Créer Dossier") and new_folder:
@@ -87,7 +81,6 @@ elif page == "Planning & Saisie":
             for _, r in df[df['Date'] == day].iterrows():
                 st.caption(f"🎯 {r['Matiere']} : {r['Chapitre']}")
 
-    # Espacements ajoutés ici
     st.write("\n\n")
     st.divider()
     st.write("\n\n")
@@ -100,4 +93,3 @@ elif page == "Planning & Saisie":
 
 elif page == "Graphiques":
     st.title("📊 Progression")
-
