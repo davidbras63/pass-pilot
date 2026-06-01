@@ -17,8 +17,6 @@ def load_data():
             df['Date'] = pd.to_datetime(df['Date'], dayfirst=True, errors='coerce').dt.date
             df['Note'] = pd.to_numeric(df['Note'], errors='coerce').fillna(0)
             if 'Statut' not in df.columns: df['Statut'] = 'À faire'
-            # Nettoyage des doublons stricts au chargement
-            df = df.drop_duplicates(subset=['Dossier', 'Matiere', 'Chapitre', 'J_Type', 'Date'], keep='first')
             return df
         except: return pd.DataFrame(columns=['Dossier', 'Matiere', 'Chapitre', 'J_Type', 'Date', 'Note', 'Statut'])
     return pd.DataFrame(columns=['Dossier', 'Matiere', 'Chapitre', 'J_Type', 'Date', 'Note', 'Statut'])
@@ -83,5 +81,58 @@ if page == "Dashboard":
         disp = final.copy()
         disp['Date'] = disp['Date'].apply(lambda x: x.strftime('%d/%m/%Y'))
         st.table(disp[['Matiere', 'Chapitre', 'J_Type', 'Date', 'Note']])
-        if st.button("🔄 Réintégrer Rattrapages"):
-            for idx, row
+    else: st.write("Pas de rattrapage.")
+
+# --- PLANNING & SAISIE ---
+elif page == "Planning & Saisie":
+    st.title("🗓️ Planning & Saisie")
+    with st.expander("➕ Ajouter Chapitre"):
+        with st.form("Add"):
+            mat = st.selectbox("Matière", st.session_state.config['dossiers'].get(choix_dos, []))
+            chap = st.text_input("Nom Chapitre")
+            d0 = st.date_input("Date J0")
+            ex = st.date_input("Date Examen", value=None)
+            if st.form_submit_button("Générer Planning"):
+                if not ex: st.error("Date examen obligatoire !")
+                else:
+                    for j in [0] + st.session_state.config['cadencier']:
+                        d = d0 + dt.timedelta(days=j)
+                        if d.weekday() == 6: d += dt.timedelta(days=1)
+                        if d <= ex:
+                            new_row = {'Dossier': choix_dos, 'Matiere': mat, 'Chapitre': chap, 'J_Type': f"J{j}", 'Date': d, 'Note': 0, 'Statut': 'À faire'}
+                            st.session_state.data = pd.concat([st.session_state.data, pd.DataFrame([new_row])], ignore_index=True)
+                    save_data(st.session_state.data); st.rerun()
+    
+    st.subheader("Planning Visuel")
+    df_dos = st.session_state.data[st.session_state.data['Dossier'] == choix_dos].drop_duplicates(subset=['Matiere', 'Chapitre', 'J_Type', 'Date'])
+    cols = st.columns(7)
+    for i, day in enumerate([dt.date.today() + dt.timedelta(days=x) for x in range(7)]):
+        with cols[i]:
+            st.markdown(f"**{day.strftime('%d/%m')}**")
+            for idx, r in df_dos[df_dos['Date'] == day].iterrows():
+                color = "green" if r.get('Statut') == 'Fait' else "blue"
+                label = f":{color}[{r['Matiere']} - {r['J_Type']}]"
+                with st.expander(label):
+                    st.write(f"Chapitre: **{r['Chapitre']}**")
+                    if r.get('Statut') != 'Fait':
+                        if st.button("✅ Fait", key=f"val_{idx}"):
+                            st.session_state.data.at[idx, 'Statut'] = 'Fait'
+                            save_data(st.session_state.data); st.rerun()
+                    else: st.success("Révision effectuée !")
+
+# --- GRAPHIQUES ---
+elif page == "Graphiques":
+    st.title("📊 Progression par Matière")
+    df_graph = st.session_state.data[(st.session_state.data['Dossier'] == choix_dos) & 
+                                     (pd.to_numeric(st.session_state.data['Note'], errors='coerce') > 0)].copy()
+    if not df_graph.empty:
+        matieres = df_graph['Matiere'].unique()
+        cols = st.columns(3)
+        for i, mat in enumerate(matieres):
+            with cols[i % 3]:
+                st.markdown(f"**📚 {mat}**")
+                df_mat = df_graph[df_graph['Matiere'] == mat].sort_values('Date')
+                df_display = df_mat[['Date', 'Note']].copy()
+                df_display['Date'] = df_display['Date'].apply(lambda x: x.strftime('%d/%m'))
+                st.table(df_display.reset_index(drop=True))
+    else: st.write("Pas encore assez de notes.")
