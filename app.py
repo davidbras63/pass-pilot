@@ -76,11 +76,16 @@ if page == "Dashboard":
 # --- PLANNING & SAISIE ---
 elif page == "Planning & Saisie":
     import uuid
-    # Sécurité ID
-    if 'ID' not in st.session_state.data.columns:
-        st.session_state.data['ID'] = [str(uuid.uuid4()) for _ in range(len(st.session_state.data))]
+
+    # 1. NETTOYAGE TOTAL AU DÉMARRAGE
+    if not st.session_state.data.empty:
+        st.session_state.data = st.session_state.data.drop_duplicates(
+            subset=['Dossier', 'Matiere', 'Chapitre', 'J_Type', 'Date'], 
+            keep='first'
+        )
         save_data(st.session_state.data)
 
+    # 2. AJOUT PROPRE
     with st.expander("✍️ Ajouter Chapitre", expanded=True):
         with st.form("Add"):
             mat = st.selectbox("Matière", st.session_state.config['dossiers'].get(choix_dos, []))
@@ -88,59 +93,41 @@ elif page == "Planning & Saisie":
             d0 = st.date_input("Date J0")
             dex = st.date_input("Date Examen", value=None)
             if st.form_submit_button("Générer Planning"):
-                if dex is None:
-                    st.error("Date examen obligatoire")
-                else:
+                if dex:
                     for j in [0] + st.session_state.config['cadencier']:
                         date_j = d0 + dt.timedelta(days=j)
                         if date_j <= dex:
-                            row = {
-                                'ID': str(uuid.uuid4()), 
-                                'Dossier': choix_dos, 'Matiere': mat, 'Chapitre': chap, 
-                                'J_Type': f'J{j}', 'Date': str(date_j), 'Note': 0, 
-                                'Statut': 'À faire', 'Date_Examen': str(dex)
-                            }
+                            row = {'ID': str(uuid.uuid4()), 'Dossier': choix_dos, 'Matiere': mat, 
+                                   'Chapitre': chap, 'J_Type': f'J{j}', 'Date': str(date_j), 
+                                   'Note': 0, 'Statut': 'À faire', 'Date_Examen': str(dex)}
                             st.session_state.data = pd.concat([st.session_state.data, pd.DataFrame([row])])
                     
-                    # --- C'EST ICI QU'IL FAUT LE RAJOUTER ---
-                    st.session_state.data = st.session_state.data.drop_duplicates(
-                        subset=['Chapitre', 'J_Type', 'Date'], 
-                        keep='last'
-                    )
-                    
+                    # Nettoyage supplémentaire après génération
+                    st.session_state.data = st.session_state.data.drop_duplicates(subset=['Chapitre', 'J_Type', 'Date', 'Dossier'])
                     save_data(st.session_state.data); st.rerun()
 
-    # PLANNING ET SAISIE NOTES INTÉGRÉS PAR JOUR
+    # 3. AFFICHAGE PAR JOUR (Sans répétition)
     cols = st.columns(7)
-    current_dates = [dt.date.today() + dt.timedelta(days=x) for x in range(7)]
-    
-    for i, day in enumerate(current_dates):
+    for i, day in enumerate([dt.date.today() + dt.timedelta(days=x) for x in range(7)]):
         with cols[i]:
             st.markdown(f"**{day.strftime('%d/%m')}**")
             mask = (pd.to_datetime(st.session_state.data['Date']).dt.date == day) & (st.session_state.data['Dossier'] == choix_dos)
-            df_day = st.session_state.data[mask].copy()
+            df_day = st.session_state.data[mask]
             
-            # 1. Planning : Affichage du CHAPITRE
             for idx, r in df_day.iterrows():
-                with st.expander(f"{r['Chapitre']} ({r['J_Type']})"): # <--- Affichage du Chapitre
-                    st.write(f"📖 **{r['Matiere']}**")
-                    if st.button("✅ Fait", key=f"btn_{r['ID']}"):
-                        st.session_state.data.at[idx, 'Statut'] = 'Fait'
-                        save_data(st.session_state.data); st.rerun()
+                if st.button(f"✅ {r['Chapitre']} ({r['J_Type']})", key=f"btn_{r['ID']}"):
+                    st.session_state.data.at[idx, 'Statut'] = 'Fait'
+                    save_data(st.session_state.data); st.rerun()
             
-            # 2. Saisie Notes : Affichage du CHAPITRE + Sauvegarde forcée
+            # Saisie Notes
             if not df_day.empty:
                 st.caption("Notes")
-                # On affiche Chapitre et Note pour la saisie
-                edited = st.data_editor(df_day[['Chapitre', 'Note']], key=f"edit_{day}")
-                
+                # On édite uniquement le tableau du jour
+                edited = st.data_editor(df_day[['Chapitre', 'J_Type', 'Note']], key=f"edit_{day}")
                 if st.button("💾", key=f"save_{day}"):
-                    # Méthode robuste pour mettre à jour les lignes modifiées
                     for idx_edited, row_edited in edited.iterrows():
                         st.session_state.data.at[idx_edited, 'Note'] = row_edited['Note']
-                    save_data(st.session_state.data)
-                    st.success("Enregistré !")
-                    st.rerun()
+                    save_data(st.session_state.data); st.rerun()
 
 # --- GRAPHIQUES ---
 elif page == "Graphiques":
