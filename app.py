@@ -64,56 +64,62 @@ if page == "Dashboard":
 
 st.subheader("⚠️ Rattrapages à traiter")
 
-# Filtrage strict des rattrapages pour le dashboard
+# 1. On prépare les données (seulement pour le Dashboard)
 df_dos = st.session_state.data[st.session_state.data['Dossier'] == choix_dos]
 rattrapages = df_dos[(df_dos['Note'] > 0) & (df_dos['Note'] < 12)]
 
 if not rattrapages.empty:
     for index, row in rattrapages.iterrows():
-        # Définition des variables nécessaires
-        chapitre = row['Chapitre']
-        matiere = row['Matiere']
+        # 2. On affiche le nom et le bouton
+        st.write(f"Matière: {row['Matiere']} | Chapitre: {row['Chapitre']}")
         
-        # Affichage simplifié dans le Dashboard
-        st.write(f"**{matiere}** : {chapitre}")
+        # 3. Le bouton qui fait tout (recherche de place, dimanche, quota, RAP)
+        # Ce code doit être situé là où 'chapitre' et 'matiere' sont déjà connus
+if st.button(f"Réintégrer {chapitre} au planning", key=f"btn_{uuid.uuid4()}"):
+    # 1. Calcul de la date (recherche de place + évite dimanche + quota)
+    max_cours = st.session_state.config.get('max_cours_par_jour', 3)
+    today = dt.date.today()
+    date_trouvee = None
+    
+    for i in range(1, 15):
+        d = today + dt.timedelta(days=i)
+        if d.weekday() == 6: continue # Skip dimanche
         
-        # Le bouton qui exécute toute ta logique
-        if st.button(f"Réintégrer {chapitre} au planning", key=f"dash_btn_{row['ID']}"):
-            max_cours = st.session_state.config.get('max_cours_par_jour', 3)
-            today = dt.date.today()
-            date_trouvee = None
+        # Compte les cours pour ce dossier ce jour-là
+        count = len(st.session_state.data[
+            (pd.to_datetime(st.session_state.data['Date']).dt.date == d) & 
+            (st.session_state.data['Dossier'] == choix_dos)
+        ])
+        
+        if count < max_cours:
+            date_trouvee = d
+            break
             
-            # 1. Recherche intelligente (14 jours, évite le dimanche)
-            for i in range(1, 15):
-                d = today + dt.timedelta(days=i)
-                if d.weekday() == 6: continue 
-                
-                count = len(st.session_state.data[(pd.to_datetime(st.session_state.data['Date']).dt.date == d) & (st.session_state.data['Dossier'] == choix_dos)])
-                
-                if count < max_cours:
-                    date_trouvee = d
-                    break
-            
-            # 2. Soupape : Si aucune place, prend le prochain jour
-            if not date_trouvee:
-                date_trouvee = today + dt.timedelta(days=1)
-                
-            # 3. Action : Création "RAP" et nettoyage
-            new_rap = {
-                'ID': str(uuid.uuid4()), 'Dossier': choix_dos, 'Matiere': matiere, 
-                'Chapitre': chapitre, 'J_Type': 'RAP', 'Date': str(date_trouvee), 
-                'Note': 0, 'Statut': 'À faire'
-            }
-            
-            # Mise à jour des données
-            st.session_state.data = pd.concat([st.session_state.data, pd.DataFrame([new_rap])])
-            st.session_state.data = st.session_state.data[~((st.session_state.data['Chapitre'] == chapitre) & (st.session_state.data['Statut'] == 'À rattraper'))]
-            
-            save_data(st.session_state.data)
-            st.success(f"Réintégré pour le {date_trouvee} !")
-            st.rerun()
-else:
-    st.info("Aucun rattrapage en attente, tout est en ordre !")
+    # Soupape de sécurité
+    if not date_trouvee:
+        date_trouvee = today + dt.timedelta(days=1)
+    
+    # 2. Création du nouveau cours RAP
+    new_rap = {
+        'ID': str(uuid.uuid4()), 
+        'Dossier': choix_dos, 
+        'Matiere': matiere, 
+        'Chapitre': chapitre, 
+        'J_Type': 'RAP', 
+        'Date': str(date_trouvee), 
+        'Note': 0, 
+        'Statut': 'À faire'
+    }
+    
+    # 3. Mise à jour des données et suppression de l'ancien
+    st.session_state.data = pd.concat([st.session_state.data, pd.DataFrame([new_rap])])
+    st.session_state.data = st.session_state.data[
+        ~((st.session_state.data['Chapitre'] == chapitre) & (st.session_state.data['Statut'] == 'À rattraper'))
+    ]
+    
+    save_data(st.session_state.data)
+    st.rerun()
+
 
 
     # --- 2. PLANNING HEBDO (Affichage robuste) ---
