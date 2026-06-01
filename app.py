@@ -61,18 +61,20 @@ if page == "Dashboard":
         if c2.button("🗑️", key=f"del_{m}"): st.session_state.config['dossiers'][choix_dos].remove(m); st.rerun()
     
     st.subheader("⚠️ Rattrapages")
+# On récupère les données de ce dossier
 df_dos = st.session_state.data[st.session_state.data['Dossier'] == choix_dos]
+# On filtre les notes à rattraper (note entre 1 et 11 par exemple)
 rattrapages = df_dos[(df_dos['Note'] > 0) & (df_dos['Note'] < 12)]
 
 if not rattrapages.empty:
-    # 1. On boucle sur chaque ligne trouvée (C'est ici que 'chapitre' et 'matiere' sont définis)
+    # --- LA BOUCLE EST OBLIGATOIRE ICI ---
     for index, row in rattrapages.iterrows():
         chapitre = row['Chapitre']
         matiere = row['Matiere']
         
         st.write(f"Matière: {matiere} | Chapitre: {chapitre}")
         
-        # 2. Maintenant que le bouton est DANS la boucle, 'chapitre' existe bien
+        # Le bouton est DANS la boucle, il connait donc 'chapitre' et 'matiere'
         if st.button(f"Réintégrer {chapitre} au planning", key=f"btn_{row['ID']}"):
             max_cours = st.session_state.config.get('max_cours_par_jour', 3)
             today = dt.date.today()
@@ -83,6 +85,7 @@ if not rattrapages.empty:
             for i in range(14):
                 d = today + dt.timedelta(days=i)
                 if d.weekday() == 6: continue
+                
                 count_day = len(st.session_state.data[
                     (pd.to_datetime(st.session_state.data['Date']).dt.date == d) & 
                     (st.session_state.data['Dossier'] == choix_dos)
@@ -94,14 +97,14 @@ if not rattrapages.empty:
             if not date_trouvee:
                 date_trouvee = today + dt.timedelta(days=(6 - today.weekday()))
             
-            # Action
+            # Action de réintégration
             if date_trouvee and date_trouvee <= date_limite:
                 new_rap = {'ID': str(uuid.uuid4()), 'Dossier': choix_dos, 'Matiere': matiere, 'Chapitre': chapitre, 'J_Type': 'RAP', 'Date': str(date_trouvee), 'Note': 0, 'Statut': 'À faire'}
                 st.session_state.data = pd.concat([st.session_state.data, pd.DataFrame([new_rap])])
-                # Nettoyage
+                # Nettoyage pour ne plus avoir le rattrapage dans le dashboard
                 st.session_state.data = st.session_state.data[~((st.session_state.data['Chapitre'] == chapitre) & (st.session_state.data['Statut'] == 'À rattraper'))]
                 save_data(st.session_state.data)
-                st.success("Réintégré !")
+                st.success("Réintégré avec succès !")
                 st.rerun()
             else:
                 st.warning("Impossible : planning saturé ou date limite dépassée.")
