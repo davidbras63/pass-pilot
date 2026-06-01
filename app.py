@@ -88,13 +88,14 @@ elif page == "Planning & Saisie":
                 else:
                     for j in [0] + st.session_state.config['cadencier']:
                         date_j = d0 + dt.timedelta(days=j)
+                        # Génération uniquement si dans les limites
                         if date_j <= dex:
                             row = {'Dossier': choix_dos, 'Matiere': mat, 'Chapitre': chap, 'J_Type': f'J{j}', 
                                    'Date': date_j, 'Note': 0, 'Statut': 'À faire', 'Date_Examen': dex}
                             st.session_state.data = pd.concat([st.session_state.data, pd.DataFrame([row])])
                     save_data(st.session_state.data); st.rerun()
     
-    # Indentation corrigée ici (alignée avec le 'elif')
+    # Indentation fixée exactement au niveau du 'elif'
     cols = st.columns(7)
     for i, day in enumerate([dt.date.today() + dt.timedelta(days=x) for x in range(7)]):
         with cols[i]:
@@ -103,7 +104,7 @@ elif page == "Planning & Saisie":
             for idx, r in st.session_state.data[mask].iterrows():
                 with st.expander(f"{r['Matiere']} ({r['J_Type']})"):
                     st.write(f"📖 **{r['Chapitre']}**")
-                    # Correction pour éviter le plantage
+                    # Utilisation de .loc pour garantir la modification de la bonne ligne
                     if st.button("✅ Fait", key=f"f_{idx}"): 
                         st.session_state.data.loc[idx, 'Statut'] = 'Fait'
                         save_data(st.session_state.data); st.rerun()
