@@ -93,21 +93,26 @@ elif page == "Planning & Saisie":
                             st.session_state.data = pd.concat([st.session_state.data, pd.DataFrame([row])])
                     save_data(st.session_state.data); st.rerun()
 
+    # SECTION PLANNING
     cols = st.columns(7)
+    date_to_validate = None # Variable pour stocker l'index à valider
+    
     current_dates = [dt.date.today() + dt.timedelta(days=x) for x in range(7)]
     for i, day in enumerate(current_dates):
         with cols[i]:
             st.markdown(f"**{day.strftime('%d/%m')}**")
-            # Filtrage propre par date
             mask = (pd.to_datetime(st.session_state.data['Date']).dt.date == day) & (st.session_state.data['Dossier'] == choix_dos)
             for idx, r in st.session_state.data[mask].iterrows():
                 with st.expander(f"{r['Matiere']} ({r['J_Type']})"):
                     st.write(f"📖 **{r['Chapitre']}**")
-                    # Bouton qui utilise l'index fixe de la ligne
                     if st.button("✅ Fait", key=f"btn_{idx}"):
-                        st.session_state.data.at[idx, 'Statut'] = 'Fait'
-                        save_data(st.session_state.data)
-                        st.rerun()
+                        date_to_validate = idx
+    
+    # MODIFICATION HORS BOUCLE
+    if date_to_validate is not None:
+        st.session_state.data.at[date_to_validate, 'Statut'] = 'Fait'
+        save_data(st.session_state.data)
+        st.rerun()
 
     st.subheader("📝 Saisie Notes")
     edited = st.data_editor(st.session_state.data[st.session_state.data['Dossier'] == choix_dos][['Matiere', 'Chapitre', 'J_Type', 'Note']])
