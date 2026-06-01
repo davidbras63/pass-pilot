@@ -77,16 +77,12 @@ if page == "Dashboard":
 elif page == "Planning & Saisie":
     import uuid
 
-    # 1. NETTOYAGE TOTAL AU DÉMARRAGE
-    if not st.session_state.data.empty:
-        st.session_state.data = st.session_state.data.drop_duplicates(
-            subset=['Dossier', 'Matiere', 'Chapitre', 'J_Type', 'Date'], 
-            keep='first'
-        )
-        save_data(st.session_state.data)
+    # 1. NETTOYAGE AU DÉMARRAGE (pour supprimer les doublons anciens)
+    if 'data' in st.session_state and not st.session_state.data.empty:
+        st.session_state.data = st.session_state.data.drop_duplicates(subset=['Dossier', 'Matiere', 'Chapitre', 'J_Type', 'Date'], keep='first')
 
-    # 2. AJOUT PROPRE
-    with st.expander("✍️ Ajouter Chapitre", expanded=True):
+    # 2. FORMULAIRE AJOUT
+    with st.expander("✍️ Ajouter Chapitre", expanded=False):
         with st.form("Add"):
             mat = st.selectbox("Matière", st.session_state.config['dossiers'].get(choix_dos, []))
             chap = st.text_input("Titre")
@@ -97,52 +93,35 @@ elif page == "Planning & Saisie":
                     for j in [0] + st.session_state.config['cadencier']:
                         date_j = d0 + dt.timedelta(days=j)
                         if date_j <= dex:
-                            row = {'ID': str(uuid.uuid4()), 'Dossier': choix_dos, 'Matiere': mat, 
-                                   'Chapitre': chap, 'J_Type': f'J{j}', 'Date': str(date_j), 
-                                   'Note': 0, 'Statut': 'À faire', 'Date_Examen': str(dex)}
+                            row = {'ID': str(uuid.uuid4()), 'Dossier': choix_dos, 'Matiere': mat, 'Chapitre': chap, 
+                                   'J_Type': f'J{j}', 'Date': str(date_j), 'Note': 0, 'Statut': 'À faire', 'Date_Examen': str(dex)}
                             st.session_state.data = pd.concat([st.session_state.data, pd.DataFrame([row])])
-                    
-                    # Nettoyage supplémentaire après génération
-                    st.session_state.data = st.session_state.data.drop_duplicates(subset=['Chapitre', 'J_Type', 'Date', 'Dossier'])
                     save_data(st.session_state.data); st.rerun()
 
-    # 3. AFFICHAGE PAR JOUR (Sans répétition)
+    # 3. AFFICHAGE ET SAISIE (7 jours)
     cols = st.columns(7)
     for i, day in enumerate([dt.date.today() + dt.timedelta(days=x) for x in range(7)]):
         with cols[i]:
             st.markdown(f"**{day.strftime('%d/%m')}**")
             mask = (pd.to_datetime(st.session_state.data['Date']).dt.date == day) & (st.session_state.data['Dossier'] == choix_dos)
-            df_day = st.session_state.data[mask]
+            df_day = st.session_state.data[mask].copy()
             
-            for idx, r in df_day.iterrows():
+            # Affichage Planning
+            for _, r in df_day.iterrows():
                 if st.button(f"✅ {r['Chapitre']} ({r['J_Type']})", key=f"btn_{r['ID']}"):
-                    st.session_state.data.at[idx, 'Statut'] = 'Fait'
+                    st.session_state.data.loc[st.session_state.data['ID'] == r['ID'], 'Statut'] = 'Fait'
                     save_data(st.session_state.data); st.rerun()
             
-               # Saisie Notes : Correction syntaxe et sauvegarde robuste
+            # Saisie Notes
             if not df_day.empty:
                 st.caption("Notes")
-                
-                # On prépare le tableau pour l'édition
-                # On garde 'ID' mais on ne l'affiche pas avec column_config
-                edited = st.data_editor(
-                    df_day[['ID', 'Chapitre', 'J_Type', 'Note']], 
-                    key=f"edit_{day}",
-                    column_config={
-                        "ID": None, # 'None' cache totalement la colonne ID
-                        "Chapitre": st.column_config.TextColumn(disabled=True),
-                        "J_Type": st.column_config.TextColumn(disabled=True)
-                    }
-                )
+                # On utilise l'ID pour identifier les lignes sans l'afficher
+                edited = st.data_editor(df_day[['ID', 'Chapitre', 'Note']], column_config={"ID": None}, hide_index=True)
                 
                 if st.button("💾", key=f"save_{day}"):
-                    # On met à jour le DataFrame global st.session_state.data
                     for _, row in edited.iterrows():
-                        # On trouve la ligne par l'ID et on met à jour la note
                         st.session_state.data.loc[st.session_state.data['ID'] == row['ID'], 'Note'] = row['Note']
-                    
                     save_data(st.session_state.data)
-                    st.success("Note enregistrée !")
                     st.rerun()
 
 # --- GRAPHIQUES ---
