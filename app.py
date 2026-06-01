@@ -75,52 +75,47 @@ if page == "Dashboard":
 
 # --- PLANNING & SAISIE ---
 elif page == "Planning & Saisie":
+    import uuid # Import nécessaire pour générer des IDs fixes
+
     with st.expander("✍️ Ajouter Chapitre", expanded=True):
         with st.form("Add"):
             mat = st.selectbox("Matière", st.session_state.config['dossiers'].get(choix_dos, []))
             chap = st.text_input("Titre")
             d0 = st.date_input("Date J0")
-            # La date examen est None par défaut, et on force l'utilisateur à la remplir
             dex = st.date_input("Date Examen", value=None)
             if st.form_submit_button("Générer Planning"):
                 if dex is None:
-                    st.error("⚠️ Date examen obligatoire !")
+                    st.error("Date examen obligatoire")
                 else:
                     for j in [0] + st.session_state.config['cadencier']:
                         date_j = d0 + dt.timedelta(days=j)
                         if date_j <= dex:
-                            row = {'Dossier': choix_dos, 'Matiere': mat, 'Chapitre': chap, 'J_Type': f'J{j}', 
-                                   'Date': str(date_j), 'Note': 0, 'Statut': 'À faire', 'Date_Examen': str(dex)}
+                            # Ajout d'une colonne ID unique pour chaque ligne
+                            row = {
+                                'ID': str(uuid.uuid4()), 
+                                'Dossier': choix_dos, 'Matiere': mat, 'Chapitre': chap, 
+                                'J_Type': f'J{j}', 'Date': str(date_j), 'Note': 0, 
+                                'Statut': 'À faire', 'Date_Examen': str(dex)
+                            }
                             st.session_state.data = pd.concat([st.session_state.data, pd.DataFrame([row])])
                     save_data(st.session_state.data); st.rerun()
 
-    # SECTION PLANNING SÉCURISÉE
     cols = st.columns(7)
-    date_to_validate = None 
-    
-    current_dates = [dt.date.today() + dt.timedelta(days=x) for x in range(7)]
-    for i, day in enumerate(current_dates):
+    for i, day in enumerate([dt.date.today() + dt.timedelta(days=x) for x in range(7)]):
         with cols[i]:
             st.markdown(f"**{day.strftime('%d/%m')}**")
-            # Masque de filtrage pour éviter les erreurs d'index lors de l'affichage
+            # Utilisation de l'ID unique au lieu de l'index
             mask = (pd.to_datetime(st.session_state.data['Date']).dt.date == day) & (st.session_state.data['Dossier'] == choix_dos)
             for idx, r in st.session_state.data[mask].iterrows():
-                with st.expander(f"{r['Matiere']} ({r['J_Type']})"):
-                    st.write(f"📖 **{r['Chapitre']}**")
-                    # Bouton avec clé unique basée sur l'index
-                    if st.button("✅ Fait", key=f"btn_{idx}"):
-                        date_to_validate = idx
-    
-    # Mise à jour effectuée HORS de la boucle
-    if date_to_validate is not None:
-        st.session_state.data.at[date_to_validate, 'Statut'] = 'Fait'
-        save_data(st.session_state.data)
-        st.rerun()
+                # On utilise r['ID'] qui ne changera jamais
+                if st.button(f"✅ {r['Chapitre']}", key=f"btn_{r['ID']}"):
+                    st.session_state.data.at[idx, 'Statut'] = 'Fait'
+                    save_data(st.session_state.data)
+                    st.rerun()
 
     st.subheader("📝 Saisie Notes")
-    # Utilisation d'une copie pour l'éditeur afin d'éviter de corrompre l'original en temps réel
     edited = st.data_editor(st.session_state.data[st.session_state.data['Dossier'] == choix_dos][['Matiere', 'Chapitre', 'J_Type', 'Note']])
-    if st.button("Enregistrer les notes"):
+    if st.button("Enregistrer"):
         st.session_state.data.update(edited)
         save_data(st.session_state.data); st.rerun()
 
