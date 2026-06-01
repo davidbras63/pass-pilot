@@ -9,100 +9,101 @@ st.set_page_config(layout="wide")
 DATA_FILE = "data.csv"
 CONFIG_FILE = "config.json"
 
-# --- CORE ---
-def load_config():
-    if os.path.exists(CONFIG_FILE):
-        with open(CONFIG_FILE, "r") as f: return json.load(f)
-    return {'cours_max': 5, 'cadencier': [1, 3, 7, 14, 30], 'seuils': {'1': 12, '3': 12, '7': 14, '14': 14, '30': 16}, 'dossiers': {"PASS": []}}
-
-def save_config(config):
-    with open(CONFIG_FILE, "w") as f: json.dump(config, f)
-
+# --- CHARGEMENT ROBUSTE ---
 def load_data():
     if os.path.exists(DATA_FILE):
         df = pd.read_csv(DATA_FILE)
+        # Nettoyage immédiat des doublons
+        df = df.drop_duplicates()
         df['Date'] = pd.to_datetime(df['Date']).dt.date
         return df
-    return pd.DataFrame(columns=['Dossier', 'Matiere', 'Chapitre', 'J_Type', 'Date', 'Note', 'Statut', 'Date_Examen'])
+    return pd.DataFrame(columns=['Dossier', 'Matiere', 'Chapitre', 'J_Type', 'Date', 'Note', 'Statut'])
 
 def save_data(df):
-    df.drop_duplicates(inplace=True)
+    df = df.drop_duplicates()
     df.to_csv(DATA_FILE, index=False)
 
-if 'config' not in st.session_state: st.session_state.config = load_config()
-if 'data' not in st.session_state: st.session_state.data = load_data()
+def load_config():
+    if os.path.exists(CONFIG_FILE):
+        with open(CONFIG_FILE, "r") as f: return json.load(f)
+    return {'dossiers': {"PASS": []}, 'cadencier': [1, 3, 7, 14, 30], 'seuils': {'1': 12, '3': 12, '7': 14, '14': 14, '30': 16}}
 
-# --- SIDEBAR ---
+# Initialisation
+if 'data' not in st.session_state: st.session_state.data = load_data()
+if 'config' not in st.session_state: st.session_state.config = load_config()
+
+# --- SIDEBAR FIXE ---
 st.sidebar.title("⚙️ Pilot Expert")
-with st.sidebar.expander("🛠️ Réglages", expanded=True):
-    st.session_state.config['cours_max'] = st.number_input("Max cours/jour", 1, 20, st.session_state.config.get('cours_max', 5))
-    cad_str = st.text_input("Cadencier (jours)", ",".join(map(str, st.session_state.config['cadencier'])))
-    st.session_state.config['cadencier'] = [int(x.strip()) for x in cad_str.split(",")]
-    # Rétablissement des paliers de notes
-    for j in st.session_state.config['cadencier']:
-        st.session_state.config['seuils'][str(j)] = st.slider(f"Seuil Note J{j}", 10, 20, int(st.session_state.config['seuils'].get(str(j), 12)))
-    if st.button("💾 Enregistrer"): save_config(st.session_state.config); st.rerun()
+with st.sidebar.expander("🛠️ Réglages"):
+    cad_input = st.text_input("Cadencier", ",".join(map(str, st.session_state.config['cadencier'])))
+    st.session_state.config['cadencier'] = [int(x.strip()) for x in cad_input.split(",")]
+    if st.button("💾 Enregistrer"): 
+        with open(CONFIG_FILE, "w") as f: json.dump(st.session_state.config, f)
+        st.rerun()
+
+# Gestion Dossiers/Matières séparée
+dossier_nom = st.sidebar.text_input("Nouveau Dossier")
+if st.sidebar.button("➕ Créer Dossier") and dossier_nom:
+    st.session_state.config['dossiers'][dossier_nom] = []
+    with open(CONFIG_FILE, "w") as f: json.dump(st.session_state.config, f)
+    st.rerun()
 
 choix_dos = st.sidebar.selectbox("Dossier", list(st.session_state.config['dossiers'].keys()))
-if st.sidebar.button("➕ Ajouter Matière"): 
-    mat = st.sidebar.text_input("Nom Matière")
-    if mat: st.session_state.config['dossiers'][choix_dos].append(mat); save_config(st.session_state.config); st.rerun()
 
-page = st.sidebar.radio("Navigation", ["Dashboard", "Planning & Saisie", "Graphiques"])
+matiere_nom = st.sidebar.text_input("Ajouter Matière")
+if st.sidebar.button("➕ Ajouter Matière") and matiere_nom:
+    st.session_state.config['dossiers'][choix_dos].append(matiere_nom)
+    with open(CONFIG_FILE, "w") as f: json.dump(st.session_state.config, f)
+    st.rerun()
 
-# --- DASHBOARD ---
+page = st.sidebar.radio("Navigation", ["Dashboard", "Planning & Saisie"])
+
+# --- DASHBOARD (Purge réelle) ---
 if page == "Dashboard":
-    st.title(f"🎯 Dashboard : {choix_dos}")
+    st.title(f"🎯 {choix_dos}")
+    df = st.session_state.data
+    df_dos = df[df['Dossier'] == choix_dos]
+    
     st.subheader("⚠️ Rattrapages")
-    df_dos = st.session_state.data[st.session_state.data['Dossier'] == choix_dos]
-    
-    # Identification des rattrapages selon seuils dynamiques
-    rattrapages_idx = []
-    for idx, row in df_dos.iterrows():
-        seuil = int(st.session_state.config['seuils'].get(row['J_Type'][1:] if row['J_Type'].startswith('J') else '0', 12))
-        if 0 < row['Note'] < seuil: rattrapages_idx.append(idx)
-    
-    rattrapages = df_dos.loc[rattrapages_idx]
+    rattrapages = df_dos[(df_dos['Note'] > 0) & (df_dos['Note'] < 12)]
     
     if not rattrapages.empty:
-        st.table(rattrapages[['Matiere', 'Chapitre', 'J_Type', 'Date', 'Note']])
-        if st.button("🔄 Réintégrer et purger"):
+        st.table(rattrapages[['Matiere', 'Chapitre', 'J_Type', 'Note']])
+        if st.button("🔄 Réintégrer (Purger l'ancien)"):
             for idx, row in rattrapages.iterrows():
+                # Ajout nouvelle ligne
                 new_r = row.copy()
                 new_r['Date'] = dt.date.today()
                 new_r['J_Type'] = 'RAT'
                 new_r['Note'] = 0
-                st.session_state.data = pd.concat([st.session_state.data, pd.DataFrame([new_r])], ignore_index=True)
-                # Purge radicale : suppression de la ligne fautive
+                st.session_state.data = pd.concat([st.session_state.data, pd.DataFrame([new_r])])
+                # Suppression définitive de l'ancienne
                 st.session_state.data = st.session_state.data.drop(idx)
             save_data(st.session_state.data); st.rerun()
-    else: st.write("Aucun rattrapage.")
 
-# --- PLANNING & SAISIE ---
+# --- PLANNING (Affichage propre) ---
 elif page == "Planning & Saisie":
-    st.markdown("### ✍️ Ajouter un nouveau chapitre")
-    with st.expander("Configuration"):
-        with st.form("Add"):
-            mat = st.selectbox("Matière", st.session_state.config['dossiers'].get(choix_dos, []))
-            chap = st.text_input("Chapitre")
-            d0 = st.date_input("Date J0")
-            dex = st.date_input("Date Examen", value=None)
-            if st.form_submit_button("Générer Planning"):
-                if not dex: st.error("Date examen obligatoire !")
-                else:
-                    for j in [0] + st.session_state.config['cadencier']:
-                        st.session_state.data = pd.concat([st.session_state.data, pd.DataFrame([{'Dossier': choix_dos, 'Matiere': mat, 'Chapitre': chap, 'J_Type': f'J{j}', 'Date': d0 + dt.timedelta(days=j), 'Note': 0, 'Statut': 'À faire', 'Date_Examen': dex}])])
-                    save_data(st.session_state.data); st.rerun()
+    st.markdown("### ✍️ Ajouter Chapitre")
+    with st.form("add_chap"):
+        mat = st.selectbox("Matière", st.session_state.config['dossiers'].get(choix_dos, []))
+        chap = st.text_input("Titre du Chapitre")
+        d0 = st.date_input("Date J0")
+        if st.form_submit_button("Ajouter"):
+            for j in [0] + st.session_state.config['cadencier']:
+                new_row = {'Dossier': choix_dos, 'Matiere': mat, 'Chapitre': chap, 'J_Type': f'J{j}', 
+                           'Date': d0 + dt.timedelta(days=j), 'Note': 0, 'Statut': 'À faire'}
+                st.session_state.data = pd.concat([st.session_state.data, pd.DataFrame([new_row])])
+            save_data(st.session_state.data); st.rerun()
 
+    # Affichage Planning
     cols = st.columns(7)
     for i, day in enumerate([dt.date.today() + dt.timedelta(days=x) for x in range(7)]):
         with cols[i]:
             st.markdown(f"**{day.strftime('%d/%m')}**")
             df_day = st.session_state.data[(st.session_state.data['Date'] == day) & (st.session_state.data['Dossier'] == choix_dos)]
             for idx, r in df_day.iterrows():
-                u_key = f"{idx}_{r['Matiere']}_{r['J_Type']}"
                 with st.expander(f"{r['Matiere']} ({r['J_Type']})"):
-                    st.write(f"📖 **{r['Chapitre']}**") # Affichage du titre du chapitre
-                    if st.button("✅ Fait", key=f"f_{u_key}"): st.session_state.data.at[idx, 'Statut'] = 'Fait'; save_data(st.session_state.data); st.rerun()
-                    new_d = st.date_input("Reporter", key=f"d_{u_key}")
-                    if st.button("Déplacer", key=f"m_{u_key}"): st.session_state.data.at[idx, 'Date'] = new_d; save_data(st.session_state.data); st.rerun()
+                    st.write(f"📖 **{r['Chapitre']}**")
+                    if st.button("✅ Fait", key=f"f_{idx}"):
+                        st.session_state.data.at[idx, 'Statut'] = 'Fait'
+                        save_data(st.session_state.data); st.rerun()
