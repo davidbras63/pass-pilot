@@ -75,9 +75,7 @@ if page == "Dashboard":
 
 # --- PLANNING & SAISIE ---
 elif page == "Planning & Saisie":
-    import uuid
-
-    # --- 1. FORMULAIRE AJOUT ---
+    # 1. AJOUT (Rien ne change ici)
     with st.expander("✍️ Ajouter Chapitre"):
         with st.form("Add"):
             mat = st.selectbox("Matière", st.session_state.config['dossiers'].get(choix_dos, []))
@@ -92,37 +90,29 @@ elif page == "Planning & Saisie":
                                'Chapitre': chap, 'J_Type': f'J{j}', 'Date': str(date_j), 
                                'Note': 0, 'Statut': 'À faire'}
                         st.session_state.data = pd.concat([st.session_state.data, pd.DataFrame([row])])
-                # Nettoyage automatique immédiat
-                st.session_state.data = st.session_state.data.drop_duplicates()
                 save_data(st.session_state.data); st.rerun()
 
-    # --- 2. PLANNING & NOTES ---
+    # 2. AFFICHAGE DIRECT (Sans filtrage complexe par date)
     st.divider()
-    cols = st.columns(7)
-    dates = [dt.date.today() + dt.timedelta(days=x) for x in range(7)]
+    # On affiche simplement les données du dossier en cours
+    data_to_show = st.session_state.data[st.session_state.data['Dossier'] == choix_dos]
     
-    for i, day in enumerate(dates):
-        with cols[i]:
-            st.markdown(f"**{day.strftime('%d/%m')}**")
-            # Filtrage des données du jour
-            mask = (pd.to_datetime(st.session_state.data['Date']).dt.date == day) & (st.session_state.data['Dossier'] == choix_dos)
-            df_day = st.session_state.data[mask].copy()
-            
-            if not df_day.empty:
-                # Affichage des tâches
-                for _, r in df_day.iterrows():
-                    if st.button(f"✅ {r['Chapitre']} ({r['J_Type']})", key=f"b_{r['ID']}"):
-                        st.session_state.data.loc[st.session_state.data['ID'] == r['ID'], 'Statut'] = 'Fait'
-                        save_data(st.session_state.data); st.rerun()
-                
-                # Saisie des notes (Simple et sans configuration complexe)
-                df_to_edit = df_day[['ID', 'Note']]
-                edited = st.data_editor(df_to_edit, hide_index=True)
-                
-                if st.button("💾", key=f"s_{day}"):
-                    for _, row in edited.iterrows():
-                        st.session_state.data.loc[st.session_state.data['ID'] == row['ID'], 'Note'] = row['Note']
-                    save_data(st.session_state.data); st.success("OK"); st.rerun()
+    # On utilise un tableau simple pour tout voir
+    st.write("Planning complet :")
+    edited = st.data_editor(
+        data_to_show[['ID', 'Date', 'Chapitre', 'J_Type', 'Note', 'Statut']],
+        column_config={"ID": None},
+        hide_index=True
+    )
+    
+    # Bouton de sauvegarde global
+    if st.button("💾 Enregistrer tout"):
+        for _, row in edited.iterrows():
+            st.session_state.data.loc[st.session_state.data['ID'] == row['ID'], 'Note'] = row['Note']
+            st.session_state.data.loc[st.session_state.data['ID'] == row['ID'], 'Statut'] = row['Statut']
+        save_data(st.session_state.data)
+        st.success("Modifications enregistrées !")
+        st.rerun()
 
 # --- GRAPHIQUES ---
 elif page == "Graphiques":
