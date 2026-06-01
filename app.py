@@ -9,29 +9,23 @@ st.set_page_config(layout="wide")
 DATA_FILE = "data.csv"
 CONFIG_FILE = "config.json"
 
-# --- RÉINITIALISATION AUTOMATIQUE ---
-if os.path.exists(DATA_FILE):
-    try:
-        pd.read_csv(DATA_FILE)
-    except:
-        os.remove(DATA_FILE)
-
+# --- NETTOYAGE ET CHARGEMENT ---
 def load_data():
-    cols = ['Dossier', 'Matiere', 'Chapitre', 'J_Type', 'Date', 'Note']
     if os.path.exists(DATA_FILE):
-        df = pd.read_csv(DATA_FILE)
-        df['Date'] = pd.to_datetime(df['Date'], errors='coerce').dt.date
-        df['Note'] = pd.to_numeric(df['Note'], errors='coerce').fillna(0)
-        return df
-    return pd.DataFrame(columns=cols)
+        try:
+            df = pd.read_csv(DATA_FILE)
+            # Conversion forcée : on force le format français et on nettoie les erreurs
+            df['Date'] = pd.to_datetime(df['Date'], dayfirst=True, errors='coerce').dt.date
+            df['Note'] = pd.to_numeric(df['Note'], errors='coerce').fillna(0)
+            return df
+        except: pass
+    return pd.DataFrame(columns=['Dossier', 'Matiere', 'Chapitre', 'J_Type', 'Date', 'Note'])
 
 def save_data(df): df.to_csv(DATA_FILE, index=False)
 
 def load_config():
     if os.path.exists(CONFIG_FILE):
-        try:
-            with open(CONFIG_FILE, "r") as f: return json.load(f)
-        except: pass
+        with open(CONFIG_FILE, "r") as f: return json.load(f)
     return {'cours_max': 5, 'cadencier': [1, 3, 7, 14, 30, 60, 90, 120], 'seuils': {'1': 12}, 'dossiers': {"PASS": []}}
 
 if 'data' not in st.session_state: st.session_state.data = load_data()
@@ -43,8 +37,6 @@ with st.sidebar.expander("🛠️ Réglages", expanded=True):
     st.session_state.config['cours_max'] = st.number_input("Max cours/jour", 1, 20, st.session_state.config.get('cours_max', 5))
     cad_input = st.text_input("Cadencier", ",".join(map(str, st.session_state.config.get('cadencier', [1,3,7]))))
     st.session_state.config['cadencier'] = [int(x.strip()) for x in cad_input.split(",")]
-    for j in st.session_state.config['cadencier']:
-        st.session_state.config['seuils'][str(j)] = st.slider(f"Seuil J{j}", 10, 20, int(st.session_state.config['seuils'].get(str(j), 12)))
     if st.button("💾 Enregistrer"): 
         with open(CONFIG_FILE, "w") as f: json.dump(st.session_state.config, f)
         st.rerun()
@@ -64,14 +56,15 @@ if page == "Dashboard":
         c1.info(f"📚 {m}")
         if c2.button("🗑️", key=f"del_{m}"): st.session_state.config['dossiers'][choix_dos].remove(m); st.rerun()
     
-    st.subheader("⚠️ Rattrapages")
+    st.subheader("⚠️ Tableau des Rattrapages")
+    # Sécurité pour éviter le crash
     if not df.empty:
-        df['Note'] = pd.to_numeric(df['Note'], errors='coerce')
-        rattrapages = df[(df['Note'] > 0) & (df['Note'] < 12)]
+        rattrapages = df[(pd.to_numeric(df['Note'], errors='coerce') < 12) & (pd.to_numeric(df['Note'], errors='coerce') > 0)]
         if not rattrapages.empty:
             disp_df = rattrapages.copy()
             disp_df['Date'] = disp_df['Date'].apply(lambda x: x.strftime('%d/%m/%Y') if pd.notnull(x) else "")
             st.table(disp_df[['Matiere', 'Chapitre', 'J_Type', 'Date', 'Note']])
+        else: st.write("Aucun rattrapage requis.")
 
 elif page == "Planning & Saisie":
     st.title("🗓️ Planning & Saisie")
@@ -109,7 +102,9 @@ elif page == "Planning & Saisie":
 elif page == "Graphiques":
     st.title("📊 Progression")
     if not df.empty:
-        df_clean = df[df['Note'] > 0].copy()
+        df_clean = df[pd.to_numeric(df['Note'], errors='coerce') > 0].copy()
         if not df_clean.empty:
             df_clean['Date'] = df_clean['Date'].apply(lambda x: x.strftime('%d/%m/%Y'))
-            st.line_chart(df_clean.pivot_table(index='Date', columns='Matiere', values='Note', aggfunc='mean'))
+            # Utilisation de pivot_table pour être plus robuste
+            pivot_df = df_clean.pivot_table(index='Date', columns='Matiere', values='Note', aggfunc='mean')
+            st.line_chart(pivot_df)
