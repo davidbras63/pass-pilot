@@ -48,13 +48,26 @@ with st.sidebar.expander("🛠️ Réglages", expanded=True):
         st.rerun()
 
 choix_dos = st.sidebar.selectbox("Dossier", list(st.session_state.config['dossiers'].keys()))
+# Boutons création
+if st.sidebar.button("➕ Créer Dossier"): 
+    nom = st.sidebar.text_input("Nom nouveau dossier")
+    if nom: st.session_state.config['dossiers'][nom] = []; st.rerun()
+if st.sidebar.button("➕ Ajouter Matière"): 
+    mat = st.sidebar.text_input("Nom Matière")
+    if mat: st.session_state.config['dossiers'][choix_dos].append(mat); st.rerun()
+
 page = st.sidebar.radio("Navigation", ["Dashboard", "Planning & Saisie", "Graphiques"])
 df = st.session_state.data[st.session_state.data['Dossier'] == choix_dos].copy()
 
 # --- DASHBOARD ---
 if page == "Dashboard":
     st.title(f"🎯 Dashboard : {choix_dos}")
-    if st.button("🔄 Recalculer Rattrapages"): st.rerun()
+    # Liste matières avec poubelles
+    for m in st.session_state.config['dossiers'].get(choix_dos, []):
+        c1, c2 = st.columns([4, 1])
+        c1.info(f"📚 {m}")
+        if c2.button("🗑️", key=f"del_{m}"): st.session_state.config['dossiers'][choix_dos].remove(m); st.rerun()
+    
     st.subheader("⚠️ Rattrapages")
     df['Note'] = pd.to_numeric(df['Note'], errors='coerce').fillna(0)
     rattrapages = []
@@ -67,8 +80,11 @@ if page == "Dashboard":
         disp = final.copy()
         disp['Date'] = disp['Date'].apply(lambda x: x.strftime('%d/%m/%Y'))
         st.table(disp[['Matiere', 'Chapitre', 'J_Type', 'Date', 'Note']])
+    else: st.write("Pas de rattrapage pour l'instant.")
+    
+    if st.button("🔄 Recalculer Rattrapages"): st.rerun()
 
-# --- PLANNING & SAISIE (RETOUR À L'AFFICHAGE PRÉCÉDENT) ---
+# --- PLANNING ---
 elif page == "Planning & Saisie":
     st.title("🗓️ Planning & Saisie")
     with st.expander("➕ Ajouter Chapitre"):
@@ -82,7 +98,7 @@ elif page == "Planning & Saisie":
                 else:
                     for j in [0] + st.session_state.config['cadencier']:
                         d = d0 + dt.timedelta(days=j)
-                        if d.weekday() == 6: d += dt.timedelta(days=1) # Soupape dimanche
+                        if d.weekday() == 6: d += dt.timedelta(days=1)
                         if d <= ex:
                             new_row = {'Dossier': choix_dos, 'Matiere': mat, 'Chapitre': chap, 'J_Type': f"J{j}", 'Date': d, 'Note': 0}
                             st.session_state.data = pd.concat([st.session_state.data, pd.DataFrame([new_row])], ignore_index=True)
@@ -97,7 +113,7 @@ elif page == "Planning & Saisie":
                 with st.expander(f"{r['Matiere']} ({r['J_Type']})"):
                     st.write(f"Chapitre: {r['Chapitre']}")
                     if st.button("Valider", key=f"val_{idx}"): st.rerun()
-
+    
     st.subheader("📝 Saisie")
     if not df.empty:
         df_today = df[df['Date'] == dt.date.today()]
