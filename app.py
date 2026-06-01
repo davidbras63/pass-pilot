@@ -77,63 +77,64 @@ if page == "Dashboard":
 elif page == "Planning & Saisie":
     import uuid
 
-    # --- 1. AJOUT SÉCURISÉ (Pas de doublons, date d'examen bloquante) ---
+    # --- 1. AJOUT SÉCURISÉ ---
     with st.expander("✍️ Ajouter Chapitre", expanded=False):
         with st.form("Add"):
             mat = st.selectbox("Matière", st.session_state.config['dossiers'].get(choix_dos, []))
             chap = st.text_input("Titre")
             d0 = st.date_input("Date J0")
-            dex = st.date_input("Date Examen")
+            dex = st.date_input("Date Examen", value=None) # Vierge au départ
             if st.form_submit_button("Générer Planning"):
-                # Nettoyage pour éviter les doublons lors de la création
-                st.session_state.data = st.session_state.data.drop_duplicates()
-                
-                new_rows = []
-                for j in [0] + st.session_state.config['cadencier']:
-                    date_j = d0 + dt.timedelta(days=j)
-                    # Condition bloquante : rien ne passe après dex
-                    if date_j <= dex:
-                        new_rows.append({
-                            'ID': str(uuid.uuid4()), 'Dossier': choix_dos, 'Matiere': mat, 
-                            'Chapitre': chap, 'J_Type': f'J{j}', 'Date': str(date_j), 
-                            'Note': 0, 'Statut': 'À faire'
-                        })
-                st.session_state.data = pd.concat([st.session_state.data, pd.DataFrame(new_rows)])
-                save_data(st.session_state.data); st.rerun()
+                if dex:
+                    # Nettoyage total des doublons avant de générer
+                    st.session_state.data = st.session_state.data.drop_duplicates()
+                    
+                    new_rows = []
+                    for j in [0] + st.session_state.config['cadencier']:
+                        date_j = d0 + dt.timedelta(days=j)
+                        # Bloquant : on arrête dès que date_j dépasse dex
+                        if date_j <= dex:
+                            new_rows.append({
+                                'ID': str(uuid.uuid4()), 'Dossier': choix_dos, 'Matiere': mat, 
+                                'Chapitre': chap, 'J_Type': f'J{j}', 'Date': str(date_j), 
+                                'Note': 0, 'Statut': 'À faire'
+                            })
+                    st.session_state.data = pd.concat([st.session_state.data, pd.DataFrame(new_rows)])
+                    save_data(st.session_state.data); st.rerun()
 
-    # --- 2. TABLEAU DE SAISIE NOTES (Largeur totale, filtre jour J uniquement) ---
+    # --- 2. PLANNING COMPLET (Visualisation) ---
+    st.subheader("🗓️ Planning Complet")
+    df_full = st.session_state.data[st.session_state.data['Dossier'] == choix_dos].copy()
+    df_full['Date_Obj'] = pd.to_datetime(df_full['Date']).dt.date
+    st.dataframe(df_full.sort_values('Date_Obj')[['Date', 'Chapitre', 'J_Type', 'Statut', 'Note']], use_container_width=True)
+
+    # --- 3. TABLEAU DE SAISIE NOTES (Uniquement aujourd'hui, pleine largeur) ---
     st.divider()
     today = dt.date.today()
-    st.subheader(f"Saisie des notes - {today.strftime('%d/%m/%Y')}")
+    st.subheader(f"Saisie Notes - Aujourd'hui ({today.strftime('%d/%m')})")
     
-    # Filtre strict : Dossier + Date d'aujourd'hui
-    mask = (pd.to_datetime(st.session_state.data['Date']).dt.date == today) & \
-           (st.session_state.data['Dossier'] == choix_dos)
-    df_day = st.session_state.data[mask].copy()
+    df_day = df_full[df_full['Date_Obj'] == today].copy()
 
     if not df_day.empty:
-        # Tableau large pour la saisie
         edited = st.data_editor(
-            df_day[['ID', 'Chapitre', 'J_Type', 'Statut', 'Note']],
+            df_day[['ID', 'Chapitre', 'J_Type', 'Note']],
             column_config={
                 "ID": None, 
                 "Chapitre": st.column_config.TextColumn(disabled=True),
                 "J_Type": st.column_config.TextColumn(disabled=True)
             },
             hide_index=True,
-            use_container_width=True # Force la largeur totale
+            use_container_width=True
         )
         
-        if st.button("💾 Enregistrer les notes"):
+        if st.button("💾 Enregistrer les notes du jour"):
             for _, row in edited.iterrows():
                 st.session_state.data.loc[st.session_state.data['ID'] == row['ID'], 'Note'] = row['Note']
-                st.session_state.data.loc[st.session_state.data['ID'] == row['ID'], 'Statut'] = row['Statut']
-            
             save_data(st.session_state.data)
-            st.success("Modifications enregistrées !")
+            st.success("Enregistré !")
             st.rerun()
     else:
-        st.info("Aucun cours prévu pour aujourd'hui.")
+        st.info("Aucun chapitre prévu aujourd'hui.")
 
 
 # --- GRAPHIQUES ---
