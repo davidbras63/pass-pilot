@@ -79,99 +79,62 @@ elif page == "Planning & Saisie":
 
     # --- 1. AJOUT SÉCURISÉ ---
     with st.expander("✍️ Ajouter Chapitre", expanded=False):
-        # clear_on_submit=True vide le formulaire après validation
         with st.form("Add_Form", clear_on_submit=True):
             mat = st.selectbox("Matière", st.session_state.config['dossiers'].get(choix_dos, []))
             chap = st.text_input("Titre")
             d0 = st.date_input("Date J0")
             dex = st.date_input("Date Examen", value=None)
             
-            submit = st.form_submit_button("Générer Planning")
-            
-            if submit:
-                if not chap:
-                    st.error("Donne un nom à ton chapitre !")
-                elif not dex:
-                    st.error("Il faut une date d'examen !")
-                else:
-                    # 1. Nettoyage préventif : Supprime l'ancien chapitre si déjà présent
-                    st.session_state.data = st.session_state.data[
-                        ~((st.session_state.data['Chapitre'] == chap) & 
-                          (st.session_state.data['Dossier'] == choix_dos))
-                    ]
-                    
-                    # 2. Génération des nouvelles lignes
-                    new_rows = []
-                    for j in [0] + st.session_state.config['cadencier']:
-                        date_j = d0 + dt.timedelta(days=j)
-                        if date_j <= dex:
-                            new_rows.append({
-                                'ID': str(uuid.uuid4()), 
-                                'Dossier': choix_dos, 
-                                'Matiere': mat, 
-                                'Chapitre': chap, 
-                                'J_Type': f'J{j}', 
-                                'Date': str(date_j), 
-                                'Note': 0, 
-                                'Statut': 'À faire'
-                            })
-                    
-                    # 3. Ajout et sauvegarde
-                    st.session_state.data = pd.concat([st.session_state.data, pd.DataFrame(new_rows)])
-                    save_data(st.session_state.data)
-                    st.rerun()
+            if st.form_submit_button("Générer Planning"):
+                # Suppression propre avant ajout (seule fois où on touche aux données)
+                st.session_state.data = st.session_state.data[
+                    ~((st.session_state.data['Chapitre'] == chap) & (st.session_state.data['Dossier'] == choix_dos))
+                ]
+                new_rows = []
+                for j in [0] + st.session_state.config['cadencier']:
+                    date_j = d0 + dt.timedelta(days=j)
+                    if date_j <= dex:
+                        new_rows.append({
+                            'ID': str(uuid.uuid4()), 'Dossier': choix_dos, 'Matiere': mat, 
+                            'Chapitre': chap, 'J_Type': f'J{j}', 'Date': str(date_j), 
+                            'Note': 0, 'Statut': 'À faire'
+                        })
+                st.session_state.data = pd.concat([st.session_state.data, pd.DataFrame(new_rows)])
+                save_data(st.session_state.data)
+                st.rerun()
 
-    # --- 2. PLANNING HEBDO (Affichage robuste) ---
+    # --- 2. PLANNING HEBDO ---
     st.subheader("🗓️ Planning Hebdomadaire")
-    cols = st.columns(7)
-    jours = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"]
     today = dt.date.today()
-    start_week = today - dt.timedelta(days=today.weekday())
+    # Utilisation d'un cache pour éviter les doublons d'affichage
+    df_view = st.session_state.data[st.session_state.data['Dossier'] == choix_dos].copy()
+    df_view['Date_Obj'] = pd.to_datetime(df_view['Date']).dt.date
     
+    cols = st.columns(7)
+    start_week = today - dt.timedelta(days=today.weekday())
     for i, col in enumerate(cols):
         day = start_week + dt.timedelta(days=i)
         with col:
-            st.markdown(f"**{jours[i]}**\n{day.strftime('%d/%m')}")
-            # Conversion sécurisée des dates
-            temp_df = st.session_state.data.copy()
-            temp_df['Date_Obj'] = pd.to_datetime(temp_df['Date']).dt.date
-            
-            df_day = temp_df[(temp_df['Date_Obj'] == day) & (temp_df['Dossier'] == choix_dos)]
-            for _, r in df_day.iterrows():
+            st.markdown(f"**{['Lun','Mar','Mer','Jeu','Ven','Sam','Dim'][i]}**\n{day.strftime('%d/%m')}")
+            for _, r in df_view[df_view['Date_Obj'] == day].iterrows():
                 st.caption(f"{r['Chapitre']} ({r['J_Type']})")
 
-        # --- 3. TABLEAU DE SAISIE NOTES (Version corrigée) ---
+    # --- 3. SAISIE NOTES ---
     st.divider()
-    st.subheader(f"Saisie Notes - Aujourd'hui")
+    st.subheader("Saisie Notes Aujourd'hui")
+    df_today = df_view[df_view['Date_Obj'] == today].copy()
     
-    # Conversion date pour le filtre
-    temp_df = st.session_state.data.copy()
-    temp_df['Date_Obj'] = pd.to_datetime(temp_df['Date']).dt.date
-    df_today = temp_df[(temp_df['Date_Obj'] == today) & (temp_df['Dossier'] == choix_dos)].copy()
-
     if not df_today.empty:
-        # Affichage éditable
-        edited = st.data_editor(
-            df_today[['ID', 'Chapitre', 'J_Type', 'Statut', 'Note']],
-            column_config={"ID": None, "Chapitre": st.column_config.TextColumn(disabled=True), 
-                           "J_Type": st.column_config.TextColumn(disabled=True)},
-            hide_index=True, use_container_width=True
-        )
+        # data_editor ici ne modifie rien directement, il sert juste de saisie
+        edited = st.data_editor(df_today[['ID', 'Chapitre', 'J_Type', 'Statut', 'Note']], hide_index=True)
         
-        # ATTENTION : Le 'if' doit être aligné exactement avec 'edited =' au-dessus
         if st.button("💾 Enregistrer"):
+            # On met à jour le session_state ici
             for _, row in edited.iterrows():
-                # Mise à jour directe
-                idx = st.session_state.data[st.session_state.data['ID'] == row['ID']].index
-                if not idx.empty:
-                    st.session_state.data.loc[idx, 'Note'] = row['Note']
-                    st.session_state.data.loc[idx, 'Statut'] = row['Statut']
-            
+                st.session_state.data.loc[st.session_state.data['ID'] == row['ID'], 'Note'] = row['Note']
+                st.session_state.data.loc[st.session_state.data['ID'] == row['ID'], 'Statut'] = row['Statut']
             save_data(st.session_state.data)
-            st.session_state.page = "Dashboard"
             st.rerun()
-    else:
-        st.info("Aucun cours prévu aujourd'hui.")
 
 
 # --- GRAPHIQUES ---
