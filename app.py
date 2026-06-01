@@ -77,45 +77,49 @@ if page == "Dashboard":
 elif page == "Planning & Saisie":
     import uuid
 
-    # --- 1. AJOUT SÉCURISÉ (Supprime uniquement les doublons exacts) ---
+    # --- 1. AJOUT SÉCURISÉ ---
     with st.expander("✍️ Ajouter Chapitre", expanded=False):
+        # clear_on_submit=True vide le formulaire après validation
         with st.form("Add_Form", clear_on_submit=True):
             mat = st.selectbox("Matière", st.session_state.config['dossiers'].get(choix_dos, []))
             chap = st.text_input("Titre")
             d0 = st.date_input("Date J0")
             dex = st.date_input("Date Examen", value=None)
             
-            if st.form_submit_button("Générer Planning"):
-                # On vérifie que les dates sont bien là avant de faire quoi que ce soit
-                if d0 and dex:
-                    # Conversion forcée en date
-                    d0 = pd.to_datetime(d0).date()
-                    dex = pd.to_datetime(dex).date()
-                    
-                    if dex < d0:
-                        st.error("La date d'examen doit être après J0 !")
-                    else:
-                        # Nettoyage des doublons existants pour le même chapitre
-                        st.session_state.data = st.session_state.data[
-                            ~((st.session_state.data['Chapitre'] == chap) & 
-                              (st.session_state.data['Dossier'] == choix_dos))
-                        ]
-                        
-                        new_rows = []
-                        for j in [0] + st.session_state.config['cadencier']:
-                            date_j = d0 + dt.timedelta(days=j)
-                            if date_j <= dex:
-                                new_rows.append({
-                                    'ID': str(uuid.uuid4()), 'Dossier': choix_dos, 'Matiere': mat, 
-                                    'Chapitre': chap, 'J_Type': f'J{j}', 'Date': str(date_j), 
-                                    'Note': 0, 'Statut': 'À faire'
-                                })
-                        
-                        st.session_state.data = pd.concat([st.session_state.data, pd.DataFrame(new_rows)])
-                        save_data(st.session_state.data)
-                        st.rerun()
+            submit = st.form_submit_button("Générer Planning")
+            
+            if submit:
+                if not chap:
+                    st.error("Donne un nom à ton chapitre !")
+                elif not dex:
+                    st.error("Il faut une date d'examen !")
                 else:
-                    st.warning("Veuillez sélectionner une date d'examen valide.")
+                    # 1. Nettoyage préventif : Supprime l'ancien chapitre si déjà présent
+                    st.session_state.data = st.session_state.data[
+                        ~((st.session_state.data['Chapitre'] == chap) & 
+                          (st.session_state.data['Dossier'] == choix_dos))
+                    ]
+                    
+                    # 2. Génération des nouvelles lignes
+                    new_rows = []
+                    for j in [0] + st.session_state.config['cadencier']:
+                        date_j = d0 + dt.timedelta(days=j)
+                        if date_j <= dex:
+                            new_rows.append({
+                                'ID': str(uuid.uuid4()), 
+                                'Dossier': choix_dos, 
+                                'Matiere': mat, 
+                                'Chapitre': chap, 
+                                'J_Type': f'J{j}', 
+                                'Date': str(date_j), 
+                                'Note': 0, 
+                                'Statut': 'À faire'
+                            })
+                    
+                    # 3. Ajout et sauvegarde
+                    st.session_state.data = pd.concat([st.session_state.data, pd.DataFrame(new_rows)])
+                    save_data(st.session_state.data)
+                    st.rerun()
 
     # --- 2. PLANNING HEBDO (Affichage robuste) ---
     st.subheader("🗓️ Planning Hebdomadaire")
