@@ -119,19 +119,26 @@ elif page == "Planning & Saisie":
                     st.session_state.data.at[idx, 'Statut'] = 'Fait'
                     save_data(st.session_state.data); st.rerun()
             
-             # Saisie Notes : Mise à jour forcée par ID
+              # Saisie Notes : Mise à jour forcée avec ID conservé
             if not df_day.empty:
                 st.caption("Notes")
-                # On affiche uniquement ce qu'il faut
-                edited = st.data_editor(df_day[['Chapitre', 'J_Type', 'Note']], key=f"edit_{day}")
                 
+                # 1. On prépare le tableau en incluant l'ID (colonne nécessaire pour retrouver la ligne)
+                df_to_edit = df_day[['ID', 'Chapitre', 'J_Type', 'Note']].copy()
+                
+                # 2. On affiche l'éditeur (on cache l'ID via la configuration de colonne)
+                edited = st.data_editor(
+                    df_to_edit, 
+                    key=f"edit_{day}", 
+                    column_config={"ID": st.column_config.Column(disabled=True, hidden=True)},
+                    use_container_width=True
+                )
+                
+                # 3. Sauvegarde : on utilise l'ID pour mettre à jour la source de vérité
                 if st.button("💾", key=f"save_{day}"):
-                    # On parcourt chaque ligne éditée
-                    for idx_edited, row_edited in edited.iterrows():
-                        # On retrouve la ligne originale dans le dataframe principal grâce à son ID
-                        original_id = df_day.at[idx_edited, 'ID']
-                        # On met à jour la note dans le dataframe central
-                        st.session_state.data.loc[st.session_state.data['ID'] == original_id, 'Note'] = row_edited['Note']
+                    for _, row_edited in edited.iterrows():
+                        # On met à jour directement le DataFrame global
+                        st.session_state.data.loc[st.session_state.data['ID'] == row_edited['ID'], 'Note'] = row_edited['Note']
                     
                     save_data(st.session_state.data)
                     st.success("Enregistré !")
