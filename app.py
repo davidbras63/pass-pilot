@@ -61,86 +61,63 @@ if page == "Dashboard":
         if c2.button("🗑️", key=f"del_{m}"): st.session_state.config['dossiers'][choix_dos].remove(m); st.rerun()
     
     st.subheader("⚠️ Rattrapages")
-
-# On récupère les données du dossier sélectionné
 df_dos = st.session_state.data[st.session_state.data['Dossier'] == choix_dos]
-# On filtre : note > 0 et < 12 (à adapter selon ton système)
 rattrapages = df_dos[(df_dos['Note'] > 0) & (df_dos['Note'] < 12)]
 
 if not rattrapages.empty:
-    # --- LA BOUCLE : C'EST ICI QUE LES VARIABLES SONT DÉFINIES ---
     for index, row in rattrapages.iterrows():
-        # Voici les variables que le bouton va utiliser
         chapitre = row['Chapitre']
         matiere = row['Matiere']
         
         st.write(f"Matière: {matiere} | Chapitre: {chapitre}")
         
-        # Le bouton est DANS la boucle : il "voit" chapitre et matière
+        # Le bouton fait TOUT ce que tu as demandé
         if st.button(f"Réintégrer {chapitre} au planning", key=f"btn_{row['ID']}"):
-            # Réglages
+            # 1. PARAMÈTRES
             max_cours = st.session_state.config.get('max_cours_par_jour', 3)
             today = dt.date.today()
             date_trouvee = None
             
-            # Recherche de place (14 jours)
-            for i in range(14):
+            # 2. RECHERCHE (Priorité semaine, évite le dimanche)
+            for i in range(1, 15): # Cherche sur les 14 prochains jours
                 d = today + dt.timedelta(days=i)
-                # Exclusion dimanche sauf si vraiment nécessaire
-                if d.weekday() != 6:
-                    count_day = len(st.session_state.data[
-                        (pd.to_datetime(st.session_state.data['Date']).dt.date == d) & 
-                        (st.session_state.data['Dossier'] == choix_dos)
-                    ])
-                    if count_day < max_cours:
-                        date_trouvee = d
-                        break
+                # Vérifie si c'est un dimanche (6 = dimanche)
+                if d.weekday() == 6: continue 
+                
+                # Compte les cours déjà prévus ce jour-là pour ce dossier
+                count_day = len(st.session_state.data[
+                    (pd.to_datetime(st.session_state.data['Date']).dt.date == d) & 
+                    (st.session_state.data['Dossier'] == choix_dos)
+                ])
+                
+                if count_day < max_cours:
+                    date_trouvee = d
+                    break
             
-            # Si rien trouvé en semaine, on prend le premier jour dispo
+            # Soupape : si vraiment aucune place en semaine, prend le prochain dimanche
             if not date_trouvee:
                 date_trouvee = today + dt.timedelta(days=1)
                 
-            # Insertion
-            new_rap = {'ID': str(uuid.uuid4()), 'Dossier': choix_dos, 'Matiere': matiere, 'Chapitre': chapitre, 'J_Type': 'RAP', 'Date': str(date_trouvee), 'Note': 0, 'Statut': 'À faire'}
-            st.session_state.data = pd.concat([st.session_state.data, pd.DataFrame([new_rap])])
-            
-            # Nettoyage dashboard
-            st.session_state.data = st.session_state.data[~((st.session_state.data['Chapitre'] == chapitre) & (st.session_state.data['Statut'] == 'À rattraper'))]
-            save_data(st.session_state.data)
-            st.rerun()
-# --- PLANNING & SAISIE ---
-elif page == "Planning & Saisie":
-    import uuid
+            # 3. ACTION : Réintégration et nettoyage
+            if date_trouvee:
+                new_rap = {
+                    'ID': str(uuid.uuid4()), 'Dossier': choix_dos, 'Matiere': matiere, 
+                    'Chapitre': chapitre, 'J_Type': 'RAP', 'Date': str(date_trouvee), 
+                    'Note': 0, 'Statut': 'À faire'
+                }
+                # Ajout du nouveau cours
+                st.session_state.data = pd.concat([st.session_state.data, pd.DataFrame([new_rap])])
+                
+                # Suppression de l'ancien dans "À rattraper"
+                st.session_state.data = st.session_state.data[
+                    ~((st.session_state.data['Chapitre'] == chapitre) & 
+                      (st.session_state.data['Statut'] == 'À rattraper'))
+                ]
+                
+                save_data(st.session_state.data)
+                st.success(f"Réintégré le {date_trouvee} !")
+                st.rerun()
 
-    # --- 1. AJOUT SÉCURISÉ (Supprime uniquement les doublons exacts) ---
-    with st.expander("✍️ Ajouter Chapitre", expanded=False):
-        with st.form("Add_Form", clear_on_submit=True):
-            mat = st.selectbox("Matière", st.session_state.config['dossiers'].get(choix_dos, []))
-            chap = st.text_input("Titre")
-            d0 = st.date_input("Date J0")
-            dex = st.date_input("Date Examen", value=None)
-            
-            if st.form_submit_button("Générer Planning"):
-                if dex:
-                    new_rows = []
-                    for j in [0] + st.session_state.config['cadencier']:
-                        date_j = d0 + dt.timedelta(days=j)
-                        if date_j <= dex:
-                            new_rows.append({
-                                'ID': str(uuid.uuid4()), 'Dossier': choix_dos, 'Matiere': mat, 
-                                'Chapitre': chap, 'J_Type': f'J{j}', 'Date': str(date_j), 
-                                'Note': 0, 'Statut': 'À faire'
-                            })
-                    
-                    # Concaténation
-                    st.session_state.data = pd.concat([st.session_state.data, pd.DataFrame(new_rows)])
-                    
-                    # NETTOYAGE SÉCURISÉ : On ne supprime que si TOUT est identique
-                    st.session_state.data = st.session_state.data.drop_duplicates(
-                        subset=['Dossier', 'Chapitre', 'J_Type', 'Date'], keep='first'
-                    )
-                    save_data(st.session_state.data)
-                    st.rerun()
 
     # --- 2. PLANNING HEBDO (Affichage robuste) ---
     st.subheader("🗓️ Planning Hebdomadaire")
