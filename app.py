@@ -4,29 +4,25 @@ import datetime as dt
 import os
 import json
 
-# --- RÉINITIALISATION FORCÉE ---
-# Si le fichier est corrompu, on le supprime automatiquement au lancement
-if os.path.exists("data.csv"):
-    try:
-        pd.read_csv("data.csv") # Test de lecture
-    except:
-        os.remove("data.csv") # Si erreur, on dégage le fichier corrompu
-# --------------------------------
-
 st.set_page_config(layout="wide")
 
 DATA_FILE = "data.csv"
 CONFIG_FILE = "config.json"
 
+# --- RÉINITIALISATION AUTOMATIQUE ---
+if os.path.exists(DATA_FILE):
+    try:
+        pd.read_csv(DATA_FILE)
+    except:
+        os.remove(DATA_FILE)
+
 def load_data():
     cols = ['Dossier', 'Matiere', 'Chapitre', 'J_Type', 'Date', 'Note']
     if os.path.exists(DATA_FILE):
-        try:
-            df = pd.read_csv(DATA_FILE)
-            df['Date'] = pd.to_datetime(df['Date'], dayfirst=True, errors='coerce').dt.date
-            df['Note'] = pd.to_numeric(df['Note'], errors='coerce').fillna(0)
-            return df
-        except: return pd.DataFrame(columns=cols)
+        df = pd.read_csv(DATA_FILE)
+        df['Date'] = pd.to_datetime(df['Date'], errors='coerce').dt.date
+        df['Note'] = pd.to_numeric(df['Note'], errors='coerce').fillna(0)
+        return df
     return pd.DataFrame(columns=cols)
 
 def save_data(df): df.to_csv(DATA_FILE, index=False)
@@ -36,16 +32,16 @@ def load_config():
         try:
             with open(CONFIG_FILE, "r") as f: return json.load(f)
         except: pass
-    return {'cadencier': [1, 3, 7, 14, 30, 60, 90, 120], 'seuils': {'1': 12, '3': 12, '7': 14}, 'dossiers': {"PASS": []}}
+    return {'cours_max': 5, 'cadencier': [1, 3, 7, 14, 30, 60, 90, 120], 'seuils': {'1': 12}, 'dossiers': {"PASS": []}}
 
 if 'data' not in st.session_state: st.session_state.data = load_data()
 if 'config' not in st.session_state: st.session_state.config = load_config()
 
 # --- SIDEBAR ---
 st.sidebar.title("⚙️ Pilot Expert")
-with st.sidebar.expander("🛠️ Réglages Seuils"):
-    cad_str = ",".join(map(str, st.session_state.config.get('cadencier', [1,3,7])))
-    cad_input = st.text_input("Cadencier (jours)", cad_str)
+with st.sidebar.expander("🛠️ Réglages", expanded=True):
+    st.session_state.config['cours_max'] = st.number_input("Max cours/jour", 1, 20, st.session_state.config.get('cours_max', 5))
+    cad_input = st.text_input("Cadencier", ",".join(map(str, st.session_state.config.get('cadencier', [1,3,7]))))
     st.session_state.config['cadencier'] = [int(x.strip()) for x in cad_input.split(",")]
     for j in st.session_state.config['cadencier']:
         st.session_state.config['seuils'][str(j)] = st.slider(f"Seuil J{j}", 10, 20, int(st.session_state.config['seuils'].get(str(j), 12)))
@@ -67,13 +63,19 @@ if page == "Dashboard":
         c1, c2 = st.columns([4, 1])
         c1.info(f"📚 {m}")
         if c2.button("🗑️", key=f"del_{m}"): st.session_state.config['dossiers'][choix_dos].remove(m); st.rerun()
+    
     st.subheader("⚠️ Rattrapages")
-    rattrapages = df[(df['Note'] > 0) & (df['Note'] < 12)]
-    st.table(rattrapages[['Matiere', 'Chapitre', 'J_Type', 'Date', 'Note']])
+    if not df.empty:
+        df['Note'] = pd.to_numeric(df['Note'], errors='coerce')
+        rattrapages = df[(df['Note'] > 0) & (df['Note'] < 12)]
+        if not rattrapages.empty:
+            disp_df = rattrapages.copy()
+            disp_df['Date'] = disp_df['Date'].apply(lambda x: x.strftime('%d/%m/%Y') if pd.notnull(x) else "")
+            st.table(disp_df[['Matiere', 'Chapitre', 'J_Type', 'Date', 'Note']])
 
 elif page == "Planning & Saisie":
     st.title("🗓️ Planning & Saisie")
-    with st.expander("➕ Ajouter Chapitre"):
+    with st.expander("➕ Ajouter"):
         with st.form("Add"):
             mat = st.selectbox("Matière", st.session_state.config['dossiers'].get(choix_dos, []))
             chap = st.text_input("Nom")
@@ -96,9 +98,8 @@ elif page == "Planning & Saisie":
             st.markdown(f"**{day.strftime('%d/%m')}**")
             for idx, r in df[df['Date'] == day].iterrows():
                 with st.expander(f"{r['Matiere']} ({r['J_Type']})"):
-                    new_d = st.date_input("Décaler", r['Date'], key=f"d_{idx}")
-                    if st.button("Valider", key=f"b_{idx}"): st.session_state.data.at[idx, 'Date'] = new_d; save_data(st.session_state.data); st.rerun()
-    
+                    if st.button("Valider", key=f"b_{idx}"): st.rerun()
+
     st.subheader("📝 Saisie")
     df_today = df[df['Date'] == dt.date.today()]
     if not df_today.empty:
@@ -107,6 +108,8 @@ elif page == "Planning & Saisie":
 
 elif page == "Graphiques":
     st.title("📊 Progression")
-    if not df.empty and 'Note' in df.columns:
+    if not df.empty:
         df_clean = df[df['Note'] > 0].copy()
-        if not df_clean.empty: st.line_chart(df_clean.pivot_table(index='Date', columns='Matiere', values='Note', aggfunc='mean'))
+        if not df_clean.empty:
+            df_clean['Date'] = df_clean['Date'].apply(lambda x: x.strftime('%d/%m/%Y'))
+            st.line_chart(df_clean.pivot_table(index='Date', columns='Matiere', values='Note', aggfunc='mean'))
