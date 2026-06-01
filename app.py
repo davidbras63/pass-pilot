@@ -53,16 +53,22 @@ with st.sidebar.expander("🛠️ Réglages", expanded=True):
         st.session_state.config['seuils'][key] = st.slider(f"Seuil J{j}", 10, 20, int(st.session_state.config.get('seuils', {}).get(key, 12)))
     if st.button("💾 Enregistrer Réglages"): save_config(st.session_state.config); st.rerun()
 
-new_folder = st.sidebar.text_input("Nouveau Dossier")
+# --- GESTION DOSSIERS ET MATIÈRES AVEC NETTOYAGE ---
+new_folder = st.sidebar.text_input("Nouveau Dossier", key="new_fold")
 if st.sidebar.button("➕ Créer Dossier") and new_folder:
     st.session_state.config['dossiers'][new_folder] = []
-    save_config(st.session_state.config); st.rerun()
+    save_config(st.session_state.config)
+    del st.session_state.new_fold # Force la réinitialisation visuelle
+    st.rerun()
 
 choix_dos = st.sidebar.selectbox("Dossier", list(st.session_state.config['dossiers'].keys()))
-new_mat = st.sidebar.text_input("Ajouter Matière")
+
+new_mat = st.sidebar.text_input("Ajouter Matière", key="new_mat")
 if st.sidebar.button("Ajouter Matière") and new_mat: 
     st.session_state.config['dossiers'][choix_dos].append(new_mat)
-    save_config(st.session_state.config); st.rerun()
+    save_config(st.session_state.config)
+    del st.session_state.new_mat # Force la réinitialisation visuelle
+    st.rerun()
 
 page = st.sidebar.radio("Navigation", ["Dashboard", "Planning & Saisie", "Graphiques"])
 df = st.session_state.data[st.session_state.data['Dossier'] == choix_dos].copy()
@@ -83,7 +89,7 @@ if page == "Dashboard":
 elif page == "Planning & Saisie":
     st.title("🗓️ Planning & Saisie")
     with st.expander("➕ Ajouter Chapitre", expanded=True):
-        with st.form("Add"):
+        with st.form("Add", clear_on_submit=True):
             c1, c2 = st.columns(2)
             mat = c1.selectbox("Matière", st.session_state.config['dossiers'].get(choix_dos, []))
             chap = c1.text_input("Nom")
