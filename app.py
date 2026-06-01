@@ -73,10 +73,8 @@ elif page == "Planning & Saisie":
             mat = st.selectbox("Matière", st.session_state.config['dossiers'].get(choix_dos, []))
             chap = st.text_input("Titre")
             d0 = st.date_input("Date J0")
-            # Modification : Date non pré-remplie
             dex = st.date_input("Date Examen", value=None)
             if st.form_submit_button("Générer Planning"):
-                # Modification : Validation bloquante
                 if dex is None:
                     st.error("Date examen obligatoire !")
                 else:
