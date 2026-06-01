@@ -54,20 +54,23 @@ with st.sidebar.expander("🛠️ Réglages", expanded=True):
     if st.button("💾 Enregistrer Réglages"): save_config(st.session_state.config); st.rerun()
 
 # --- GESTION DOSSIERS ET MATIÈRES AVEC NETTOYAGE ---
-new_folder = st.sidebar.text_input("Nouveau Dossier", key="new_fold")
+if 'new_fold' not in st.session_state: st.session_state.new_fold = ""
+if 'new_mat' not in st.session_state: st.session_state.new_mat = ""
+
+new_folder = st.sidebar.text_input("Nouveau Dossier", key="new_fold_input", value=st.session_state.new_fold)
 if st.sidebar.button("➕ Créer Dossier") and new_folder:
     st.session_state.config['dossiers'][new_folder] = []
     save_config(st.session_state.config)
-    del st.session_state.new_fold # Force la réinitialisation visuelle
+    st.session_state.new_fold = ""
     st.rerun()
 
 choix_dos = st.sidebar.selectbox("Dossier", list(st.session_state.config['dossiers'].keys()))
 
-new_mat = st.sidebar.text_input("Ajouter Matière", key="new_mat")
+new_mat = st.sidebar.text_input("Ajouter Matière", key="new_mat_input", value=st.session_state.new_mat)
 if st.sidebar.button("Ajouter Matière") and new_mat: 
     st.session_state.config['dossiers'][choix_dos].append(new_mat)
     save_config(st.session_state.config)
-    del st.session_state.new_mat # Force la réinitialisation visuelle
+    st.session_state.new_mat = ""
     st.rerun()
 
 page = st.sidebar.radio("Navigation", ["Dashboard", "Planning & Saisie", "Graphiques"])
