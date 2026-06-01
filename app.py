@@ -21,8 +21,25 @@ if 'data' not in st.session_state: st.session_state.data = load_data()
 if 'dossiers' not in st.session_state:
     st.session_state.dossiers = {"PASS": ["UE1", "UE2"]}
 
+# FORÇAGE DES RÉGLAGES POUR QU'ILS APPARAISSENT
+st.session_state.config = {
+    'cours_max': 5, 
+    'cadencier': [1, 3, 7, 14, 30, 60, 90, 120], 
+    'seuils': {1: 12, 3: 12, 7: 14, 14: 14, 30: 16, 60: 16, 90: 18, 120: 18}
+}
+
 # --- SIDEBAR ---
 st.sidebar.title("⚙️ Pilot Expert")
+
+with st.sidebar.expander("🛠️ Réglages", expanded=True):
+    st.session_state.config['cours_max'] = st.number_input("Max cours/jour", 1, 20, st.session_state.config['cours_max'])
+    cad_input = st.text_input("Cadencier", ",".join(map(str, st.session_state.config['cadencier'])))
+    st.session_state.config['cadencier'] = [int(x.strip()) for x in cad_input.split(",")]
+    
+    st.write("---")
+    st.subheader("Seuils de notes par J")
+    for j in st.session_state.config['cadencier']:
+        st.session_state.config['seuils'][j] = st.slider(f"Seuil note J{j}", 10, 20, st.session_state.config['seuils'].get(j, 12))
 
 new_folder = st.sidebar.text_input("Nouveau Dossier")
 if st.sidebar.button("➕ Créer Dossier") and new_folder:
@@ -30,7 +47,6 @@ if st.sidebar.button("➕ Créer Dossier") and new_folder:
     st.rerun()
 
 choix_dos = st.sidebar.selectbox("Dossier", list(st.session_state.dossiers.keys()))
-
 new_mat = st.sidebar.text_input("Ajouter Matière")
 if st.sidebar.button("Ajouter Matière") and new_mat: 
     st.session_state.dossiers[choix_dos].append(new_mat)
@@ -42,7 +58,7 @@ df = st.session_state.data[st.session_state.data['Dossier'] == choix_dos].copy()
 # --- PAGES ---
 if page == "Dashboard":
     st.title(f"🎯 Dashboard : {choix_dos}")
-    for m in st.session_state.dossiers[choix_dos]:
+    for m in st.session_state.dossiers.get(choix_dos, []):
         col1, col2 = st.columns([4, 1])
         col1.info(f"📚 {m}")
         if col2.button("🗑️", key=f"del_{m}"): 
@@ -62,8 +78,7 @@ elif page == "Planning & Saisie":
             d0 = c2.date_input("Date J0", format="DD/MM/YYYY")
             date_exam = c2.date_input("Date Examen", value=None, format="DD/MM/YYYY")
             if st.form_submit_button("Générer"):
-                # Cadencier par défaut
-                for j in [0, 1, 3, 7, 14, 30]:
+                for j in [0] + st.session_state.config['cadencier']:
                     d = d0 + dt.timedelta(days=j)
                     if d.weekday() != 6 and (not date_exam or d <= date_exam):
                         new_row = {'Dossier': choix_dos, 'Matiere': mat, 'Chapitre': chap, 'J_Type': f"J{j}", 'Date': d, 'Note': '0'}
@@ -77,6 +92,10 @@ elif page == "Planning & Saisie":
             st.markdown(f"**{day.strftime('%d/%m')}**")
             for _, r in df[df['Date'] == day].iterrows():
                 st.caption(f"🎯 {r['Matiere']} : {r['Chapitre']}")
+
+    st.write("\n\n")
+    st.divider()
+    st.write("\n\n")
 
     st.subheader("📝 Saisie des Notes")
     edited = st.data_editor(df, use_container_width=True)
