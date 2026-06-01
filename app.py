@@ -61,20 +61,21 @@ if page == "Dashboard":
         if c2.button("🗑️", key=f"del_{m}"): st.session_state.config['dossiers'][choix_dos].remove(m); st.rerun()
     
     st.subheader("⚠️ Rattrapages")
-# On récupère les données de ce dossier
+
+# 1. On récupère les données
 df_dos = st.session_state.data[st.session_state.data['Dossier'] == choix_dos]
-# On filtre les notes à rattraper (note entre 1 et 11 par exemple)
 rattrapages = df_dos[(df_dos['Note'] > 0) & (df_dos['Note'] < 12)]
 
 if not rattrapages.empty:
-    # --- LA BOUCLE EST OBLIGATOIRE ICI ---
+    # 2. C'EST ICI QUE TOUT SE JOUE : Il faut boucler sur les lignes
     for index, row in rattrapages.iterrows():
+        # On définit les variables ici, elles seront connues dans cette boucle
         chapitre = row['Chapitre']
         matiere = row['Matiere']
         
         st.write(f"Matière: {matiere} | Chapitre: {chapitre}")
         
-        # Le bouton est DANS la boucle, il connait donc 'chapitre' et 'matiere'
+        # Le bouton est DANS la boucle, il accède donc bien aux variables
         if st.button(f"Réintégrer {chapitre} au planning", key=f"btn_{row['ID']}"):
             max_cours = st.session_state.config.get('max_cours_par_jour', 3)
             today = dt.date.today()
@@ -101,10 +102,11 @@ if not rattrapages.empty:
             if date_trouvee and date_trouvee <= date_limite:
                 new_rap = {'ID': str(uuid.uuid4()), 'Dossier': choix_dos, 'Matiere': matiere, 'Chapitre': chapitre, 'J_Type': 'RAP', 'Date': str(date_trouvee), 'Note': 0, 'Statut': 'À faire'}
                 st.session_state.data = pd.concat([st.session_state.data, pd.DataFrame([new_rap])])
-                # Nettoyage pour ne plus avoir le rattrapage dans le dashboard
+                
+                # Nettoyage
                 st.session_state.data = st.session_state.data[~((st.session_state.data['Chapitre'] == chapitre) & (st.session_state.data['Statut'] == 'À rattraper'))]
                 save_data(st.session_state.data)
-                st.success("Réintégré avec succès !")
+                st.success("Réintégré !")
                 st.rerun()
             else:
                 st.warning("Impossible : planning saturé ou date limite dépassée.")
