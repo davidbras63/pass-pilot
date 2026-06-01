@@ -48,7 +48,6 @@ with st.sidebar.expander("🛠️ Réglages", expanded=True):
         st.rerun()
 
 choix_dos = st.sidebar.selectbox("Dossier", list(st.session_state.config['dossiers'].keys()))
-# Boutons création
 if st.sidebar.button("➕ Créer Dossier"): 
     nom = st.sidebar.text_input("Nom nouveau dossier")
     if nom: st.session_state.config['dossiers'][nom] = []; st.rerun()
@@ -57,24 +56,25 @@ if st.sidebar.button("➕ Ajouter Matière"):
     if mat: st.session_state.config['dossiers'][choix_dos].append(mat); st.rerun()
 
 page = st.sidebar.radio("Navigation", ["Dashboard", "Planning & Saisie", "Graphiques"])
-df = st.session_state.data[st.session_state.data['Dossier'] == choix_dos].copy()
 
 # --- DASHBOARD ---
 if page == "Dashboard":
     st.title(f"🎯 Dashboard : {choix_dos}")
-    # Liste matières avec poubelles
     for m in st.session_state.config['dossiers'].get(choix_dos, []):
         c1, c2 = st.columns([4, 1])
         c1.info(f"📚 {m}")
         if c2.button("🗑️", key=f"del_{m}"): st.session_state.config['dossiers'][choix_dos].remove(m); st.rerun()
     
     st.subheader("⚠️ Rattrapages")
-    df['Note'] = pd.to_numeric(df['Note'], errors='coerce').fillna(0)
+    st.session_state.data['Note'] = pd.to_numeric(st.session_state.data['Note'], errors='coerce').fillna(0)
+    df_filtered = st.session_state.data[st.session_state.data['Dossier'] == choix_dos]
+    
     rattrapages = []
     for j in st.session_state.config['cadencier']:
         seuil = float(st.session_state.config['seuils'].get(str(j), 12))
-        mask = (df['J_Type'] == f"J{j}") & (df['Note'] > 0) & (df['Note'] < seuil)
-        rattrapages.append(df[mask])
+        mask = (df_filtered['J_Type'] == f"J{j}") & (df_filtered['Note'] > 0) & (df_filtered['Note'] < seuil)
+        rattrapages.append(df_filtered[mask])
+    
     final = pd.concat(rattrapages) if rattrapages else pd.DataFrame()
     if not final.empty:
         disp = final.copy()
@@ -84,7 +84,7 @@ if page == "Dashboard":
     
     if st.button("🔄 Recalculer Rattrapages"): st.rerun()
 
-# --- PLANNING ---
+# --- PLANNING & SAISIE ---
 elif page == "Planning & Saisie":
     st.title("🗓️ Planning & Saisie")
     with st.expander("➕ Ajouter Chapitre"):
@@ -105,27 +105,31 @@ elif page == "Planning & Saisie":
                     save_data(st.session_state.data); st.rerun()
     
     st.subheader("Planning Visuel")
+    df_dos = st.session_state.data[st.session_state.data['Dossier'] == choix_dos]
     cols = st.columns(7)
     for i, day in enumerate([dt.date.today() + dt.timedelta(days=x) for x in range(7)]):
         with cols[i]:
             st.markdown(f"**{day.strftime('%d/%m')}**")
-            for idx, r in df[df['Date'] == day].iterrows():
+            for idx, r in df_dos[df_dos['Date'] == day].iterrows():
                 with st.expander(f"{r['Matiere']} ({r['J_Type']})"):
                     st.write(f"Chapitre: {r['Chapitre']}")
                     if st.button("Valider", key=f"val_{idx}"): st.rerun()
     
     st.subheader("📝 Saisie")
-    if not df.empty:
-        df_today = df[df['Date'] == dt.date.today()]
+    df_today = df_dos[df_dos['Date'] == dt.date.today()]
+    if not df_today.empty:
         edited = st.data_editor(df_today)
-        if st.button("Enregistrer"): st.session_state.data.update(edited); save_data(st.session_state.data); st.rerun()
+        if st.button("Enregistrer"): 
+            st.session_state.data.update(edited)
+            save_data(st.session_state.data)
+            st.rerun()
 
 # --- GRAPHIQUES ---
 elif page == "Graphiques":
     st.title("📊 Progression")
-    if not df.empty:
-        df['Note'] = pd.to_numeric(df['Note'], errors='coerce').fillna(0)
-        df_clean = df[df['Note'] > 0].copy()
-        if not df_clean.empty:
-            df_clean['Date'] = df_clean['Date'].apply(lambda x: x.strftime('%d/%m/%Y'))
-            st.line_chart(df_clean.pivot_table(index='Date', columns='Matiere', values='Note', aggfunc='mean'))
+    df_graph = st.session_state.data[(st.session_state.data['Dossier'] == choix_dos) & (pd.to_numeric(st.session_state.data['Note'], errors='coerce') > 0)].copy()
+    if not df_graph.empty:
+        df_graph['Date'] = pd.to_datetime(df_graph['Date']).dt.strftime('%d/%m/%Y')
+        st.line_chart(df_graph.pivot_table(index='Date', columns='Matiere', values='Note', aggfunc='mean'))
+    else: st.write("Pas de données pour afficher le graphique.")
+
