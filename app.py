@@ -77,7 +77,7 @@ if page == "Dashboard":
 elif page == "Planning & Saisie":
     import uuid
 
-    # --- 1. AJOUT SÉCURISÉ (Le seul endroit où on nettoie) ---
+    # --- 1. AJOUT SÉCURISÉ ---
     with st.expander("✍️ Ajouter Chapitre", expanded=False):
         with st.form("Add_Form", clear_on_submit=True):
             mat = st.selectbox("Matière", st.session_state.config['dossiers'].get(choix_dos, []))
@@ -87,7 +87,7 @@ elif page == "Planning & Saisie":
             
             if st.form_submit_button("Générer Planning"):
                 if dex:
-                    # 1. On charge, on ajoute, on nettoie, on sauvegarde
+                    # On crée la liste des lignes AVANT de les ajouter
                     new_rows = []
                     for j in [0] + st.session_state.config['cadencier']:
                         date_j = d0 + dt.timedelta(days=j)
@@ -98,16 +98,14 @@ elif page == "Planning & Saisie":
                                 'Note': 0, 'Statut': 'À faire'
                             })
                     
+                    # Ajout sécurisé au DataFrame global
                     st.session_state.data = pd.concat([st.session_state.data, pd.DataFrame(new_rows)])
-                    
-                    # Nettoyage strict UNIQUEMENT au moment de l'ajout
-                    cols_to_check = ['Dossier', 'Matiere', 'Chapitre', 'J_Type', 'Date']
-                    st.session_state.data = st.session_state.data.drop_duplicates(subset=cols_to_check, keep='first')
-                    
+                    # Nettoyage unique juste après l'ajout
+                    st.session_state.data = st.session_state.data.drop_duplicates(subset=['Dossier', 'Chapitre', 'J_Type', 'Date'])
                     save_data(st.session_state.data)
                     st.rerun()
 
-    # --- 2. PLANNING HEBDOMADAIRE (Lecture seule) ---
+    # --- 2. PLANNING HEBDOMADAIRE ---
     st.subheader("🗓️ Planning Hebdomadaire")
     cols = st.columns(7)
     jours = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"]
@@ -118,7 +116,6 @@ elif page == "Planning & Saisie":
         day = start_week + dt.timedelta(days=i)
         with col:
             st.markdown(f"**{jours[i]}**\n{day.strftime('%d/%m')}")
-            # Lecture simple, sans aucune modification
             df_day = st.session_state.data[
                 (pd.to_datetime(st.session_state.data['Date']).dt.date == day) & 
                 (st.session_state.data['Dossier'] == choix_dos)
@@ -126,9 +123,9 @@ elif page == "Planning & Saisie":
             for _, r in df_day.iterrows():
                 st.caption(f"{r['Chapitre']} ({r['J_Type']})")
 
-    # --- 3. TABLEAU DE SAISIE NOTES (Aujourd'hui uniquement) ---
+    # --- 3. TABLEAU DE SAISIE NOTES (Correction affichage) ---
     st.divider()
-    st.subheader(f"Saisie Notes - Aujourd'hui ({today.strftime('%d/%m')})")
+    st.subheader(f"Saisie Notes - Aujourd'hui")
     
     df_today = st.session_state.data[
         (pd.to_datetime(st.session_state.data['Date']).dt.date == today) & 
@@ -136,9 +133,15 @@ elif page == "Planning & Saisie":
     ].copy()
 
     if not df_today.empty:
+        # On affiche Chapitre, Type, Statut et Note pour que ce soit clair
         edited = st.data_editor(
             df_today[['ID', 'Chapitre', 'J_Type', 'Statut', 'Note']],
-            column_config={"ID": None, "Chapitre": None, "J_Type": None}, # ID caché
+            column_config={
+                "ID": None, 
+                "Chapitre": st.column_config.TextColumn("Chapitre", disabled=True),
+                "J_Type": st.column_config.TextColumn("Type", disabled=True),
+                "Statut": st.column_config.SelectboxColumn("Statut", options=["À faire", "Fait"])
+            },
             hide_index=True, use_container_width=True
         )
         if st.button("💾 Enregistrer"):
