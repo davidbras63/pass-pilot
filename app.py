@@ -74,7 +74,7 @@ if not rattrapages.empty:
     for index, row in rattrapages.iterrows():
         # On utilise un expander pour ne pas polluer l'affichage du Planning
         with st.expander(f"Matière: {row['Matiere']} - {row['Chapitre']} (Note: {row['Note']})"):
-     if st.button(f"Réintégrer {row['Chapitre']}", key=f"btn_{row['ID']}"):
+            if st.button(f"Réintégrer {row['Chapitre']}", key=f"btn_{row['ID']}"):
                 # 1. Calcul de la date (14 jours, pas de dimanche, quota max)
                 d = dt.date.today()
                 date_trouvee = None
