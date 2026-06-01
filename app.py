@@ -119,15 +119,23 @@ elif page == "Planning & Saisie":
                     st.session_state.data.at[idx, 'Statut'] = 'Fait'
                     save_data(st.session_state.data); st.rerun()
             
-            # Saisie Notes
+             # Saisie Notes : Mise à jour forcée par ID
             if not df_day.empty:
                 st.caption("Notes")
-                # On édite uniquement le tableau du jour
+                # On affiche uniquement ce qu'il faut
                 edited = st.data_editor(df_day[['Chapitre', 'J_Type', 'Note']], key=f"edit_{day}")
+                
                 if st.button("💾", key=f"save_{day}"):
+                    # On parcourt chaque ligne éditée
                     for idx_edited, row_edited in edited.iterrows():
-                        st.session_state.data.at[idx_edited, 'Note'] = row_edited['Note']
-                    save_data(st.session_state.data); st.rerun()
+                        # On retrouve la ligne originale dans le dataframe principal grâce à son ID
+                        original_id = df_day.at[idx_edited, 'ID']
+                        # On met à jour la note dans le dataframe central
+                        st.session_state.data.loc[st.session_state.data['ID'] == original_id, 'Note'] = row_edited['Note']
+                    
+                    save_data(st.session_state.data)
+                    st.success("Enregistré !")
+                    st.rerun()
 
 # --- GRAPHIQUES ---
 elif page == "Graphiques":
