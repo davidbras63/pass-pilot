@@ -77,7 +77,7 @@ if page == "Dashboard":
 elif page == "Planning & Saisie":
     import uuid
 
-    # --- 1. AJOUT SÉCURISÉ ---
+    # --- 1. AJOUT SÉCURISÉ (Supprime uniquement les doublons exacts) ---
     with st.expander("✍️ Ajouter Chapitre", expanded=False):
         with st.form("Add_Form", clear_on_submit=True):
             mat = st.selectbox("Matière", st.session_state.config['dossiers'].get(choix_dos, []))
@@ -87,7 +87,6 @@ elif page == "Planning & Saisie":
             
             if st.form_submit_button("Générer Planning"):
                 if dex:
-                    # On crée la liste des lignes AVANT de les ajouter
                     new_rows = []
                     for j in [0] + st.session_state.config['cadencier']:
                         date_j = d0 + dt.timedelta(days=j)
@@ -98,14 +97,17 @@ elif page == "Planning & Saisie":
                                 'Note': 0, 'Statut': 'À faire'
                             })
                     
-                    # Ajout sécurisé au DataFrame global
+                    # Concaténation
                     st.session_state.data = pd.concat([st.session_state.data, pd.DataFrame(new_rows)])
-                    # Nettoyage unique juste après l'ajout
-                    st.session_state.data = st.session_state.data.drop_duplicates(subset=['Dossier', 'Chapitre', 'J_Type', 'Date'])
+                    
+                    # NETTOYAGE SÉCURISÉ : On ne supprime que si TOUT est identique
+                    st.session_state.data = st.session_state.data.drop_duplicates(
+                        subset=['Dossier', 'Chapitre', 'J_Type', 'Date'], keep='first'
+                    )
                     save_data(st.session_state.data)
                     st.rerun()
 
-    # --- 2. PLANNING HEBDOMADAIRE ---
+    # --- 2. PLANNING HEBDO (Affichage robuste) ---
     st.subheader("🗓️ Planning Hebdomadaire")
     cols = st.columns(7)
     jours = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"]
@@ -116,40 +118,48 @@ elif page == "Planning & Saisie":
         day = start_week + dt.timedelta(days=i)
         with col:
             st.markdown(f"**{jours[i]}**\n{day.strftime('%d/%m')}")
-            df_day = st.session_state.data[
-                (pd.to_datetime(st.session_state.data['Date']).dt.date == day) & 
-                (st.session_state.data['Dossier'] == choix_dos)
-            ]
+            # Conversion sécurisée des dates
+            temp_df = st.session_state.data.copy()
+            temp_df['Date_Obj'] = pd.to_datetime(temp_df['Date']).dt.date
+            
+            df_day = temp_df[(temp_df['Date_Obj'] == day) & (temp_df['Dossier'] == choix_dos)]
             for _, r in df_day.iterrows():
                 st.caption(f"{r['Chapitre']} ({r['J_Type']})")
 
-    # --- 3. TABLEAU DE SAISIE NOTES (Correction affichage) ---
+    # --- 3. SAISIE NOTES (Affichage robuste) ---
     st.divider()
     st.subheader(f"Saisie Notes - Aujourd'hui")
     
-    df_today = st.session_state.data[
-        (pd.to_datetime(st.session_state.data['Date']).dt.date == today) & 
-        (st.session_state.data['Dossier'] == choix_dos)
-    ].copy()
+    # Même logique de conversion pour être sûr de trouver les données
+    temp_df = st.session_state.data.copy()
+    temp_df['Date_Obj'] = pd.to_datetime(temp_df['Date']).dt.date
+    df_today = temp_df[(temp_df['Date_Obj'] == today) & (temp_df['Dossier'] == choix_dos)].copy()
 
     if not df_today.empty:
-        # On affiche Chapitre, Type, Statut et Note pour que ce soit clair
         edited = st.data_editor(
             df_today[['ID', 'Chapitre', 'J_Type', 'Statut', 'Note']],
-            column_config={
-                "ID": None, 
-                "Chapitre": st.column_config.TextColumn("Chapitre", disabled=True),
-                "J_Type": st.column_config.TextColumn("Type", disabled=True),
-                "Statut": st.column_config.SelectboxColumn("Statut", options=["À faire", "Fait"])
-            },
-            hide_index=True, use_container_width=True
+            column_config={"ID": None}, hide_index=True, use_container_width=True
         )
         if st.button("💾 Enregistrer"):
+            # Mise à jour des notes et statuts ligne par ligne
             for _, row in edited.iterrows():
-                st.session_state.data.loc[st.session_state.data['ID'] == row['ID'], 'Note'] = row['Note']
-                st.session_state.data.loc[st.session_state.data['ID'] == row['ID'], 'Statut'] = row['Statut']
+                # On cherche l'ID exact dans le dataframe principal
+                mask = st.session_state.data['ID'] == row['ID']
+                st.session_state.data.loc[mask, 'Note'] = row['Note']
+                st.session_state.data.loc[mask, 'Statut'] = row['Statut']
+            
+            # Sauvegarde physique
             save_data(st.session_state.data)
+            
+            # Message de confirmation
+            st.success("Notes enregistrées avec succès !")
+            
+            # --- REDIRECTION FORCÉE ---
+            # On change la valeur de la page pour rebasculer sur le Dashboard
+            st.session_state.page = "Dashboard" 
             st.rerun()
+    else:
+        st.info("Aucun chapitre prévu aujourd'hui.")
 
 
 # --- GRAPHIQUES ---
