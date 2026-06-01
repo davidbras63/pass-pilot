@@ -74,25 +74,21 @@ if not rattrapages.empty:
     for index, row in rattrapages.iterrows():
         # On utilise un expander pour ne pas polluer l'affichage du Planning
         with st.expander(f"Matière: {row['Matiere']} - {row['Chapitre']} (Note: {row['Note']})"):
-     if st.button(f"Réintégrer {row['Chapitre']}", key=f"btn_{row['ID']}"):
-            # TOUTES CES LIGNES DOIVENT ÊTRE DÉCALÉES D'UN NIVEAU (Touche TAB)
-            d = dt.date.today()
-            date_trouvee = None
-            for i in range(1, 15):
-                test_d = d + dt.timedelta(days=i)
-                if test_d.weekday() == 6: continue
-                nb = len(st.session_state.data[(pd.to_datetime(st.session_state.data['Date']).dt.date == test_d) & (st.session_state.data['Dossier'] == choix_dos)])
-                if nb < st.session_state.config.get('max_cours_par_jour', 3):
-                    date_trouvee = test_d
-                    break
-            
-            if not date_trouvee: date_trouvee = d + dt.timedelta(days=1)
-            
-            new_rap = {'ID': str(uuid.uuid4()), 'Dossier': choix_dos, 'Matiere': row['Matiere'], 'Chapitre': row['Chapitre'], 'J_Type': 'RAP', 'Date': str(date_trouvee), 'Note': 0, 'Statut': 'À faire'}
-            st.session_state.data = pd.concat([st.session_state.data, pd.DataFrame([new_rap])])
-            st.session_state.data = st.session_state.data[st.session_state.data['ID'] != row['ID']]
-            save_data(st.session_state.data)
-            st.rerun()    	
+     # COPIE CECI : c'est une version compacte qui ne bougera pas l'architecture
+ # COPIE CECI : c'est une version compacte qui ne bougera pas l'architecture
+ # COPIE CECI : c'est une version compacte qui ne bougera pas l'architecture
+if st.button(f"Réintégrer {row['Chapitre']}", key=f"btn_{row['ID']}"):
+    d = dt.date.today(); dt_tr = None
+    for i in range(1, 15):
+        t = d + dt.timedelta(days=i)
+        if t.weekday() == 6: continue
+        nb = len(st.session_state.data[(pd.to_datetime(st.session_state.data['Date']).dt.date == t) & (st.session_state.data['Dossier'] == choix_dos)])
+        if nb < st.session_state.config.get('max_cours_par_jour', 3): dt_tr = t; break
+    if not dt_tr: dt_tr = d + dt.timedelta(days=1)
+    new_r = {'ID': str(uuid.uuid4()), 'Dossier': choix_dos, 'Matiere': row['Matiere'], 'Chapitre': row['Chapitre'], 'J_Type': 'RAP', 'Date': str(dt_tr), 'Note': 0, 'Statut': 'À faire'}
+    st.session_state.data = pd.concat([st.session_state.data, pd.DataFrame([new_r])])
+    st.session_state.data = st.session_state.data[st.session_state.data['ID'] != row['ID']]
+    save_data(st.session_state.data); st.rerun()
 else:
     st.write("Aucun rattrapage en attente.")
 
