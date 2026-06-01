@@ -80,15 +80,15 @@ if page == "Dashboard":
         disp = final.copy()
         disp['Date'] = disp['Date'].apply(lambda x: x.strftime('%d/%m/%Y'))
         st.table(disp[['Matiere', 'Chapitre', 'J_Type', 'Date', 'Note']])
+        
         if st.button("🔄 Réintégrer Rattrapages au planning"):
-            for _, row in final.iterrows():
+            for idx, row in final.iterrows():
                 new_r = {'Dossier': choix_dos, 'Matiere': row['Matiere'], 'Chapitre': f"Rattrapage : {row['Chapitre']}", 
                          'J_Type': 'RAT', 'Date': dt.date.today(), 'Note': 0}
                 st.session_state.data = pd.concat([st.session_state.data, pd.DataFrame([new_r])], ignore_index=True)
+                st.session_state.data.at[idx, 'Note'] = 0 # Désactive du rattrapage
             save_data(st.session_state.data); st.rerun()
     else: st.write("Pas de rattrapage pour l'instant.")
-    
-    if st.button("🔄 Recalculer Rattrapages"): st.rerun()
 
 # --- PLANNING & SAISIE ---
 elif page == "Planning & Saisie":
@@ -102,8 +102,10 @@ elif page == "Planning & Saisie":
             if st.form_submit_button("Générer Planning"):
                 if not ex: st.error("Date examen obligatoire !")
                 else:
-                    doublon = not st.session_state.data[(st.session_state.data['Matiere'] == mat) & (st.session_state.data['Chapitre'] == chap)].empty
-                    if doublon: st.error("Ce chapitre existe déjà !")
+                    exists = not st.session_state.data[(st.session_state.data['Matiere'] == mat) & 
+                                                       (st.session_state.data['Chapitre'] == chap) & 
+                                                       (st.session_state.data['Dossier'] == choix_dos)].empty
+                    if exists: st.error("Ce chapitre existe déjà !")
                     else:
                         for j in [0] + st.session_state.config['cadencier']:
                             d = d0 + dt.timedelta(days=j)
@@ -121,7 +123,7 @@ elif page == "Planning & Saisie":
             st.markdown(f"**{day.strftime('%d/%m')}**")
             for idx, r in df_dos[df_dos['Date'] == day].iterrows():
                 with st.expander(f"{r['Matiere']} ({r['J_Type']})"):
-                    st.write(f"Chapitre: {r['Chapitre']}")
+                    st.write(f"**{r['Chapitre']}**")
                     if st.button("Valider", key=f"val_{idx}"): st.rerun()
     
     st.subheader("📝 Saisie")
