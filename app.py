@@ -10,7 +10,7 @@ st.set_page_config(layout="wide")
 DATA_FILE = "data.csv"
 CONFIG_FILE = "config.json"
 
-# --- CHARGEMENT ---
+# --- CHARGEMENT SÉCURISÉ ---
 def load_data():
     if os.path.exists(DATA_FILE):
         try:
@@ -33,9 +33,10 @@ def load_config():
         try:
             with open(CONFIG_FILE, "r") as f: 
                 cfg = json.load(f)
-                # Vérifie que toutes les clés existent, sinon remplit avec les défauts
+                # Vérification de sécurité des clés
                 if 'dossiers' not in cfg: cfg['dossiers'] = default['dossiers']
-                if 'config' not in cfg: cfg.update(default)
+                if 'cadencier' not in cfg: cfg['cadencier'] = default['cadencier']
+                if 'seuils' not in cfg: cfg['seuils'] = default['seuils']
                 return cfg
         except: return default
     return default
@@ -50,25 +51,30 @@ if 'config' not in st.session_state: st.session_state.config = load_config()
 # --- SIDEBAR ---
 st.sidebar.title("⚙️ Pilot Expert")
 
+# Réglages sidebar
 with st.sidebar.expander("🛠️ Réglages", expanded=True):
-    st.session_state.config['cours_max'] = st.number_input("Max cours/jour", 1, 20, st.session_state.config['cours_max'])
-    cad_str = ",".join(map(str, st.session_state.config['cadencier']))
+    st.session_state.config['cours_max'] = st.number_input("Max cours/jour", 1, 20, st.session_state.config.get('cours_max', 5))
+    cad_list = st.session_state.config.get('cadencier', [1, 3, 7, 14, 30])
+    cad_str = ",".join(map(str, cad_list))
     cad_input = st.text_input("Cadencier", cad_str)
     st.session_state.config['cadencier'] = [int(x.strip()) for x in cad_input.split(",")]
     
     st.write("---")
     st.subheader("Seuils de notes par J")
     for j in st.session_state.config['cadencier']:
-        val = st.slider(f"Seuil note J{j}", 10, 20, int(st.session_state.config['seuils'].get(str(j), 12)))
-        st.session_state.config['seuils'][str(j)] = val
+        key = str(j)
+        val = st.slider(f"Seuil note J{j}", 10, 20, int(st.session_state.config.get('seuils', {}).get(key, 12)))
+        st.session_state.config['seuils'][key] = val
     
     if st.button("💾 Enregistrer Réglages"):
         save_config(st.session_state.config)
         st.success("Config sauvée !")
         st.rerun()
 
-# --- GESTION DOSSIERS ---
-dossiers = st.session_state.config.get('dossiers', {"PASS": ["UE1", "UE2"]})
+# Gestion Dossiers
+if 'dossiers' not in st.session_state.config: st.session_state.config['dossiers'] = {"PASS": ["UE1", "UE2"]}
+dossiers = st.session_state.config['dossiers']
+
 new_folder = st.sidebar.text_input("Nouveau Dossier")
 if st.sidebar.button("➕ Créer Dossier") and new_folder:
     st.session_state.config['dossiers'][new_folder] = []
@@ -83,19 +89,21 @@ if st.sidebar.button("Ajouter Matière") and new_mat:
 
 # --- NAVIGATION ---
 page = st.sidebar.radio("Navigation", ["Dashboard", "Planning & Saisie", "Graphiques"])
-df = st.session_state.data[st.session_state.data['Dossier'] == choix_dos].copy()
+df_all = st.session_state.data
+df = df_all[df_all['Dossier'] == choix_dos].copy()
 
 # --- PAGES ---
 if page == "Dashboard":
     st.title(f"🎯 Dashboard : {choix_dos}")
-    for m in st.session_state.config['dossiers'].get(choix_dos, []):
+    matieres = st.session_state.config['dossiers'].get(choix_dos, [])
+    for m in matieres:
         col1, col2 = st.columns([4, 1])
         col1.info(f"📚 {m}")
         if col2.button("🗑️", key=f"del_{m}"): 
             st.session_state.config['dossiers'][choix_dos].remove(m)
             save_config(st.session_state.config); st.rerun()
     st.table(df[df['Note'] != '0'])
-    if st.button("🚀 Générer saisie"): save_data(st.session_state.data); st.rerun()
+    if st.button("🚀 Générer"): save_data(st.session_state.data); st.rerun()
 
 elif page == "Planning & Saisie":
     st.title("🗓️ Planning & Saisie")
