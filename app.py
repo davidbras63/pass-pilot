@@ -140,38 +140,38 @@ elif page == "Planning & Saisie":
             for _, r in df_day.iterrows():
                 st.caption(f"{r['Chapitre']} ({r['J_Type']})")
 
-    # --- 3. SAISIE NOTES (Affichage robuste) ---
+        # --- 3. TABLEAU DE SAISIE NOTES (Version corrigée) ---
     st.divider()
     st.subheader(f"Saisie Notes - Aujourd'hui")
     
-    # Même logique de conversion pour être sûr de trouver les données
+    # Conversion date pour le filtre
     temp_df = st.session_state.data.copy()
     temp_df['Date_Obj'] = pd.to_datetime(temp_df['Date']).dt.date
     df_today = temp_df[(temp_df['Date_Obj'] == today) & (temp_df['Dossier'] == choix_dos)].copy()
 
     if not df_today.empty:
+        # Affichage éditable
         edited = st.data_editor(
             df_today[['ID', 'Chapitre', 'J_Type', 'Statut', 'Note']],
-            column_config={"ID": None}, hide_index=True, use_container_width=True
+            column_config={"ID": None, "Chapitre": st.column_config.TextColumn(disabled=True), 
+                           "J_Type": st.column_config.TextColumn(disabled=True)},
+            hide_index=True, use_container_width=True
         )
-         if st.button("💾 Enregistrer"):
-            # 1. Synchronisation forcée des données modifiées
+        
+        # ATTENTION : Le 'if' doit être aligné exactement avec 'edited =' au-dessus
+        if st.button("💾 Enregistrer"):
             for _, row in edited.iterrows():
-                # On met à jour directement le session_state avec les valeurs de l'éditeur
+                # Mise à jour directe
                 idx = st.session_state.data[st.session_state.data['ID'] == row['ID']].index
                 if not idx.empty:
                     st.session_state.data.loc[idx, 'Note'] = row['Note']
                     st.session_state.data.loc[idx, 'Statut'] = row['Statut']
             
-            # 2. Sauvegarde et recalcule
             save_data(st.session_state.data)
-            st.success("Enregistré !")
-            
-            # 3. Bascule forcée sur le Dashboard
             st.session_state.page = "Dashboard"
             st.rerun()
     else:
-        st.info("Aucun chapitre prévu aujourd'hui.")
+        st.info("Aucun cours prévu aujourd'hui.")
 
 
 # --- GRAPHIQUES ---
