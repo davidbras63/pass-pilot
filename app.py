@@ -77,7 +77,7 @@ if page == "Dashboard":
 elif page == "Planning & Saisie":
     import uuid
 
-    # --- 1. AJOUT ---
+    # --- 1. FORMULAIRE AJOUT ---
     with st.expander("✍️ Ajouter Chapitre"):
         with st.form("Add"):
             mat = st.selectbox("Matière", st.session_state.config['dossiers'].get(choix_dos, []))
@@ -88,14 +88,15 @@ elif page == "Planning & Saisie":
                 for j in [0] + st.session_state.config['cadencier']:
                     date_j = d0 + dt.timedelta(days=j)
                     if date_j <= dex:
-                        st.session_state.data = pd.concat([st.session_state.data, pd.DataFrame([{
-                            'ID': str(uuid.uuid4()), 'Dossier': choix_dos, 'Matiere': mat, 
-                            'Chapitre': chap, 'J_Type': f'J{j}', 'Date': str(date_j), 
-                            'Note': 0, 'Statut': 'À faire'
-                        }])])
+                        row = {'ID': str(uuid.uuid4()), 'Dossier': choix_dos, 'Matiere': mat, 
+                               'Chapitre': chap, 'J_Type': f'J{j}', 'Date': str(date_j), 
+                               'Note': 0, 'Statut': 'À faire'}
+                        st.session_state.data = pd.concat([st.session_state.data, pd.DataFrame([row])])
+                # Nettoyage automatique immédiat
+                st.session_state.data = st.session_state.data.drop_duplicates()
                 save_data(st.session_state.data); st.rerun()
 
-    # --- 2. AFFICHAGE ET SAISIE ---
+    # --- 2. PLANNING & NOTES ---
     st.divider()
     cols = st.columns(7)
     dates = [dt.date.today() + dt.timedelta(days=x) for x in range(7)]
@@ -103,46 +104,25 @@ elif page == "Planning & Saisie":
     for i, day in enumerate(dates):
         with cols[i]:
             st.markdown(f"**{day.strftime('%d/%m')}**")
-            # Filtrage propre sur la date et le dossier
-            mask = (pd.to_datetime(st.session_state.data['Date']).dt.date == day) & \
-                   (st.session_state.data['Dossier'] == choix_dos)
-            df_day = st.session_state.data[mask]
+            # Filtrage des données du jour
+            mask = (pd.to_datetime(st.session_state.data['Date']).dt.date == day) & (st.session_state.data['Dossier'] == choix_dos)
+            df_day = st.session_state.data[mask].copy()
             
             if not df_day.empty:
-                # Boutons de validation
+                # Affichage des tâches
                 for _, r in df_day.iterrows():
-                    if st.button(f"✅ {r['Chapitre']} ({r['J_Type']})", key=f"btn_{r['ID']}"):
+                    if st.button(f"✅ {r['Chapitre']} ({r['J_Type']})", key=f"b_{r['ID']}"):
                         st.session_state.data.loc[st.session_state.data['ID'] == r['ID'], 'Statut'] = 'Fait'
                         save_data(st.session_state.data); st.rerun()
                 
-                # Édition des notes
-                edited = st.data_editor(
-                    df_day[['ID', 'Chapitre', 'J_Type', 'Note']],
-                    column_config={"ID": None}, hide_index=True
-                )
-                if st.button("💾", key=f"save_{day}"):
+                # Saisie des notes (Simple et sans configuration complexe)
+                df_to_edit = df_day[['ID', 'Note']]
+                edited = st.data_editor(df_to_edit, hide_index=True)
+                
+                if st.button("💾", key=f"s_{day}"):
                     for _, row in edited.iterrows():
                         st.session_state.data.loc[st.session_state.data['ID'] == row['ID'], 'Note'] = row['Note']
                     save_data(st.session_state.data); st.success("OK"); st.rerun()
-            else:
-                st.info("---")
-            
-            # SAISIE NOTES (Le tableau réapparaît ici)
-            if not df_day.empty:
-                st.caption("Notes")
-                # On affiche Chapitre, Type et Note pour la saisie
-                edited = st.data_editor(
-                    df_day[['ID', 'Chapitre', 'J_Type', 'Note']], 
-                    column_config={"ID": None, "Chapitre": st.column_config.TextColumn(disabled=True), "J_Type": st.column_config.TextColumn(disabled=True)}, 
-                    hide_index=True
-                )
-                
-                if st.button("💾", key=f"save_{day}"):
-                    for _, row in edited.iterrows():
-                        st.session_state.data.loc[st.session_state.data['ID'] == row['ID'], 'Note'] = row['Note']
-                    save_data(st.session_state.data)
-                    st.success("Enregistré")
-                    st.rerun()
 
 # --- GRAPHIQUES ---
 elif page == "Graphiques":
