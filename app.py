@@ -75,49 +75,43 @@ if page == "Dashboard":
 
 # --- PLANNING & SAISIE ---
 elif page == "Planning & Saisie":
-    st.markdown("### ✍️ Ajouter Chapitre")
     with st.expander("✍️ Ajouter Chapitre", expanded=True):
         with st.form("Add"):
             mat = st.selectbox("Matière", st.session_state.config['dossiers'].get(choix_dos, []))
-            chap = st.text_input("Titre Chapitre")
+            chap = st.text_input("Titre")
             d0 = st.date_input("Date J0")
-            # Modification : Date vierge par défaut (None)
+            # Date examen vierge et bloquante
             dex = st.date_input("Date Examen", value=None)
             if st.form_submit_button("Générer Planning"):
-                # Modification : Validation bloquante
                 if dex is None:
                     st.error("Date examen obligatoire")
                 else:
                     for j in [0] + st.session_state.config['cadencier']:
-                        # On ne génère que si la date Jj est <= date examen
                         date_j = d0 + dt.timedelta(days=j)
                         if date_j <= dex:
-                            st.session_state.data = pd.concat([st.session_state.data, pd.DataFrame([{
-                                'Dossier': choix_dos, 'Matiere': mat, 'Chapitre': chap, 
-                                'J_Type': f'J{j}', 'Date': date_j, 'Note': 0, 
-                                'Statut': 'À faire', 'Date_Examen': dex
-                            }])])
+                            row = {'Dossier': choix_dos, 'Matiere': mat, 'Chapitre': chap, 'J_Type': f'J{j}', 
+                                   'Date': date_j, 'Note': 0, 'Statut': 'À faire', 'Date_Examen': dex}
+                            st.session_state.data = pd.concat([st.session_state.data, pd.DataFrame([row])])
                     save_data(st.session_state.data); st.rerun()
-
-     cols = st.columns(7)
+    
+    # Indentation corrigée ici (alignée avec le 'elif')
+    cols = st.columns(7)
     for i, day in enumerate([dt.date.today() + dt.timedelta(days=x) for x in range(7)]):
         with cols[i]:
             st.markdown(f"**{day.strftime('%d/%m')}**")
-            # On récupère les indices des lignes correspondant au jour et dossier
             mask = (st.session_state.data['Date'] == day) & (st.session_state.data['Dossier'] == choix_dos)
             for idx, r in st.session_state.data[mask].iterrows():
                 with st.expander(f"{r['Matiere']} ({r['J_Type']})"):
                     st.write(f"📖 **{r['Chapitre']}**")
-                    # Correction ici : Utilisation de l'index 'idx' directement pour modifier la ligne globale
+                    # Correction pour éviter le plantage
                     if st.button("✅ Fait", key=f"f_{idx}"): 
                         st.session_state.data.loc[idx, 'Statut'] = 'Fait'
-                        save_data(st.session_state.data)
-                        st.rerun()
-
+                        save_data(st.session_state.data); st.rerun()
 
     st.subheader("📝 Saisie Notes")
     edited = st.data_editor(st.session_state.data[st.session_state.data['Dossier'] == choix_dos][['Matiere', 'Chapitre', 'J_Type', 'Note']])
-    if st.button("Enregistrer"): st.session_state.data.update(edited); save_data(st.session_state.data); st.rerun()
+    if st.button("Enregistrer"): 
+        st.session_state.data.update(edited); save_data(st.session_state.data); st.rerun()
 
 # --- GRAPHIQUES ---
 elif page == "Graphiques":
