@@ -75,7 +75,12 @@ if page == "Dashboard":
 
 # --- PLANNING & SAISIE ---
 elif page == "Planning & Saisie":
-    import uuid # Import nécessaire pour générer des IDs fixes
+    import uuid
+    
+    # SÉCURITÉ : Vérifier si la colonne ID existe, sinon la créer pour toutes les lignes
+    if 'ID' not in st.session_state.data.columns:
+        st.session_state.data['ID'] = [str(uuid.uuid4()) for _ in range(len(st.session_state.data))]
+        save_data(st.session_state.data)
 
     with st.expander("✍️ Ajouter Chapitre", expanded=True):
         with st.form("Add"):
@@ -90,9 +95,9 @@ elif page == "Planning & Saisie":
                     for j in [0] + st.session_state.config['cadencier']:
                         date_j = d0 + dt.timedelta(days=j)
                         if date_j <= dex:
-                            # Ajout d'une colonne ID unique pour chaque ligne
+                            # Ajout de l'ID ici aussi
                             row = {
-                                'ID': str(uuid.uuid4()), 
+                                'ID': str(uuid.uuid4()),
                                 'Dossier': choix_dos, 'Matiere': mat, 'Chapitre': chap, 
                                 'J_Type': f'J{j}', 'Date': str(date_j), 'Note': 0, 
                                 'Statut': 'À faire', 'Date_Examen': str(dex)
@@ -104,10 +109,9 @@ elif page == "Planning & Saisie":
     for i, day in enumerate([dt.date.today() + dt.timedelta(days=x) for x in range(7)]):
         with cols[i]:
             st.markdown(f"**{day.strftime('%d/%m')}**")
-            # Utilisation de l'ID unique au lieu de l'index
             mask = (pd.to_datetime(st.session_state.data['Date']).dt.date == day) & (st.session_state.data['Dossier'] == choix_dos)
             for idx, r in st.session_state.data[mask].iterrows():
-                # On utilise r['ID'] qui ne changera jamais
+                # Maintenant r['ID'] existera toujours grâce à la sécurité au début
                 if st.button(f"✅ {r['Chapitre']}", key=f"btn_{r['ID']}"):
                     st.session_state.data.at[idx, 'Statut'] = 'Fait'
                     save_data(st.session_state.data)
