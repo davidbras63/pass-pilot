@@ -77,9 +77,15 @@ if page == "Dashboard":
 elif page == "Planning & Saisie":
     import uuid
 
-    # 1. NETTOYAGE AU DÉMARRAGE (pour supprimer les doublons anciens)
+     # 1. NETTOYAGE INTELLIGENT : Fusionner les lignes au lieu de supprimer
     if 'data' in st.session_state and not st.session_state.data.empty:
-        st.session_state.data = st.session_state.data.drop_duplicates(subset=['Dossier', 'Matiere', 'Chapitre', 'J_Type', 'Date'], keep='first')
+        # On regroupe par ce qui définit le cours, et on garde la note la plus élevée (ou la plus récente)
+        st.session_state.data = st.session_state.data.sort_values('Note', ascending=False)
+        st.session_state.data = st.session_state.data.drop_duplicates(
+            subset=['Dossier', 'Matiere', 'Chapitre', 'J_Type', 'Date'], 
+            keep='first'
+        )
+        save_data(st.session_state.data)
 
     # 2. FORMULAIRE AJOUT
     with st.expander("✍️ Ajouter Chapitre", expanded=False):
