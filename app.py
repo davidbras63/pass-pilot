@@ -60,62 +60,47 @@ if page == "Dashboard":
         c1.info(f"📚 {m}")
         if c2.button("🗑️", key=f"del_{m}"): st.session_state.config['dossiers'][choix_dos].remove(m); st.rerun()
     
-    st.subheader("⚠️ Rattrapages")
-    df_dos = st.session_state.data[st.session_state.data['Dossier'] == choix_dos]
-    rattrapages = df_dos[(df_dos['Note'] > 0) & (df_dos['Note'] < 12)]
-    
-    if not rattrapages.empty:
-        st.table(rattrapages[['Matiere', 'Chapitre', 'J_Type', 'Date', 'Note']])
-         # Ton code actuel affiche déjà : matiere, chapitre, etc.
-        # Colle ce bouton juste en dessous :
-        
-        # 1. Filtrage strict : Note < 12 et dossier actuel
+    # --- REMPLACE TON BLOC DE RATTRAPAGE PAR CELUI-CI ---
+st.subheader("⚠️ Rattrapages à traiter")
+
+# 1. Filtre tes rattrapages (Note < 12)
 rattrapages = st.session_state.data[
     (st.session_state.data['Dossier'] == choix_dos) & 
     (st.session_state.data['Note'] > 0) & 
     (st.session_state.data['Note'] < 12)
 ]
 
-# 2. Affichage et Bouton pour CHAQUE rattrapage trouvé
 if not rattrapages.empty:
     for index, row in rattrapages.iterrows():
-        st.write(f"Matière: {row['Matiere']} | Chapitre: {row['Chapitre']} (Note: {row['Note']})")
-        
-        if st.button(f"Réintégrer {row['Chapitre']}", key=f"btn_{row['ID']}"):
-            # Recherche de place dispo (sans dimanche, max 3 par jour)
-            today = dt.date.today()
-            date_trouvee = None
-            max_c = st.session_state.config.get('max_cours_par_jour', 3)
-            
-            for i in range(1, 15):
-                d = today + dt.timedelta(days=i)
-                if d.weekday() == 6: continue 
+        # On utilise un expander pour ne pas polluer l'affichage du Planning
+        with st.expander(f"Matière: {row['Matiere']} - {row['Chapitre']} (Note: {row['Note']})"):
+            if st.button(f"Réintégrer {row['Chapitre']}", key=f"btn_{row['ID']}"):
                 
-                # Vérifie le nombre de cours prévus ce jour
-                nb_cours = len(st.session_state.data[
-                    (pd.to_datetime(st.session_state.data['Date']).dt.date == d) & 
-                    (st.session_state.data['Dossier'] == choix_dos)
-                ])
+                # Recherche date dispo
+                max_c = st.session_state.config.get('max_cours_par_jour', 3)
+                date_trouvee = None
+                for i in range(1, 15):
+                    d = dt.date.today() + dt.timedelta(days=i)
+                    if d.weekday() == 6: continue
+                    nb = len(st.session_state.data[(pd.to_datetime(st.session_state.data['Date']).dt.date == d) & (st.session_state.data['Dossier'] == choix_dos)])
+                    if nb < max_c:
+                        date_trouvee = d
+                        break
                 
-                if nb_cours < max_c:
-                    date_trouvee = d
-                    break
-            
-            if not date_trouvee: date_trouvee = today + dt.timedelta(days=1)
-            
-            # Création du nouveau cours RAP
-            new_row = {
-                'ID': str(uuid.uuid4()), 'Dossier': choix_dos, 'Matiere': row['Matiere'],
-                'Chapitre': row['Chapitre'], 'J_Type': 'RAP', 'Date': str(date_trouvee),
-                'Note': 0, 'Statut': 'À faire'
-            }
-            
-            # Ajout et purge de l'ancienne ligne
-            st.session_state.data = pd.concat([st.session_state.data, pd.DataFrame([new_row])])
-            st.session_state.data = st.session_state.data[st.session_state.data['ID'] != row['ID']]
-            
-            save_data(st.session_state.data)
-            st.rerun()
+                if not date_trouvee: date_trouvee = dt.date.today() + dt.timedelta(days=1)
+                
+                # Ajout nouveau RAP
+                new_row = {'ID': str(uuid.uuid4()), 'Dossier': choix_dos, 'Matiere': row['Matiere'], 'Chapitre': row['Chapitre'], 'J_Type': 'RAP', 'Date': str(date_trouvee), 'Note': 0, 'Statut': 'À faire'}
+                st.session_state.data = pd.concat([st.session_state.data, pd.DataFrame([new_row])])
+                
+                # Purge de l'ancien
+                st.session_state.data = st.session_state.data[st.session_state.data['ID'] != row['ID']]
+                
+                save_data(st.session_state.data)
+                st.rerun()
+else:
+    st.write("Aucun rattrapage en attente.")
+
 
 
 # --- PLANNING & SAISIE ---
