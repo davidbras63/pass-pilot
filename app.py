@@ -69,48 +69,50 @@ if page == "Dashboard":
          # Ton code actuel affiche déjà : matiere, chapitre, etc.
         # Colle ce bouton juste en dessous :
         
-        if st.button(f"Réintégrer et Purger {chapitre}", key=f"btn_rap_{row['ID']}"):
-            # 1. Recherche de place (14 jours, évite dimanche, respecte max_cours)
-            max_cours = st.session_state.config.get('max_cours_par_jour', 3)
+        # 1. Filtrage strict : Note < 12 et dossier actuel
+rattrapages = st.session_state.data[
+    (st.session_state.data['Dossier'] == choix_dos) & 
+    (st.session_state.data['Note'] > 0) & 
+    (st.session_state.data['Note'] < 12)
+]
+
+# 2. Affichage et Bouton pour CHAQUE rattrapage trouvé
+if not rattrapages.empty:
+    for index, row in rattrapages.iterrows():
+        st.write(f"Matière: {row['Matiere']} | Chapitre: {row['Chapitre']} (Note: {row['Note']})")
+        
+        if st.button(f"Réintégrer {row['Chapitre']}", key=f"btn_{row['ID']}"):
+            # Recherche de place dispo (sans dimanche, max 3 par jour)
             today = dt.date.today()
             date_trouvee = None
+            max_c = st.session_state.config.get('max_cours_par_jour', 3)
             
             for i in range(1, 15):
                 d = today + dt.timedelta(days=i)
-                if d.weekday() == 6: continue # Skip dimanche
+                if d.weekday() == 6: continue 
                 
-                # Vérifie le nombre de cours déjà prévus
-                count = len(st.session_state.data[
+                # Vérifie le nombre de cours prévus ce jour
+                nb_cours = len(st.session_state.data[
                     (pd.to_datetime(st.session_state.data['Date']).dt.date == d) & 
                     (st.session_state.data['Dossier'] == choix_dos)
                 ])
                 
-                if count < max_cours:
+                if nb_cours < max_c:
                     date_trouvee = d
                     break
             
-            # Si aucune place, on prend le lendemain
-            if not date_trouvee:
-                date_trouvee = today + dt.timedelta(days=1)
+            if not date_trouvee: date_trouvee = today + dt.timedelta(days=1)
             
-            # 2. Ajout du cours RAP
-            new_rap = {
-                'ID': str(uuid.uuid4()), 
-                'Dossier': choix_dos, 
-                'Matiere': matiere, 
-                'Chapitre': chapitre, 
-                'J_Type': 'RAP', 
-                'Date': str(date_trouvee), 
-                'Note': 0, 
-                'Statut': 'À faire'
+            # Création du nouveau cours RAP
+            new_row = {
+                'ID': str(uuid.uuid4()), 'Dossier': choix_dos, 'Matiere': row['Matiere'],
+                'Chapitre': row['Chapitre'], 'J_Type': 'RAP', 'Date': str(date_trouvee),
+                'Note': 0, 'Statut': 'À faire'
             }
             
-            st.session_state.data = pd.concat([st.session_state.data, pd.DataFrame([new_rap])])
-            
-            # 3. Purge de l'ancien rattrapage
-            st.session_state.data = st.session_state.data[
-                ~((st.session_state.data['ID'] == row['ID']))
-            ]
+            # Ajout et purge de l'ancienne ligne
+            st.session_state.data = pd.concat([st.session_state.data, pd.DataFrame([new_row])])
+            st.session_state.data = st.session_state.data[st.session_state.data['ID'] != row['ID']]
             
             save_data(st.session_state.data)
             st.rerun()
