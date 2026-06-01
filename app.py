@@ -24,15 +24,21 @@ if 'dossiers' not in st.session_state:
 # --- SIDEBAR ---
 st.sidebar.title("⚙️ Pilot Expert")
 
-# Gestion Dossiers
+# RÉGLAGES (Réintégrés)
+with st.sidebar.expander("🛠️ Réglages complets"):
+    st.session_state.config['cours_max'] = st.number_input("Max cours/jour", 1, 20, st.session_state.config['cours_max'])
+    cad_str = st.text_input("Cadencier (ex: 1,3,7,14,30)", ",".join(map(str, st.session_state.config['cadencier'])))
+    st.session_state.config['cadencier'] = [int(x.strip()) for x in cad_str.split(",")]
+    for j in st.session_state.config['cadencier']:
+        st.session_state.config['seuils'][j] = st.slider(f"Seuil note J{j}", 0, 20, st.session_state.config['seuils'].get(j, 10))
+
+# GESTION DOSSIERS & MATIÈRES
 new_folder = st.sidebar.text_input("Nouveau Dossier")
 if st.sidebar.button("➕ Créer Dossier") and new_folder:
     st.session_state.dossiers[new_folder] = []
     st.rerun()
 
 choix_dos = st.sidebar.selectbox("Dossier", list(st.session_state.dossiers.keys()))
-
-# Gestion Matières
 new_mat = st.sidebar.text_input("Ajouter Matière")
 if st.sidebar.button("Ajouter Matière") and new_mat: 
     st.session_state.dossiers[choix_dos].append(new_mat)
