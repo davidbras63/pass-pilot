@@ -76,16 +76,27 @@ if page == "Dashboard":
 # --- PLANNING & SAISIE ---
 elif page == "Planning & Saisie":
     st.markdown("### ✍️ Ajouter Chapitre")
-    with st.expander("Configuration", expanded=True):
+    with st.expander("✍️ Ajouter Chapitre", expanded=True):
         with st.form("Add"):
             mat = st.selectbox("Matière", st.session_state.config['dossiers'].get(choix_dos, []))
-            chap = st.text_input("Titre du Chapitre")
-            d0, dex = st.date_input("Date J0"), st.date_input("Date Examen")
-            if st.form_submit_button("Générer"):
-                if not dex: st.error("Date examen obligatoire !")
+            chap = st.text_input("Titre Chapitre")
+            d0 = st.date_input("Date J0")
+            # Modification : Date vierge par défaut (None)
+            dex = st.date_input("Date Examen", value=None)
+            if st.form_submit_button("Générer Planning"):
+                # Modification : Validation bloquante
+                if dex is None:
+                    st.error("Date examen obligatoire")
                 else:
                     for j in [0] + st.session_state.config['cadencier']:
-                        st.session_state.data = pd.concat([st.session_state.data, pd.DataFrame([{'Dossier': choix_dos, 'Matiere': mat, 'Chapitre': chap, 'J_Type': f'J{j}', 'Date': d0 + dt.timedelta(days=j), 'Note': 0, 'Statut': 'À faire', 'Date_Examen': dex}])])
+                        # On ne génère que si la date Jj est <= date examen
+                        date_j = d0 + dt.timedelta(days=j)
+                        if date_j <= dex:
+                            st.session_state.data = pd.concat([st.session_state.data, pd.DataFrame([{
+                                'Dossier': choix_dos, 'Matiere': mat, 'Chapitre': chap, 
+                                'J_Type': f'J{j}', 'Date': date_j, 'Note': 0, 
+                                'Statut': 'À faire', 'Date_Examen': dex
+                            }])])
                     save_data(st.session_state.data); st.rerun()
 
     cols = st.columns(7)
