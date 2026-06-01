@@ -107,23 +107,29 @@ elif page == "Planning & Saisie":
         with cols[i]:
             st.markdown(f"**{day.strftime('%d/%m')}**")
             mask = (pd.to_datetime(st.session_state.data['Date']).dt.date == day) & (st.session_state.data['Dossier'] == choix_dos)
+            df_day = st.session_state.data[mask].copy()
             
-            # Affichage Planning
-            for idx, r in st.session_state.data[mask].iterrows():
-                with st.expander(f"{r['Matiere']} ({r['J_Type']})"):
-                    st.write(f"📖 {r['Chapitre']}")
+            # 1. Planning : Affichage du CHAPITRE
+            for idx, r in df_day.iterrows():
+                with st.expander(f"{r['Chapitre']} ({r['J_Type']})"): # <--- Affichage du Chapitre
+                    st.write(f"📖 **{r['Matiere']}**")
                     if st.button("✅ Fait", key=f"btn_{r['ID']}"):
                         st.session_state.data.at[idx, 'Statut'] = 'Fait'
                         save_data(st.session_state.data); st.rerun()
             
-            # Saisie Notes filtrée par jour
-            df_day = st.session_state.data[mask].copy()
+            # 2. Saisie Notes : Affichage du CHAPITRE + Sauvegarde forcée
             if not df_day.empty:
                 st.caption("Notes")
-                edited = st.data_editor(df_day[['Matiere', 'Chapitre', 'Note']], key=f"edit_{day}")
+                # On affiche Chapitre et Note pour la saisie
+                edited = st.data_editor(df_day[['Chapitre', 'Note']], key=f"edit_{day}")
+                
                 if st.button("💾", key=f"save_{day}"):
-                    st.session_state.data.update(edited)
-                    save_data(st.session_state.data); st.rerun()
+                    # Méthode robuste pour mettre à jour les lignes modifiées
+                    for idx_edited, row_edited in edited.iterrows():
+                        st.session_state.data.at[idx_edited, 'Note'] = row_edited['Note']
+                    save_data(st.session_state.data)
+                    st.success("Enregistré !")
+                    st.rerun()
 
 # --- GRAPHIQUES ---
 elif page == "Graphiques":
