@@ -126,10 +126,18 @@ elif page == "Planning & Saisie":
 
 # --- GRAPHIQUES ---
 elif page == "Graphiques":
-    st.title("📊 Progression")
-    df_graph = st.session_state.data[(st.session_state.data['Dossier'] == choix_dos) & (pd.to_numeric(st.session_state.data['Note'], errors='coerce') > 0)].copy()
+    st.title("📊 Progression par Matière")
+    df_graph = st.session_state.data[(st.session_state.data['Dossier'] == choix_dos) & 
+                                     (pd.to_numeric(st.session_state.data['Note'], errors='coerce') > 0)].copy()
+    
     if not df_graph.empty:
-        df_graph['Date'] = pd.to_datetime(df_graph['Date']).dt.strftime('%d/%m/%Y')
-        st.line_chart(df_graph.pivot_table(index='Date', columns='Matiere', values='Note', aggfunc='mean'))
-    else: st.write("Pas de données pour afficher le graphique.")
-
+        matieres = df_graph['Matiere'].unique()
+        cols = st.columns(3)
+        for i, mat in enumerate(matieres):
+            with cols[i % 3]:
+                st.markdown(f"**📚 {mat}**")
+                df_mat = df_graph[df_graph['Matiere'] == mat].sort_values('Date')
+                df_display = df_mat[['Date', 'Note']].copy()
+                df_display['Date'] = df_display['Date'].apply(lambda x: x.strftime('%d/%m'))
+                st.table(df_display.reset_index(drop=True))
+    else: st.write("Pas encore assez de notes saisies pour afficher la progression.")
