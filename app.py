@@ -140,23 +140,21 @@ elif page == "Planning & Saisie":
             df_today[['ID', 'Chapitre', 'J_Type', 'Statut', 'Note']],
             column_config={"ID": None}, hide_index=True, use_container_width=True
         )
-        if st.button("💾 Enregistrer"):
-            # Mise à jour des notes et statuts ligne par ligne
+         if st.button("💾 Enregistrer"):
+            # 1. Synchronisation forcée des données modifiées
             for _, row in edited.iterrows():
-                # On cherche l'ID exact dans le dataframe principal
-                mask = st.session_state.data['ID'] == row['ID']
-                st.session_state.data.loc[mask, 'Note'] = row['Note']
-                st.session_state.data.loc[mask, 'Statut'] = row['Statut']
+                # On met à jour directement le session_state avec les valeurs de l'éditeur
+                idx = st.session_state.data[st.session_state.data['ID'] == row['ID']].index
+                if not idx.empty:
+                    st.session_state.data.loc[idx, 'Note'] = row['Note']
+                    st.session_state.data.loc[idx, 'Statut'] = row['Statut']
             
-            # Sauvegarde physique
+            # 2. Sauvegarde et recalcule
             save_data(st.session_state.data)
+            st.success("Enregistré !")
             
-            # Message de confirmation
-            st.success("Notes enregistrées avec succès !")
-            
-            # --- REDIRECTION FORCÉE ---
-            # On change la valeur de la page pour rebasculer sur le Dashboard
-            st.session_state.page = "Dashboard" 
+            # 3. Bascule forcée sur le Dashboard
+            st.session_state.page = "Dashboard"
             st.rerun()
     else:
         st.info("Aucun chapitre prévu aujourd'hui.")
