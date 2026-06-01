@@ -66,18 +66,12 @@ if page == "Dashboard":
     
     if not rattrapages.empty:
         st.table(rattrapages[['Matiere', 'Chapitre', 'J_Type', 'Date', 'Note']])
-        # --- DEBUT DU BOUTON COMPACT ---
-	if st.button(f"Réintégrer {row['Chapitre']}", key=f"btn_{row['ID']}"):
- 		d = dt.date.today(); dt_tr = None
- 		for i in range(1, 15):
-  			t = d + dt.timedelta(days=i)
-  			if t.weekday() == 6: continue
-  			nb = len(st.session_state.data[(pd.to_datetime(st.session_state.data['Date']).dt.date == t) & (st.session_state.data['Dossier'] == choix_dos)])
- 			if nb < st.session_state.config.get('max_cours_par_jour', 3): dt_tr = t; break
- 		if not dt_tr: dt_tr = d + dt.timedelta(days=1)
-		n_r = {'ID':str(uuid.uuid4()),'Dossier':choix_dos,'Matiere':row['Matiere'],'Chapitre':row['Chapitre'],'J_Type':'RAP','Date':str(dt_tr),'Note':0,'Statut':'À faire'}					
- 		st.session_state.data = pd.concat([st.session_state.data, pd.DataFrame([n_r])]); st.session_state.data = st.session_state.data[st.session_state.data['ID'] != row['ID']]; save_data(st.session_state.data); st.rerun()
-	# --- FIN DU BOUTON COMPACT ---
+        if st.button("🔄 Réintégrer et purger"):
+            for idx, row in rattrapages.iterrows():
+                new_r = row.copy(); new_r['Date'] = dt.date.today(); new_r['J_Type'] = 'RAT'; new_r['Note'] = 0
+                st.session_state.data = pd.concat([st.session_state.data, pd.DataFrame([new_r])])
+            st.session_state.data = st.session_state.data.drop(rattrapages.index)
+            save_data(st.session_state.data); st.rerun()
 
 # --- PLANNING & SAISIE ---
 elif page == "Planning & Saisie":
