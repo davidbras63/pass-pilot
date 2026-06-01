@@ -112,16 +112,21 @@ elif page == "Planning & Saisie":
                     st.session_state.data.loc[st.session_state.data['ID'] == r['ID'], 'Statut'] = 'Fait'
                     save_data(st.session_state.data); st.rerun()
             
-            # Saisie Notes
+            # SAISIE NOTES (Le tableau réapparaît ici)
             if not df_day.empty:
                 st.caption("Notes")
-                # On utilise l'ID pour identifier les lignes sans l'afficher
-                edited = st.data_editor(df_day[['ID', 'Chapitre', 'Note']], column_config={"ID": None}, hide_index=True)
+                # On affiche Chapitre, Type et Note pour la saisie
+                edited = st.data_editor(
+                    df_day[['ID', 'Chapitre', 'J_Type', 'Note']], 
+                    column_config={"ID": None, "Chapitre": st.column_config.TextColumn(disabled=True), "J_Type": st.column_config.TextColumn(disabled=True)}, 
+                    hide_index=True
+                )
                 
                 if st.button("💾", key=f"save_{day}"):
                     for _, row in edited.iterrows():
                         st.session_state.data.loc[st.session_state.data['ID'] == row['ID'], 'Note'] = row['Note']
                     save_data(st.session_state.data)
+                    st.success("Enregistré")
                     st.rerun()
 
 # --- GRAPHIQUES ---
