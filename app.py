@@ -94,9 +94,20 @@ elif page == "Planning & Saisie":
                     for j in [0] + st.session_state.config['cadencier']:
                         date_j = d0 + dt.timedelta(days=j)
                         if date_j <= dex:
-                            row = {'ID': str(uuid.uuid4()), 'Dossier': choix_dos, 'Matiere': mat, 'Chapitre': chap, 
-                                   'J_Type': f'J{j}', 'Date': str(date_j), 'Note': 0, 'Statut': 'À faire', 'Date_Examen': str(dex)}
+                            row = {
+                                'ID': str(uuid.uuid4()), 
+                                'Dossier': choix_dos, 'Matiere': mat, 'Chapitre': chap, 
+                                'J_Type': f'J{j}', 'Date': str(date_j), 'Note': 0, 
+                                'Statut': 'À faire', 'Date_Examen': str(dex)
+                            }
                             st.session_state.data = pd.concat([st.session_state.data, pd.DataFrame([row])])
+                    
+                    # --- C'EST ICI QU'IL FAUT LE RAJOUTER ---
+                    st.session_state.data = st.session_state.data.drop_duplicates(
+                        subset=['Chapitre', 'J_Type', 'Date'], 
+                        keep='last'
+                    )
+                    
                     save_data(st.session_state.data); st.rerun()
 
     # PLANNING ET SAISIE NOTES INTÉGRÉS PAR JOUR
