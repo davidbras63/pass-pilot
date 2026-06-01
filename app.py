@@ -62,20 +62,20 @@ if page == "Dashboard":
     
     st.subheader("⚠️ Rattrapages")
 
-# 1. On récupère les données
+# 1. On filtre les rattrapages
 df_dos = st.session_state.data[st.session_state.data['Dossier'] == choix_dos]
 rattrapages = df_dos[(df_dos['Note'] > 0) & (df_dos['Note'] < 12)]
 
+# 2. ON BOUCLE SUR LES RÉSULTATS (C'est ici que les variables sont créées)
 if not rattrapages.empty:
-    # 2. C'EST ICI QUE TOUT SE JOUE : Il faut boucler sur les lignes
     for index, row in rattrapages.iterrows():
-        # On définit les variables ici, elles seront connues dans cette boucle
+        # Définition des variables obligatoires pour le bouton
         chapitre = row['Chapitre']
         matiere = row['Matiere']
         
         st.write(f"Matière: {matiere} | Chapitre: {chapitre}")
         
-        # Le bouton est DANS la boucle, il accède donc bien aux variables
+        # 3. Le bouton est DANS la boucle, il accède donc bien aux variables
         if st.button(f"Réintégrer {chapitre} au planning", key=f"btn_{row['ID']}"):
             max_cours = st.session_state.config.get('max_cours_par_jour', 3)
             today = dt.date.today()
@@ -98,7 +98,7 @@ if not rattrapages.empty:
             if not date_trouvee:
                 date_trouvee = today + dt.timedelta(days=(6 - today.weekday()))
             
-            # Action de réintégration
+            # Action
             if date_trouvee and date_trouvee <= date_limite:
                 new_rap = {'ID': str(uuid.uuid4()), 'Dossier': choix_dos, 'Matiere': matiere, 'Chapitre': chapitre, 'J_Type': 'RAP', 'Date': str(date_trouvee), 'Note': 0, 'Statut': 'À faire'}
                 st.session_state.data = pd.concat([st.session_state.data, pd.DataFrame([new_rap])])
