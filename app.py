@@ -67,16 +67,16 @@ if page == "Dashboard":
     if not rattrapages.empty:
         st.table(rattrapages[['Matiere', 'Chapitre', 'J_Type', 'Date', 'Note']])
         # --- BOUTON DE RÉINTÉGRATION INTELLIGENT ---
+# Assure-toi que ce bouton est dans un bloc qui a accès aux variables 'chapitre', 'matiere', 'choix_dos'
 if st.button(f"Réintégrer {chapitre} au planning"):
     # 1. PARAMÈTRES
     max_cours = st.session_state.config.get('max_cours_par_jour', 3)
     today = dt.date.today()
-    # Date limite : on interdit de reprogrammer si le trou disponible est après 7 jours
     date_limite = today + dt.timedelta(days=7) 
     
     date_trouvee = None
     
-    # 2. RECHERCHE (Semaine d'abord, Dimanche en dernier recours)
+    # 2. RECHERCHE D'UNE PLACE
     for i in range(14): 
         d = today + dt.timedelta(days=i)
         if d.weekday() == 6: continue 
@@ -91,11 +91,11 @@ if st.button(f"Réintégrer {chapitre} au planning"):
             date_trouvee = d
             break
             
-    # Si rien trouvé en semaine, on prend le dimanche
+    # Soupape dimanche
     if not date_trouvee:
         date_trouvee = today + dt.timedelta(days=(6 - today.weekday()))
 
-    # 3. ACTION ET SÉCURITÉ
+    # 3. ACTION
     if date_trouvee and date_trouvee <= date_limite:
         new_rap = {
             'ID': str(uuid.uuid4()), 'Dossier': choix_dos, 'Matiere': matiere, 
@@ -105,7 +105,7 @@ if st.button(f"Réintégrer {chapitre} au planning"):
         
         st.session_state.data = pd.concat([st.session_state.data, pd.DataFrame([new_rap])])
         
-        # Nettoyage du Dashboard
+        # Nettoyage Dashboard (vérifie bien que 'À rattraper' est le bon texte)
         st.session_state.data = st.session_state.data[
             ~((st.session_state.data['Chapitre'] == chapitre) & 
               (st.session_state.data['Statut'] == 'À rattraper'))
@@ -116,7 +116,7 @@ if st.button(f"Réintégrer {chapitre} au planning"):
         st.session_state.page = "Planning & Saisie"
         st.rerun()
     else:
-        st.warning("Réintégration impossible : aucune place efficace disponible avant la prochaine échéance.")
+        st.warning("Réintégration impossible : aucune place efficace disponible.")
 
 # --- PLANNING & SAISIE ---
 elif page == "Planning & Saisie":
