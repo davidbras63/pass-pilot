@@ -16,11 +16,14 @@ def load_data():
             df = pd.read_csv(DATA_FILE)
             df['Date'] = pd.to_datetime(df['Date'], dayfirst=True, errors='coerce').dt.date
             df['Note'] = pd.to_numeric(df['Note'], errors='coerce').fillna(0)
-            return df
+            # Suppression des doublons ici
+            return df.drop_duplicates(subset=['Dossier', 'Matiere', 'Chapitre', 'J_Type', 'Date'])
         except: return pd.DataFrame(columns=['Dossier', 'Matiere', 'Chapitre', 'J_Type', 'Date', 'Note'])
     return pd.DataFrame(columns=['Dossier', 'Matiere', 'Chapitre', 'J_Type', 'Date', 'Note'])
 
-def save_data(df): df.to_csv(DATA_FILE, index=False)
+def save_data(df):
+    df.drop_duplicates(inplace=True)
+    df.to_csv(DATA_FILE, index=False)
 
 def load_config():
     if os.path.exists(CONFIG_FILE):
@@ -60,15 +63,14 @@ page = st.sidebar.radio("Navigation", ["Dashboard", "Planning & Saisie", "Graphi
 # --- DASHBOARD ---
 if page == "Dashboard":
     st.title(f"🎯 Dashboard : {choix_dos}")
+    st.subheader("📚 Matières")
     for m in st.session_state.config['dossiers'].get(choix_dos, []):
         c1, c2 = st.columns([4, 1])
         c1.info(f"📚 {m}")
         if c2.button("🗑️", key=f"del_{m}"): st.session_state.config['dossiers'][choix_dos].remove(m); st.rerun()
     
     st.subheader("⚠️ Rattrapages")
-    st.session_state.data['Note'] = pd.to_numeric(st.session_state.data['Note'], errors='coerce').fillna(0)
     df_filtered = st.session_state.data[st.session_state.data['Dossier'] == choix_dos]
-    
     rattrapages = []
     for j in st.session_state.config['cadencier']:
         seuil = float(st.session_state.config['seuils'].get(str(j), 12))
@@ -77,18 +79,14 @@ if page == "Dashboard":
     
     final = pd.concat(rattrapages) if rattrapages else pd.DataFrame()
     if not final.empty:
-        disp = final.copy()
-        disp['Date'] = disp['Date'].apply(lambda x: x.strftime('%d/%m/%Y'))
-        st.table(disp[['Matiere', 'Chapitre', 'J_Type', 'Date', 'Note']])
-        
+        st.table(final[['Matiere', 'Chapitre', 'J_Type', 'Date', 'Note']])
         if st.button("🔄 Réintégrer Rattrapages au planning"):
             for idx, row in final.iterrows():
                 new_r = {'Dossier': choix_dos, 'Matiere': row['Matiere'], 'Chapitre': f"Rattrapage : {row['Chapitre']}", 
                          'J_Type': 'RAT', 'Date': dt.date.today(), 'Note': 0}
                 st.session_state.data = pd.concat([st.session_state.data, pd.DataFrame([new_r])], ignore_index=True)
-                st.session_state.data.at[idx, 'Note'] = 0 # Désactive du rattrapage
+                st.session_state.data.at[idx, 'Note'] = 0 
             save_data(st.session_state.data); st.rerun()
-    else: st.write("Pas de rattrapage pour l'instant.")
 
 # --- PLANNING & SAISIE ---
 elif page == "Planning & Saisie":
@@ -102,29 +100,27 @@ elif page == "Planning & Saisie":
             if st.form_submit_button("Générer Planning"):
                 if not ex: st.error("Date examen obligatoire !")
                 else:
-                    exists = not st.session_state.data[(st.session_state.data['Matiere'] == mat) & 
-                                                       (st.session_state.data['Chapitre'] == chap) & 
-                                                       (st.session_state.data['Dossier'] == choix_dos)].empty
-                    if exists: st.error("Ce chapitre existe déjà !")
-                    else:
-                        for j in [0] + st.session_state.config['cadencier']:
-                            d = d0 + dt.timedelta(days=j)
-                            if d.weekday() == 6: d += dt.timedelta(days=1)
-                            if d <= ex:
-                                new_row = {'Dossier': choix_dos, 'Matiere': mat, 'Chapitre': chap, 'J_Type': f"J{j}", 'Date': d, 'Note': 0}
-                                st.session_state.data = pd.concat([st.session_state.data, pd.DataFrame([new_row])], ignore_index=True)
-                        save_data(st.session_state.data); st.rerun()
+                    for j in [0] + st.session_state.config['cadencier']:
+                        d = d0 + dt.timedelta(days=j)
+                        if d <= ex:
+                            new_row = {'Dossier': choix_dos, 'Matiere': mat, 'Chapitre': chap, 'J_Type': f"J{j}", 'Date': d, 'Note': 0}
+                            st.session_state.data = pd.concat([st.session_state.data, pd.DataFrame([new_row])], ignore_index=True)
+                    save_data(st.session_state.data); st.rerun()
     
     st.subheader("Planning Visuel")
-    df_dos = st.session_state.data[st.session_state.data['Dossier'] == choix_dos]
+    df_dos = st.session_state.data[st.session_state.data['Dossier'] == choix_dos].drop_duplicates()
     cols = st.columns(7)
     for i, day in enumerate([dt.date.today() + dt.timedelta(days=x) for x in range(7)]):
         with cols[i]:
             st.markdown(f"**{day.strftime('%d/%m')}**")
             for idx, r in df_dos[df_dos['Date'] == day].iterrows():
-                with st.expander(f"{r['Matiere']} ({r['J_Type']})"):
+                with st.expander(f":green[{r['Matiere']}] ({r['J_Type']})"):
                     st.write(f"**{r['Chapitre']}**")
-                    if st.button("Valider", key=f"val_{idx}"): st.rerun()
+                    if st.button("✅ Valider", key=f"val_{idx}"): st.rerun()
+                    new_date = st.date_input("Reporter", key=f"move_{idx}")
+                    if st.button("Déplacer", key=f"btn_move_{idx}"):
+                        st.session_state.data.at[idx, 'Date'] = new_date
+                        save_data(st.session_state.data); st.rerun()
     
     st.subheader("📝 Saisie")
     df_today = df_dos[df_dos['Date'] == dt.date.today()]
@@ -132,22 +128,12 @@ elif page == "Planning & Saisie":
         edited = st.data_editor(df_today)
         if st.button("Enregistrer"): 
             st.session_state.data.update(edited)
-            save_data(st.session_state.data)
-            st.rerun()
+            save_data(st.session_state.data); st.rerun()
 
 # --- GRAPHIQUES ---
 elif page == "Graphiques":
-    st.title("📊 Progression par Matière")
-    df_graph = st.session_state.data[(st.session_state.data['Dossier'] == choix_dos) & 
-                                     (pd.to_numeric(st.session_state.data['Note'], errors='coerce') > 0)].copy()
-    if not df_graph.empty:
-        matieres = df_graph['Matiere'].unique()
-        cols = st.columns(3)
-        for i, mat in enumerate(matieres):
-            with cols[i % 3]:
-                st.markdown(f"**📚 {mat}**")
-                df_mat = df_graph[df_graph['Matiere'] == mat].sort_values('Date')
-                df_display = df_mat[['Date', 'Note']].copy()
-                df_display['Date'] = df_display['Date'].apply(lambda x: x.strftime('%d/%m'))
-                st.table(df_display.reset_index(drop=True))
-    else: st.write("Pas encore assez de notes saisies.")
+    st.title("📊 Progression")
+    for mat in st.session_state.config['dossiers'].get(choix_dos, []):
+        st.markdown(f"**📚 {mat}**")
+        df_mat = st.session_state.data[(st.session_state.data['Matiere'] == mat) & (st.session_state.data['Note'] > 0)]
+        st.table(df_mat[['Date', 'Note']].tail(3))
