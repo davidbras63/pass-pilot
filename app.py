@@ -19,15 +19,21 @@ def save_data(df): df.to_csv(DATA_FILE, index=False)
 if 'data' not in st.session_state: st.session_state.data = load_data()
 if 'dossiers' not in st.session_state:
     st.session_state.dossiers = {"PASS": ["UE1", "UE2"]}
-    st.session_state.config = {'cours_max': 5, 'cadencier': [1, 3, 7, 14, 30]}
+    st.session_state.config = {
+        'cours_max': 5, 
+        'cadencier': [1, 3, 7, 14, 30], 
+        'seuils': {1: 10, 3: 12, 7: 14, 14: 15, 30: 16}
+    }
 
 # --- SIDEBAR ---
 st.sidebar.title("⚙️ Pilot Expert")
 
-with st.sidebar.expander("🛠️ Réglages"):
+with st.sidebar.expander("🛠️ Réglages complets"):
     st.session_state.config['cours_max'] = st.number_input("Max cours/jour", 1, 20, st.session_state.config['cours_max'])
-    cad_input = st.text_input("Cadencier (ex: 1,3,7,14,30)", ",".join(map(str, st.session_state.config['cadencier'])))
-    st.session_state.config['cadencier'] = [int(x.strip()) for x in cad_input.split(",")]
+    cad_str = st.text_input("Cadencier", ",".join(map(str, st.session_state.config['cadencier'])))
+    st.session_state.config['cadencier'] = [int(x.strip()) for x in cad_str.split(",")]
+    for j in st.session_state.config['cadencier']:
+        st.session_state.config['seuils'][j] = st.slider(f"Seuil note J{j}", 0, 20, st.session_state.config['seuils'].get(j, 10))
 
 new_folder = st.sidebar.text_input("Nouveau Dossier")
 if st.sidebar.button("➕ Créer Dossier") and new_folder:
@@ -46,7 +52,6 @@ df = st.session_state.data[st.session_state.data['Dossier'] == choix_dos].copy()
 # --- PAGES ---
 if page == "Dashboard":
     st.title(f"🎯 Dashboard : {choix_dos}")
-    # Affichage matières avec poubelles
     for m in st.session_state.dossiers.get(choix_dos, []):
         col1, col2 = st.columns([4, 1])
         col1.info(f"📚 {m}")
@@ -81,6 +86,11 @@ elif page == "Planning & Saisie":
             st.markdown(f"**{day.strftime('%d/%m')}**")
             for _, r in df[df['Date'] == day].iterrows():
                 st.caption(f"🎯 {r['Matiere']} : {r['Chapitre']}")
+
+    # Espacements ajoutés ici
+    st.write("\n\n")
+    st.divider()
+    st.write("\n\n")
 
     st.subheader("📝 Saisie des Notes")
     edited = st.data_editor(df, use_container_width=True)
