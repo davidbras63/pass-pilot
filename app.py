@@ -66,56 +66,35 @@ if page == "Dashboard":
     
     if not rattrapages.empty:
         st.table(rattrapages[['Matiere', 'Chapitre', 'J_Type', 'Date', 'Note']])
-# --- DEBUT DU BLOC BOUTON ---
-# Assure-toi que cette partie est collée DANS ta boucle qui affiche tes rattrapages
-# (là où 'chapitre', 'matiere' et 'choix_dos' sont déjà connus)
-
-if 'chapitre' in locals() or 'chapitre' in globals():
-    if st.button(f"Réintégrer {chapitre} au planning"):
-        # 1. PARAMÈTRES
-        max_cours = st.session_state.config.get('max_cours_par_jour', 3)
-        today = dt.date.today()
-        date_limite = today + dt.timedelta(days=7)
-        date_trouvee = None
-        
-        # 2. RECHERCHE DE PLACE (Priorité semaine, puis dimanche)
-        for i in range(14):
-            d = today + dt.timedelta(days=i)
-            if d.weekday() == 6: continue
+# Assure-toi que cet espace est respecté sous ton 'if' de boucle
+        if st.button(f"Réintégrer {chapitre} au planning"):
+            max_cours = st.session_state.config.get('max_cours_par_jour', 3)
+            today = dt.date.today()
+            date_limite = today + dt.timedelta(days=7)
+            date_trouvee = None
             
-            count_day = len(st.session_state.data[
-                (pd.to_datetime(st.session_state.data['Date']).dt.date == d) & 
-                (st.session_state.data['Dossier'] == choix_dos)
-            ])
+            for i in range(14):
+                d = today + dt.timedelta(days=i)
+                if d.weekday() == 6: continue
+                count_day = len(st.session_state.data[
+                    (pd.to_datetime(st.session_state.data['Date']).dt.date == d) & 
+                    (st.session_state.data['Dossier'] == choix_dos)
+                ])
+                if count_day < max_cours:
+                    date_trouvee = d
+                    break
             
-            if count_day < max_cours:
-                date_trouvee = d
-                break
+            if not date_trouvee:
+                date_trouvee = today + dt.timedelta(days=(6 - today.weekday()))
                 
-        if not date_trouvee:
-            date_trouvee = today + dt.timedelta(days=(6 - today.weekday()))
-            
-        # 3. ACTION
-        if date_trouvee and date_trouvee <= date_limite:
-            new_rap = {
-                'ID': str(uuid.uuid4()), 'Dossier': choix_dos, 'Matiere': matiere, 
-                'Chapitre': chapitre, 'J_Type': 'RAP', 'Date': str(date_trouvee), 
-                'Note': 0, 'Statut': 'À faire'
-            }
-            st.session_state.data = pd.concat([st.session_state.data, pd.DataFrame([new_rap])])
-            
-            # Nettoyage
-            st.session_state.data = st.session_state.data[
-                ~((st.session_state.data['Chapitre'] == chapitre) & 
-                  (st.session_state.data['Statut'] == 'À rattraper'))
-            ]
-            save_data(st.session_state.data)
-            st.rerun()
-        else:
-            st.warning("Réintégration impossible : planning saturé ou date limite dépassée.")
-else:
-    st.error("Erreur : Les informations du chapitre ne sont pas chargées ici.")
-# --- FIN DU BLOC BOUTON ---
+            if date_trouvee and date_trouvee <= date_limite:
+                new_rap = {'ID': str(uuid.uuid4()), 'Dossier': choix_dos, 'Matiere': matiere, 'Chapitre': chapitre, 'J_Type': 'RAP', 'Date': str(date_trouvee), 'Note': 0, 'Statut': 'À faire'}
+                st.session_state.data = pd.concat([st.session_state.data, pd.DataFrame([new_rap])])
+                st.session_state.data = st.session_state.data[~((st.session_state.data['Chapitre'] == chapitre) & (st.session_state.data['Statut'] == 'À rattraper'))]
+                save_data(st.session_state.data)
+                st.rerun()
+            else:
+                st.warning("Réintégration impossible.")
 # --- PLANNING & SAISIE ---
 elif page == "Planning & Saisie":
     import uuid
