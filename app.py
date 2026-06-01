@@ -28,7 +28,7 @@ def load_config():
         try:
             with open(CONFIG_FILE, "r") as f: return json.load(f)
         except: pass
-    return {'cours_max': 5, 'cadencier': [1, 3, 7, 14, 30], 'seuils': {1: 12, 3: 12, 7: 14, 14: 14, 30: 16}, 'dossiers': {"PASS": []}}
+    return {'cours_max': 5, 'cadencier': [1, 3, 7, 14, 30], 'seuils': {'1': 12, '3': 12, '7': 14, '14': 14, '30': 16}, 'dossiers': {"PASS": []}}
 
 if 'data' not in st.session_state: st.session_state.data = load_data()
 if 'config' not in st.session_state: st.session_state.config = load_config()
@@ -39,8 +39,6 @@ with st.sidebar.expander("🛠️ Réglages", expanded=True):
     st.session_state.config['cours_max'] = st.number_input("Max cours/jour", 1, 20, st.session_state.config.get('cours_max', 5))
     cad_input = st.text_input("Cadencier (jours)", ",".join(map(str, st.session_state.config.get('cadencier', [1, 3, 7]))))
     st.session_state.config['cadencier'] = [int(x.strip()) for x in cad_input.split(",")]
-    for j in st.session_state.config['cadencier']:
-        st.session_state.config['seuils'][str(j)] = st.slider(f"Seuil Note J{j}", 10, 20, int(st.session_state.config['seuils'].get(str(j), 12)))
     if st.button("💾 Enregistrer"): 
         with open(CONFIG_FILE, "w") as f: json.dump(st.session_state.config, f)
         st.rerun()
@@ -79,14 +77,26 @@ if page == "Dashboard":
                 new_r = {'Dossier': choix_dos, 'Matiere': row['Matiere'], 'Chapitre': f"Rattrapage: {row['Chapitre']}", 
                          'J_Type': 'RAT', 'Date': dt.date.today(), 'Note': 0, 'Statut': 'À faire'}
                 st.session_state.data = pd.concat([st.session_state.data, pd.DataFrame([new_r])], ignore_index=True)
-                st.session_state.data.at[idx, 'Note'] = 0
+                st.session_state.data.at[idx, 'Note'] = 0 # On remet à 0 pour éviter le rattrapage en boucle
             save_data(st.session_state.data); st.rerun()
     else: st.write("Pas de rattrapage en cours.")
 
 # --- PLANNING & SAISIE ---
 elif page == "Planning & Saisie":
     st.title("🗓️ Planning & Saisie")
-    # ... [Ajout Chapitre identique]
+    # RESTAURATION : Ajout de chapitres
+    with st.expander("➕ Ajouter un nouveau chapitre", expanded=True):
+        with st.form("Add"):
+            mat = st.selectbox("Matière", st.session_state.config['dossiers'].get(choix_dos, []))
+            chap = st.text_input("Nom Chapitre")
+            d0 = st.date_input("Date J0")
+            if st.form_submit_button("Générer Planning"):
+                for j in [0] + st.session_state.config['cadencier']:
+                    new_r = {'Dossier': choix_dos, 'Matiere': mat, 'Chapitre': chap, 'J_Type': f'J{j}', 
+                             'Date': d0 + dt.timedelta(days=j), 'Note': 0, 'Statut': 'À faire'}
+                    st.session_state.data = pd.concat([st.session_state.data, pd.DataFrame([new_r])], ignore_index=True)
+                save_data(st.session_state.data); st.rerun()
+
     st.subheader("Planning Visuel")
     df_visu = st.session_state.data[st.session_state.data['Dossier'] == choix_dos].drop_duplicates(subset=['Matiere', 'Chapitre', 'J_Type', 'Date'])
     cols = st.columns(7)
@@ -101,11 +111,11 @@ elif page == "Planning & Saisie":
                         st.session_state.data.at[idx, 'Statut'] = 'Fait'
                         save_data(st.session_state.data); st.rerun()
     
-    st.subheader("📝 Saisie des notes")
+    st.subheader("📝 Saisie des notes (Aujourd'hui)")
     df_today = df_visu[df_visu['Date'] == dt.date.today()]
     if not df_today.empty:
         edited = st.data_editor(df_today[['Matiere', 'Chapitre', 'Note']], key="editor_today")
-        if st.button("Enregistrer"): st.session_state.data.update(edited); save_data(st.session_state.data); st.rerun()
+        if st.button("Enregistrer Notes"): st.session_state.data.update(edited); save_data(st.session_state.data); st.rerun()
 
 # --- GRAPHIQUES ---
 elif page == "Graphiques":
