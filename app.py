@@ -62,8 +62,12 @@ page = st.sidebar.radio("Navigation", ["Dashboard", "Planning & Saisie", "Graphi
 if page == "Dashboard":
     st.title(f"🎯 Dashboard : {choix_dos}")
     if st.button("❌ Supprimer ce Dossier"):
+        # Suppression du dossier dans la config
         del st.session_state.config['dossiers'][choix_dos]
         with open(CONFIG_FILE, "w") as f: json.dump(st.session_state.config, f)
+        # Suppression de toutes les données associées au dossier
+        st.session_state.data = st.session_state.data[st.session_state.data['Dossier'] != choix_dos]
+        save_data(st.session_state.data)
         st.rerun()
     for m in st.session_state.config['dossiers'].get(choix_dos, []):
         c1, c2 = st.columns([4, 1])
@@ -123,12 +127,15 @@ elif page == "Planning & Saisie":
             temp_df['Date_Obj'] = pd.to_datetime(temp_df['Date']).dt.date
             df_day = temp_df[(temp_df['Date_Obj'] == day) & (temp_df['Dossier'] == choix_dos)]
             for idx, r in df_day.iterrows():
-                with st.popover(f"{r['Chapitre']} ({r['J_Type']})"):
+                # Indicateur visuel : Vert si Fait
+                is_done = r['Statut'] == 'Fait'
+                box_color = "🟢" if is_done else "⚪"
+                with st.popover(f"{box_color} {r['Chapitre']} ({r['J_Type']})"):
                     new_date = st.date_input("Date", value=r['Date'], key=f"d_{r['ID']}")
-                    is_done = st.checkbox("Fait", value=(r['Statut'] == 'Fait'), key=f"c_{r['ID']}")
+                    is_done_new = st.checkbox("Fait", value=is_done, key=f"c_{r['ID']}")
                     if st.button("Valider", key=f"b_{r['ID']}"):
                         st.session_state.data.at[idx, 'Date'] = new_date
-                        st.session_state.data.at[idx, 'Statut'] = 'Fait' if is_done else 'À faire'
+                        st.session_state.data.at[idx, 'Statut'] = 'Fait' if is_done_new else 'À faire'
                         save_data(st.session_state.data); st.rerun()
 
     st.divider()
