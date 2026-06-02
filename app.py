@@ -4,6 +4,7 @@ import datetime as dt
 import os
 import json
 import uuid
+import plotly.graph_objects as go
 
 st.set_page_config(layout="wide")
 
@@ -57,7 +58,6 @@ page = st.sidebar.radio("Navigation", ["Dashboard", "Planning & Saisie", "Graphi
 if page == "Dashboard":
     st.title(f"🎯 Dashboard : {choix_dos}")
     
-    # Suppression Dossier
     if st.button("❌ Supprimer ce Dossier"):
         del st.session_state.config['dossiers'][choix_dos]
         with open(CONFIG_FILE, "w") as f: json.dump(st.session_state.config, f)
@@ -71,7 +71,6 @@ if page == "Dashboard":
     st.subheader("⚠️ Rattrapages à traiter")
     df_dos = st.session_state.data[st.session_state.data['Dossier'] == choix_dos]
     
-    # Filtrage dynamique par palier
     def est_en_rattrapage(row):
         j_str = row['J_Type'].replace('J', '')
         seuil = int(st.session_state.config['seuils'].get(j_str, 12))
@@ -148,7 +147,43 @@ elif page == "Planning & Saisie":
 
 # --- GRAPHIQUES ---
 elif page == "Graphiques":
-    st.title("📊 Progression")
-    for mat in st.session_state.config['dossiers'].get(choix_dos, []):
-        st.subheader(f"📚 {mat}")
-        st.table(st.session_state.data[(st.session_state.data['Matiere'] == mat) & (st.session_state.data['Note'] > 0)][['Date', 'Note']].tail(3))
+    st.title("📊 Analyse de Progression")
+    
+    matieres_dispos = st.session_state.config['dossiers'].get(choix_dos, [])
+    if not matieres_dispos:
+        st.warning("Aucune matière créée dans ce dossier.")
+    else:
+        mat_sel = st.selectbox("Choisir une Matière", matieres_dispos)
+        
+        chapitres_dispos = st.session_state.data[
+            (st.session_state.data['Dossier'] == choix_dos) & 
+            (st.session_state.data['Matiere'] == mat_sel)
+        ]['Chapitre'].unique()
+        
+        if len(chapitres_dispos) == 0:
+            st.info("Aucun chapitre pour cette matière.")
+        else:
+            chap_sel = st.selectbox("Choisir un Chapitre", chapitres_dispos)
+            
+            df_chap = st.session_state.data[
+                (st.session_state.data['Dossier'] == choix_dos) & 
+                (st.session_state.data['Matiere'] == mat_sel) & 
+                (st.session_state.data['Chapitre'] == chap_sel)
+            ].sort_values('Date')
+
+            fig = go.Figure()
+            fig.add_trace(go.Scatter(
+                x=df_chap['J_Type'], y=df_chap['Note'],
+                mode='lines+markers', name='Progression',
+                line=dict(color='#00CC96', width=3)
+            ))
+            
+            fig.update_layout(
+                title=f"Progression : {chap_sel}",
+                xaxis_title="Étapes (J)",
+                yaxis_title="Note / 20",
+                yaxis=dict(range=[0, 20]),
+                template="plotly_white"
+            )
+            st.plotly_chart(fig, use_container_width=True)
+            st.table(df_chap[['J_Type', 'Date', 'Note']])
