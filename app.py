@@ -31,10 +31,6 @@ def load_config():
 if 'data' not in st.session_state: st.session_state.data = load_data()
 if 'config' not in st.session_state: st.session_state.config = load_config()
 
-# --- FONCTIONS DE NETTOYAGE ---
-def clear_input_dossier(): st.session_state.input_dossier = ""
-def clear_input_matiere(): st.session_state.input_matiere = ""
-
 # --- SIDEBAR ---
 st.sidebar.title("⚙️ Pilot Expert")
 with st.sidebar.expander("🛠️ Réglages", expanded=False):
@@ -47,17 +43,24 @@ with st.sidebar.expander("🛠️ Réglages", expanded=False):
         with open(CONFIG_FILE, "w") as f: json.dump(st.session_state.config, f)
         st.rerun()
 
-# Saisie Dossier avec reset
-st.sidebar.text_input("Nouveau Dossier", key="input_dossier")
-if st.sidebar.button("➕ Créer Dossier", on_click=clear_input_dossier) and st.session_state.input_dossier:
-    st.session_state.config['dossiers'][st.session_state.input_dossier] = []; st.rerun()
+# Modification ici pour vider la saisie (key + reassign)
+st.sidebar.text_input("Nouveau Dossier", key="dossier_input")
+if st.sidebar.button("➕ Créer Dossier"):
+    if st.session_state.dossier_input:
+        st.session_state.config['dossiers'][st.session_state.dossier_input] = []
+        with open(CONFIG_FILE, "w") as f: json.dump(st.session_state.config, f)
+        st.session_state.dossier_input = ""
+        st.rerun()
 
 choix_dos = st.sidebar.selectbox("Dossier", list(st.session_state.config['dossiers'].keys()))
 
-# Saisie Matière avec reset
-st.sidebar.text_input("Nom Matière", key="input_matiere")
-if st.sidebar.button("➕ Ajouter Matière", on_click=clear_input_matiere) and st.session_state.input_matiere:
-    st.session_state.config['dossiers'][choix_dos].append(st.session_state.input_matiere); st.rerun()
+st.sidebar.text_input("Nom Matière", key="matiere_input")
+if st.sidebar.button("➕ Ajouter Matière"):
+    if st.session_state.matiere_input:
+        st.session_state.config['dossiers'][choix_dos].append(st.session_state.matiere_input)
+        with open(CONFIG_FILE, "w") as f: json.dump(st.session_state.config, f)
+        st.session_state.matiere_input = ""
+        st.rerun()
 
 page = st.sidebar.radio("Navigation", ["Dashboard", "Planning & Saisie", "Graphiques"])
 
@@ -66,10 +69,9 @@ if page == "Dashboard":
     st.title(f"🎯 Dashboard : {choix_dos}")
    
     if st.button("❌ Supprimer ce Dossier"):
-        # Suppression config
         del st.session_state.config['dossiers'][choix_dos]
         with open(CONFIG_FILE, "w") as f: json.dump(st.session_state.config, f)
-        # Suppression données CSV/Session
+        # Nettoyage des données associées
         st.session_state.data = st.session_state.data[st.session_state.data['Dossier'] != choix_dos]
         save_data(st.session_state.data)
         st.rerun()
