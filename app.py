@@ -87,8 +87,13 @@ if page == "Dashboard":
         c1.info(f"📚 {m}")
         if c2.button("🗑️", key=f"del_{m}"): st.session_state.config['dossiers'][choix_dos].remove(m); st.rerun()
     st.subheader("⚠️ Rattrapages à traiter")
-    df_dos = st.session_state.data[st.session_state.data['Dossier'] == choix_dos]
-    rattrapages = df_dos[df_dos.apply(lambda row: (row['Note'] != "" and str(row['Note']).replace('.','').isdigit() and float(str(row['Note']).split(',')[0]) < int(st.session_state.config['seuils'].get(str(row['J_Type']).replace('J', '').replace('RAP', '1'), 12))), axis=1)]
+    df_dos = st.session_state.data[st.session_state.data['Dossier'] == choix_dos].copy()
+    # Filtre rattrapage : Note > 0, date passée, et en dessous du seuil
+    rattrapages = df_dos[
+        (df_dos['Note'] != "0") & 
+        (pd.to_datetime(df_dos['Date']).dt.date <= dt.date.today()) &
+        (df_dos.apply(lambda row: float(str(row['Note']).split(',')[0]) < int(st.session_state.config['seuils'].get(str(row['J_Type']).replace('J', '').replace('RAP', '1'), 12)), axis=1))
+    ]
     if not rattrapages.empty:
         st.table(rattrapages[['Matiere', 'Chapitre', 'J_Type', 'Date', 'Note']])
         for _, row in rattrapages.iterrows():
@@ -113,7 +118,7 @@ elif page == "Planning & Saisie":
             d0 = st.date_input("Date J0")
             dex = st.date_input("Date Examen", value=None)
             if st.form_submit_button("Générer Planning"):
-                # Vérification stricte : aucun J0 pour ce chapitre dans ce dossier
+                # Vérification stricte : aucun chapitre du même nom dans le dossier
                 if chap and not ((st.session_state.data['Chapitre'] == chap) & (st.session_state.data['Dossier'] == choix_dos)).any():
                     new_rows = [{'ID': str(uuid.uuid4()), 'Dossier': choix_dos, 'Matiere': mat, 'Chapitre': chap, 'J_Type': 'J0', 'Date': d0, 'Note': '0', 'Statut': 'À faire'}]
                     for j in st.session_state.config['cadencier']:
@@ -122,7 +127,7 @@ elif page == "Planning & Saisie":
                             new_rows.append({'ID': str(uuid.uuid4()), 'Dossier': choix_dos, 'Matiere': mat, 'Chapitre': chap, 'J_Type': f'J{j}', 'Date': date_j, 'Note': '0', 'Statut': 'À faire'})
                     st.session_state.data = pd.concat([st.session_state.data, pd.DataFrame(new_rows)])
                     save_data(st.session_state.data); st.rerun()
-                else: st.error("Doublon détecté.")
+                else: st.error("Doublon : Ce chapitre existe déjà.")
 
     st.subheader("🗓️ Planning Hebdomadaire")
     cols = st.columns(7)
@@ -162,13 +167,19 @@ elif page == "Graphiques":
         if len(chap_list) > 0:
             chap_sel = st.selectbox("Chapitre", chap_list)
             df_c = st.session_state.data[(st.session_state.data['Dossier'] == choix_dos) & (st.session_state.data['Chapitre'] == chap_sel)].copy()
-            # Calcul moyenne
+            
             def moy(x): 
                 notes = [float(n) for n in str(x).split(',') if n != '0']
                 return sum(notes)/len(notes) if notes else 0
             df_c['Moyenne'] = df_c['Note'].apply(moy)
+            
+            # Affichage graphique si des notes existent
             df_plot = df_c[df_c['Moyenne'] > 0]
             if not df_plot.empty:
                 fig = go.Figure([go.Scatter(x=df_plot['J_Type'], y=df_plot['Moyenne'], mode='lines+markers')])
                 st.plotly_chart(fig)
-            st.table(df_c[['Chapitre', 'J_Type', 'Date', 'Note']])
+            
+            # Affichage tableau uniquement pour les entrées ayant des notes (exclut les '0')
+            df_table = df_c[df_c['Note'] != "0"]
+            if not df_table.empty:
+                st.table(df_table[['Chapitre', 'J_Type', 'Date', 'Note']])
