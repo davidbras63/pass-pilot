@@ -61,27 +61,21 @@ page = st.sidebar.radio("Navigation", ["Dashboard", "Planning & Saisie", "Graphi
 # --- DASHBOARD ---
 if page == "Dashboard":
     st.title(f"🎯 Dashboard : {choix_dos}")
-    
     if st.button("❌ Supprimer ce Dossier"):
         del st.session_state.config['dossiers'][choix_dos]
         with open(CONFIG_FILE, "w") as f: json.dump(st.session_state.config, f)
         st.rerun()
-        
     for m in st.session_state.config['dossiers'].get(choix_dos, []):
         c1, c2 = st.columns([4, 1])
         c1.info(f"📚 {m}")
         if c2.button("🗑️", key=f"del_{m}"): st.session_state.config['dossiers'][choix_dos].remove(m); st.rerun()
-   
     st.subheader("⚠️ Rattrapages à traiter")
     df_dos = st.session_state.data[st.session_state.data['Dossier'] == choix_dos]
-    
     def est_en_rattrapage(row):
         j_str = row['J_Type'].replace('J', '')
         seuil = int(st.session_state.config['seuils'].get(j_str, 12))
         return row['Note'] > 0 and row['Note'] < seuil
-
     rattrapages = df_dos[df_dos.apply(est_en_rattrapage, axis=1)]
-   
     if not rattrapages.empty:
         st.table(rattrapages[['Matiere', 'Chapitre', 'J_Type', 'Date', 'Note']])
         for _, row in rattrapages.iterrows():
@@ -95,8 +89,7 @@ if page == "Dashboard":
                 if not dt_tr: dt_tr = d + dt.timedelta(days=1)
                 n_r = {'ID':str(uuid.uuid4()),'Dossier':choix_dos,'Matiere':row['Matiere'],'Chapitre':row['Chapitre'],'J_Type':'RAP','Date':str(dt_tr),'Note':0,'Statut':'À faire'}
                 st.session_state.data = pd.concat([st.session_state.data, pd.DataFrame([n_r])]); st.session_state.data = st.session_state.data[st.session_state.data['ID'] != row['ID']]; save_data(st.session_state.data); st.rerun()
-    else:
-        st.write("Aucun rattrapage en attente.")
+    else: st.write("Aucun rattrapage en attente.")
 
 # --- PLANNING & SAISIE ---
 elif page == "Planning & Saisie":
@@ -129,59 +122,46 @@ elif page == "Planning & Saisie":
             temp_df = st.session_state.data.copy()
             temp_df['Date_Obj'] = pd.to_datetime(temp_df['Date']).dt.date
             df_day = temp_df[(temp_df['Date_Obj'] == day) & (temp_df['Dossier'] == choix_dos)]
-            for _, r in df_day.iterrows(): st.caption(f"{r['Chapitre']} ({r['J_Type']})")
+            for idx, r in df_day.iterrows():
+                with st.popover(f"{r['Chapitre']} ({r['J_Type']})"):
+                    new_date = st.date_input("Date", value=r['Date'], key=f"d_{r['ID']}")
+                    is_done = st.checkbox("Fait", value=(r['Statut'] == 'Fait'), key=f"c_{r['ID']}")
+                    if st.button("Valider", key=f"b_{r['ID']}"):
+                        st.session_state.data.at[idx, 'Date'] = new_date
+                        st.session_state.data.at[idx, 'Statut'] = 'Fait' if is_done else 'À faire'
+                        save_data(st.session_state.data); st.rerun()
 
     st.divider()
-    st.subheader("🛠️ Gestion du Planning")
-    df_planning = st.session_state.data[st.session_state.data['Dossier'] == choix_dos].copy()
-    df_planning['Fait'] = df_planning['Statut'] == 'Fait'
-    
-    edited_df = st.data_editor(
-        df_planning[['Chapitre', 'J_Type', 'Date', 'Fait', 'Note']],
-        column_config={"Date": st.column_config.DateColumn("Date")},
-        use_container_width=True
-    )
-    
-    if st.button("💾 Enregistrer Planning"):
-        for i, row in edited_df.iterrows():
-            mask = st.session_state.data['ID'] == df_planning.loc[i, 'ID']
-            st.session_state.data.loc[mask, 'Date'] = row['Date']
-            st.session_state.data.loc[mask, 'Statut'] = 'Fait' if row['Fait'] else 'À faire'
-            st.session_state.data.loc[mask, 'Note'] = row['Note']
-        save_data(st.session_state.data); st.success("Modifications enregistrées !"); st.rerun()
+    st.subheader(f"Saisie Notes - Aujourd'hui")
+    temp_df = st.session_state.data.copy()
+    temp_df['Date_Obj'] = pd.to_datetime(temp_df['Date']).dt.date
+    df_today = temp_df[(temp_df['Date_Obj'] == today) & (temp_df['Dossier'] == choix_dos)].copy()
+    if not df_today.empty:
+        edited = st.data_editor(df_today[['ID', 'Chapitre', 'J_Type', 'Statut', 'Note']], column_config={"ID": None}, hide_index=True, use_container_width=True)
+        if st.button("💾 Enregistrer Notes"):
+            for _, row in edited.iterrows():
+                mask = st.session_state.data['ID'] == row['ID']
+                st.session_state.data.loc[mask, 'Note'] = row['Note']
+                st.session_state.data.loc[mask, 'Statut'] = row['Statut']
+            save_data(st.session_state.data); st.success("Notes enregistrées !"); st.rerun()
+    else: st.info("Aucun chapitre prévu aujourd'hui.")
 
 # --- GRAPHIQUES ---
 elif page == "Graphiques":
     st.title("📊 Analyse de Progression")
     matieres_dispos = st.session_state.config['dossiers'].get(choix_dos, [])
-    if not matieres_dispos:
-        st.warning("Aucune matière créée dans ce dossier.")
+    if not matieres_dispos: st.warning("Aucune matière créée.")
     else:
         mat_sel = st.selectbox("Choisir une Matière", matieres_dispos)
         chapitres_dispos = st.session_state.data[(st.session_state.data['Dossier'] == choix_dos) & (st.session_state.data['Matiere'] == mat_sel)]['Chapitre'].unique()
-        
-        if len(chapitres_dispos) == 0:
-            st.info("Aucun chapitre pour cette matière.")
+        if len(chapitres_dispos) == 0: st.info("Aucun chapitre.")
         else:
             chap_sel = st.selectbox("Choisir un Chapitre", chapitres_dispos)
-            # On filtre pour ne garder que les notes > 0 pour le graphique
-            df_chap = st.session_state.data[
-                (st.session_state.data['Dossier'] == choix_dos) & 
-                (st.session_state.data['Matiere'] == mat_sel) & 
-                (st.session_state.data['Chapitre'] == chap_sel) &
-                (st.session_state.data['Note'] > 0)
-            ].sort_values('Date')
-
+            df_chap = st.session_state.data[(st.session_state.data['Dossier'] == choix_dos) & (st.session_state.data['Matiere'] == mat_sel) & (st.session_state.data['Chapitre'] == chap_sel) & (st.session_state.data['Note'] > 0)].sort_values('Date')
             if not df_chap.empty:
                 fig = go.Figure()
-                fig.add_trace(go.Scatter(
-                    x=df_chap['J_Type'], y=df_chap['Note'],
-                    mode='lines+markers', name='Progression',
-                    line=dict(color='#00CC96', width=3)
-                ))
+                fig.add_trace(go.Scatter(x=df_chap['J_Type'], y=df_chap['Note'], mode='lines+markers', name='Progression', line=dict(color='#00CC96', width=3)))
                 fig.update_layout(title=f"Progression : {chap_sel}", xaxis_title="Jours", yaxis_title="Note", yaxis=dict(range=[0, 20]), template="plotly_white")
                 st.plotly_chart(fig, use_container_width=True)
-            else:
-                st.info("Aucune note saisie pour ce chapitre.")
-                
+            else: st.info("Aucune note saisie.")
             st.table(df_chap[['J_Type', 'Date', 'Note']])
