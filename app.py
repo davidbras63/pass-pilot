@@ -82,6 +82,10 @@ if page == "Dashboard":
         st.session_state.data = st.session_state.data[st.session_state.data['Dossier'] != choix_dos]
         save_data(st.session_state.data)
         st.rerun()
+    for m in st.session_state.config['dossiers'].get(choix_dos, []):
+        c1, c2 = st.columns([4, 1])
+        c1.info(f"📚 {m}")
+        if c2.button("🗑️", key=f"del_{m}"): st.session_state.config['dossiers'][choix_dos].remove(m); st.rerun()
     st.subheader("⚠️ Rattrapages à traiter")
     df_dos = st.session_state.data[st.session_state.data['Dossier'] == choix_dos]
     rattrapages = df_dos[df_dos.apply(lambda row: (row['Note'] > 0 and row['Note'] < int(st.session_state.config['seuils'].get(str(row['J_Type']).replace('J', '').replace('RAP', '1'), 12))), axis=1)]
@@ -98,6 +102,7 @@ if page == "Dashboard":
                 if dt_tr:
                     n_r = {'ID':str(uuid.uuid4()),'Dossier':choix_dos,'Matiere':row['Matiere'],'Chapitre':row['Chapitre'],'J_Type':'RAP','Date':dt_tr,'Note':0,'Statut':'À faire'}
                     st.session_state.data = pd.concat([st.session_state.data, pd.DataFrame([n_r])]); save_data(st.session_state.data); st.rerun()
+    else: st.write("Aucun rattrapage en attente.")
 
 # --- PLANNING & SAISIE ---
 elif page == "Planning & Saisie":
@@ -108,7 +113,6 @@ elif page == "Planning & Saisie":
             d0 = st.date_input("Date J0")
             dex = st.date_input("Date Examen", value=None)
             if st.form_submit_button("Générer Planning"):
-                # Vérification doublon chapitre (et J0)
                 if chap and not ((st.session_state.data['Chapitre'] == chap) & (st.session_state.data['Dossier'] == choix_dos)).any():
                     new_rows = [{'ID': str(uuid.uuid4()), 'Dossier': choix_dos, 'Matiere': mat, 'Chapitre': chap, 'J_Type': 'J0', 'Date': d0, 'Note': 0, 'Statut': 'À faire'}]
                     for j in st.session_state.config['cadencier']:
@@ -117,16 +121,35 @@ elif page == "Planning & Saisie":
                             new_rows.append({'ID': str(uuid.uuid4()), 'Dossier': choix_dos, 'Matiere': mat, 'Chapitre': chap, 'J_Type': f'J{j}', 'Date': date_j, 'Note': 0, 'Statut': 'À faire'})
                     st.session_state.data = pd.concat([st.session_state.data, pd.DataFrame(new_rows)])
                     save_data(st.session_state.data); st.rerun()
-                else: st.error("Le chapitre existe déjà ou titre vide.")
+                else: st.error("Doublon ou titre vide.")
 
-    st.subheader("Saisie Notes - Aujourd'hui")
+    st.subheader("🗓️ Planning Hebdomadaire")
+    cols = st.columns(7)
+    jours = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"]
     today = dt.date.today()
+    start_week = today - dt.timedelta(days=today.weekday())
+    for i, col in enumerate(cols):
+        day = start_week + dt.timedelta(days=i)
+        with col:
+            st.markdown(f"**{jours[i]}**\n{day.strftime('%d/%m')}")
+            df_day = st.session_state.data[(pd.to_datetime(st.session_state.data['Date']).dt.date == day) & (st.session_state.data['Dossier'] == choix_dos)]
+            for idx, r in df_day.iterrows():
+                box_color = "🟢" if r['Statut'] == 'Fait' else "⚪"
+                with st.popover(f"{box_color} {r['Chapitre']} ({r['J_Type']})"):
+                    new_date = st.date_input("Date", value=r['Date'], key=f"d_{r['ID']}")
+                    is_done_new = st.checkbox("Fait", value=(r['Statut'] == 'Fait'), key=f"c_{r['ID']}")
+                    if st.button("Valider", key=f"b_{r['ID']}"):
+                        st.session_state.data.at[idx, 'Date'] = new_date
+                        st.session_state.data.at[idx, 'Statut'] = 'Fait' if is_done_new else 'À faire'
+                        save_data(st.session_state.data); st.rerun()
+
+    st.divider()
+    st.subheader("Saisie Notes - Aujourd'hui")
     df_today = st.session_state.data[(pd.to_datetime(st.session_state.data['Date']).dt.date == today) & (st.session_state.data['Dossier'] == choix_dos)]
     if not df_today.empty:
-        # Data Editor pour modifier les notes sur les lignes existantes
-        edited_df = st.data_editor(df_today[['ID', 'Chapitre', 'J_Type', 'Note', 'Statut']], column_config={"ID": None}, hide_index=True)
+        edited = st.data_editor(df_today[['ID', 'Chapitre', 'J_Type', 'Note', 'Statut']], column_config={"ID": None}, hide_index=True)
         if st.button("💾 Enregistrer les Notes"):
-            for _, row in edited_df.iterrows():
+            for _, row in edited.iterrows():
                 mask = st.session_state.data['ID'] == row['ID']
                 st.session_state.data.loc[mask, 'Note'] = row['Note']
                 st.session_state.data.loc[mask, 'Statut'] = row['Statut']
