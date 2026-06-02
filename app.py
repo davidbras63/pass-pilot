@@ -74,7 +74,16 @@ if page == "Dashboard":
         seuil = st.session_state.config['seuils'].get(str(row['J_Type']).replace('J',''), 12)
         if row['Note'] < seuil and row['Date'] <= dt.date.today():
             if st.button(f"Réintégrer {row['Chapitre']} ({row['J_Type']})", key=row['ID']):
+                prochain_j = df_d[(df_d['Chapitre'] == row['Chapitre']) & (df_d['Date'] > dt.date.today())]
+                date_limite = prochain_j['Date'].min() if not prochain_j.empty else dt.date.today() + dt.timedelta(days=30)
+                
                 target_date = dt.date.today() + dt.timedelta(days=1)
+                trouve = False
+                while target_date < date_limite and not trouve:
+                    nb_cours = len(st.session_state.data[(st.session_state.data['Date'] == target_date) & (st.session_state.data['Dossier'] == choix_dos)])
+                    if nb_cours < st.session_state.config.get('cours_max', 5): trouve = True
+                    else: target_date += dt.timedelta(days=1)
+                
                 new_r = {'ID': str(uuid.uuid4()), 'Dossier': choix_dos, 'Matiere': row['Matiere'], 'Chapitre': row['Chapitre'], 'J_Type': 'RAP', 'Date': target_date, 'Note': 0, 'Statut': 'À faire'}
                 st.session_state.data = pd.concat([st.session_state.data, pd.DataFrame([new_r])])
                 save_data(st.session_state.data); st.rerun()
@@ -97,7 +106,7 @@ elif page == "Planning & Saisie":
                     st.session_state.data = pd.concat([st.session_state.data, pd.DataFrame(rows)])
                     save_data(st.session_state.data); st.rerun()
                 else: st.error("Doublon détecté.")
-    
+   
     st.subheader("🗓️ Planning Hebdomadaire")
     cols = st.columns(7)
     today = dt.date.today()
