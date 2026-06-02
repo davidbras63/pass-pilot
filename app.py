@@ -85,9 +85,9 @@ if page == "Dashboard":
     st.subheader("⚠️ Rattrapages à traiter")
     df_dos = st.session_state.data[st.session_state.data['Dossier'] == choix_dos].copy()
     for _, row in df_dos.iterrows():
-        # Condition : Note existe et n'est pas NaN, et < seuil
-        if pd.notna(row['Note']) and str(row['Note']) != 'nan':
-            notes = [float(n) for n in str(row['Note']).split(',') if n != 'nan']
+        # Filtre : note réelle saisie uniquement
+        if pd.notna(row['Note']) and str(row['Note']) not in ['nan', '0']:
+            notes = [float(n) for n in str(row['Note']).split(',') if n not in ['nan', '0']]
             if notes and notes[-1] < int(st.session_state.config['seuils'].get(str(row['J_Type']).replace('J','').replace('RAP','1'), 12)) and row['Date'] <= dt.date.today():
                 if st.button(f"Réintégrer {row['Chapitre']} ({row['J_Type']})", key=f"btn_{row['ID']}"):
                     n_r = {'ID':str(uuid.uuid4()),'Dossier':choix_dos,'Matiere':row['Matiere'],'Chapitre':row['Chapitre'],'J_Type':'RAP','Date':dt.date.today(),'Note':np.nan,'Statut':'À faire'}
@@ -102,7 +102,6 @@ elif page == "Planning & Saisie":
             d0 = st.date_input("Date J0")
             dex = st.date_input("Date Examen", value=None)
             if st.form_submit_button("Générer Planning"):
-                # Vérification anti-doublon J0
                 if chap and not ((st.session_state.data['Dossier'] == choix_dos) & (st.session_state.data['Chapitre'] == chap)).any():
                     rows = [{'ID': str(uuid.uuid4()), 'Dossier': choix_dos, 'Matiere': mat, 'Chapitre': chap, 'J_Type': 'J0', 'Date': d0, 'Note': np.nan, 'Statut': 'À faire'}]
                     for j in st.session_state.config['cadencier']:
@@ -110,7 +109,7 @@ elif page == "Planning & Saisie":
                             rows.append({'ID': str(uuid.uuid4()), 'Dossier': choix_dos, 'Matiere': mat, 'Chapitre': chap, 'J_Type': f'J{j}', 'Date': d0 + dt.timedelta(days=j), 'Note': np.nan, 'Statut': 'À faire'})
                     st.session_state.data = pd.concat([st.session_state.data, pd.DataFrame(rows)])
                     save_data(st.session_state.data); st.rerun()
-                else: st.error("Doublon détecté.")
+                else: st.error("Doublon ou erreur saisie.")
 
     st.subheader("🗓️ Planning Hebdomadaire")
     cols = st.columns(7)
@@ -146,10 +145,9 @@ elif page == "Graphiques":
         if len(chap_list) > 0:
             chap_sel = st.selectbox("Chapitre", chap_list)
             df_c = st.session_state.data[(st.session_state.data['Dossier'] == choix_dos) & (st.session_state.data['Chapitre'] == chap_sel)].copy()
-            # Nettoyage : uniquement les notes saisies
-            df_clean = df_c[df_c['Note'].notna() & (df_c['Note'] != 'nan') & (df_c['Note'] != 0)]
+            df_clean = df_c[df_c['Note'].notna() & (~df_c['Note'].isin(['nan', '0']))]
             if not df_clean.empty:
-                def moy(x): return sum([float(n) for n in str(x).split(',')])/len(str(x).split(','))
+                def moy(x): return sum([float(n) for n in str(x).split(',') if n not in ['nan', '0']])/len([float(n) for n in str(x).split(',') if n not in ['nan', '0']])
                 df_clean['Moyenne'] = df_clean['Note'].apply(moy)
                 fig = go.Figure([go.Scatter(x=df_clean['J_Type'], y=df_clean['Moyenne'], mode='lines+markers')])
                 st.plotly_chart(fig)
