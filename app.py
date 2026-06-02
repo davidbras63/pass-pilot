@@ -30,6 +30,7 @@ if 'config' not in st.session_state: st.session_state.config = load_config()
 # --- SIDEBAR ---
 st.sidebar.title("⚙️ Pilot Expert")
 
+# Initialisation des états pour vider les cases
 if 'input_dossier' not in st.session_state: st.session_state.input_dossier = ""
 if 'input_matiere' not in st.session_state: st.session_state.input_matiere = ""
 
@@ -38,20 +39,14 @@ def action_creer_dossier():
     if nom and nom not in st.session_state.config['dossiers']:
         st.session_state.config['dossiers'][nom] = []
         with open(CONFIG_FILE, "w") as f: json.dump(st.session_state.config, f)
-        st.session_state.input_dossier = ""
+        st.session_state.input_dossier = "" # Vide la case
 
 def action_ajouter_matiere():
     mat = st.session_state.input_matiere
     if mat and mat not in st.session_state.config['dossiers'].get(choix_dos, []):
         st.session_state.config['dossiers'][choix_dos].append(mat)
         with open(CONFIG_FILE, "w") as f: json.dump(st.session_state.config, f)
-        st.session_state.input_matiere = ""
-
-with st.sidebar.expander("🛠️ Réglages"):
-    st.session_state.config['cours_max'] = st.number_input("Max cours/jour", 1, 20, st.session_state.config.get('cours_max', 5))
-    if st.button("💾 Enregistrer"):
-        with open(CONFIG_FILE, "w") as f: json.dump(st.session_state.config, f)
-        st.rerun()
+        st.session_state.input_matiere = "" # Vide la case
 
 st.sidebar.text_input("Nouveau Dossier", key="input_dossier")
 st.sidebar.button("➕ Créer Dossier", on_click=action_creer_dossier)
@@ -69,17 +64,12 @@ page = st.sidebar.radio("Navigation", ["Dashboard", "Planning & Saisie", "Graphi
 if page == "Dashboard":
     st.title(f"🎯 Dashboard : {choix_dos}")
     if st.button("❌ Supprimer ce Dossier"):
+        # Supprime le dossier et vide sa data
         del st.session_state.config['dossiers'][choix_dos]
         with open(CONFIG_FILE, "w") as f: json.dump(st.session_state.config, f)
         st.session_state.data = st.session_state.data[st.session_state.data['Dossier'] != choix_dos]
-        save_data(st.session_state.data); st.rerun()
-
-    for m in st.session_state.config['dossiers'].get(choix_dos, []):
-        c1, c2 = st.columns([4, 1])
-        c1.info(f"📚 {m}")
-        if c2.button("🗑️", key=f"del_{m}"): 
-            st.session_state.config['dossiers'][choix_dos].remove(m)
-            with open(CONFIG_FILE, "w") as f: json.dump(st.session_state.config, f); st.rerun()
+        save_data(st.session_state.data) # Met à jour le CSV vide
+        st.rerun()
 
     st.subheader("⚠️ Rattrapages à traiter")
     df_d = st.session_state.data[st.session_state.data['Dossier'] == choix_dos]
@@ -87,16 +77,7 @@ if page == "Dashboard":
         seuil = st.session_state.config['seuils'].get(str(row['J_Type']).replace('J',''), 12)
         if row['Note'] < seuil and row['Date'] <= dt.date.today():
             if st.button(f"Réintégrer {row['Chapitre']} ({row['J_Type']})", key=row['ID']):
-                prochain_j = df_d[(df_d['Chapitre'] == row['Chapitre']) & (df_d['Date'] > dt.date.today())]
-                date_limite = prochain_j['Date'].min() if not prochain_j.empty else dt.date.today() + dt.timedelta(days=30)
-                
                 target_date = dt.date.today() + dt.timedelta(days=1)
-                trouve = False
-                while target_date < date_limite and not trouve:
-                    nb_cours = len(st.session_state.data[(st.session_state.data['Date'] == target_date) & (st.session_state.data['Dossier'] == choix_dos)])
-                    if nb_cours < st.session_state.config.get('cours_max', 5): trouve = True
-                    else: target_date += dt.timedelta(days=1)
-                
                 new_r = {'ID': str(uuid.uuid4()), 'Dossier': choix_dos, 'Matiere': row['Matiere'], 'Chapitre': row['Chapitre'], 'J_Type': 'RAP', 'Date': target_date, 'Note': 0, 'Statut': 'À faire'}
                 st.session_state.data = pd.concat([st.session_state.data, pd.DataFrame([new_r])])
                 save_data(st.session_state.data); st.rerun()
@@ -130,16 +111,6 @@ elif page == "Planning & Saisie":
             st.markdown(f"**{day.strftime('%d/%m')}**")
             df_day = st.session_state.data[(pd.to_datetime(st.session_state.data['Date']).dt.date == day) & (st.session_state.data['Dossier'] == choix_dos)]
             for _, r in df_day.iterrows(): st.caption(f"{r['Chapitre']} ({r['J_Type']})")
-            
-    st.subheader("Saisie Notes - Aujourd'hui")
-    df_today = st.session_state.data[(pd.to_datetime(st.session_state.data['Date']).dt.date == today) & (st.session_state.data['Dossier'] == choix_dos)].copy()
-    if not df_today.empty:
-        edited = st.data_editor(df_today[['ID', 'Chapitre', 'J_Type', 'Statut', 'Note']], hide_index=True)
-        if st.button("💾 Enregistrer"):
-            for _, row in edited.iterrows():
-                mask = st.session_state.data['ID'] == row['ID']
-                st.session_state.data.loc[mask, ['Note', 'Statut']] = [row['Note'], row['Statut']]
-            save_data(st.session_state.data); st.rerun()
 
 # --- GRAPHIQUES ---
 elif page == "Graphiques":
