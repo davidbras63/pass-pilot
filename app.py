@@ -88,7 +88,7 @@ if page == "Dashboard":
         if c2.button("🗑️", key=f"del_{m}"): st.session_state.config['dossiers'][choix_dos].remove(m); st.rerun()
     st.subheader("⚠️ Rattrapages à traiter")
     df_dos = st.session_state.data[st.session_state.data['Dossier'] == choix_dos]
-    rattrapages = df_dos[df_dos.apply(lambda row: (row['Note'] > 0 and row['Note'] < int(st.session_state.config['seuils'].get(str(row['J_Type']).replace('J', '').replace('RAP', '1'), 12))), axis=1)]
+    rattrapages = df_dos[df_dos.apply(lambda row: (row['Note'] != "" and str(row['Note']).replace('.','').isdigit() and float(str(row['Note']).split(',')[0]) < int(st.session_state.config['seuils'].get(str(row['J_Type']).replace('J', '').replace('RAP', '1'), 12))), axis=1)]
     if not rattrapages.empty:
         st.table(rattrapages[['Matiere', 'Chapitre', 'J_Type', 'Date', 'Note']])
         for _, row in rattrapages.iterrows():
@@ -100,7 +100,7 @@ if page == "Dashboard":
                     if len(st.session_state.data[(pd.to_datetime(st.session_state.data['Date']).dt.date == t) & (st.session_state.data['Dossier'] == choix_dos)]) < st.session_state.config.get('cours_max', 5):
                         dt_tr = t; break
                 if dt_tr:
-                    n_r = {'ID':str(uuid.uuid4()),'Dossier':choix_dos,'Matiere':row['Matiere'],'Chapitre':row['Chapitre'],'J_Type':'RAP','Date':dt_tr,'Note':0,'Statut':'À faire'}
+                    n_r = {'ID':str(uuid.uuid4()),'Dossier':choix_dos,'Matiere':row['Matiere'],'Chapitre':row['Chapitre'],'J_Type':'RAP','Date':dt_tr,'Note':'0','Statut':'À faire'}
                     st.session_state.data = pd.concat([st.session_state.data, pd.DataFrame([n_r])]); save_data(st.session_state.data); st.rerun()
     else: st.write("Aucun rattrapage en attente.")
 
@@ -113,15 +113,16 @@ elif page == "Planning & Saisie":
             d0 = st.date_input("Date J0")
             dex = st.date_input("Date Examen", value=None)
             if st.form_submit_button("Générer Planning"):
+                # Vérification stricte : aucun J0 pour ce chapitre dans ce dossier
                 if chap and not ((st.session_state.data['Chapitre'] == chap) & (st.session_state.data['Dossier'] == choix_dos)).any():
-                    new_rows = [{'ID': str(uuid.uuid4()), 'Dossier': choix_dos, 'Matiere': mat, 'Chapitre': chap, 'J_Type': 'J0', 'Date': d0, 'Note': 0, 'Statut': 'À faire'}]
+                    new_rows = [{'ID': str(uuid.uuid4()), 'Dossier': choix_dos, 'Matiere': mat, 'Chapitre': chap, 'J_Type': 'J0', 'Date': d0, 'Note': '0', 'Statut': 'À faire'}]
                     for j in st.session_state.config['cadencier']:
                         date_j = d0 + dt.timedelta(days=j)
                         if dex and date_j <= dex:
-                            new_rows.append({'ID': str(uuid.uuid4()), 'Dossier': choix_dos, 'Matiere': mat, 'Chapitre': chap, 'J_Type': f'J{j}', 'Date': date_j, 'Note': 0, 'Statut': 'À faire'})
+                            new_rows.append({'ID': str(uuid.uuid4()), 'Dossier': choix_dos, 'Matiere': mat, 'Chapitre': chap, 'J_Type': f'J{j}', 'Date': date_j, 'Note': '0', 'Statut': 'À faire'})
                     st.session_state.data = pd.concat([st.session_state.data, pd.DataFrame(new_rows)])
                     save_data(st.session_state.data); st.rerun()
-                else: st.error("Doublon ou titre vide.")
+                else: st.error("Doublon détecté.")
 
     st.subheader("🗓️ Planning Hebdomadaire")
     cols = st.columns(7)
@@ -134,26 +135,22 @@ elif page == "Planning & Saisie":
             st.markdown(f"**{jours[i]}**\n{day.strftime('%d/%m')}")
             df_day = st.session_state.data[(pd.to_datetime(st.session_state.data['Date']).dt.date == day) & (st.session_state.data['Dossier'] == choix_dos)]
             for idx, r in df_day.iterrows():
-                box_color = "🟢" if r['Statut'] == 'Fait' else "⚪"
-                with st.popover(f"{box_color} {r['Chapitre']} ({r['J_Type']})"):
-                    new_date = st.date_input("Date", value=r['Date'], key=f"d_{r['ID']}")
-                    is_done_new = st.checkbox("Fait", value=(r['Statut'] == 'Fait'), key=f"c_{r['ID']}")
-                    if st.button("Valider", key=f"b_{r['ID']}"):
-                        st.session_state.data.at[idx, 'Date'] = new_date
-                        st.session_state.data.at[idx, 'Statut'] = 'Fait' if is_done_new else 'À faire'
-                        save_data(st.session_state.data); st.rerun()
+                with st.popover(f"{r['Chapitre']} ({r['J_Type']})"):
+                    if st.button("Valider", key=f"val_{r['ID']}"): st.session_state.data.at[idx, 'Statut'] = 'Fait'; save_data(st.session_state.data); st.rerun()
 
     st.divider()
     st.subheader("Saisie Notes - Aujourd'hui")
     df_today = st.session_state.data[(pd.to_datetime(st.session_state.data['Date']).dt.date == today) & (st.session_state.data['Dossier'] == choix_dos)]
     if not df_today.empty:
-        edited = st.data_editor(df_today[['ID', 'Chapitre', 'J_Type', 'Note', 'Statut']], column_config={"ID": None}, hide_index=True)
-        if st.button("💾 Enregistrer les Notes"):
-            for _, row in edited.iterrows():
-                mask = st.session_state.data['ID'] == row['ID']
-                st.session_state.data.loc[mask, 'Note'] = row['Note']
-                st.session_state.data.loc[mask, 'Statut'] = row['Statut']
+        chap_sel = st.selectbox("Sélectionner Chapitre", df_today['Chapitre'].unique())
+        row = df_today[df_today['Chapitre'] == chap_sel].iloc[0]
+        n_input = st.number_input("Nouvelle Note", 0.0, 20.0, 0.0)
+        if st.button("Ajouter Note"):
+            actuel = str(row['Note'])
+            new_note = str(n_input) if actuel == "0" else actuel + "," + str(n_input)
+            st.session_state.data.loc[st.session_state.data['ID'] == row['ID'], 'Note'] = new_note
             save_data(st.session_state.data); st.rerun()
+        st.info(f"Notes actuelles : {row['Note']}")
 
 # --- GRAPHIQUES ---
 elif page == "Graphiques":
@@ -164,10 +161,14 @@ elif page == "Graphiques":
         chap_list = st.session_state.data[(st.session_state.data['Dossier'] == choix_dos) & (st.session_state.data['Matiere'] == mat_sel)]['Chapitre'].unique()
         if len(chap_list) > 0:
             chap_sel = st.selectbox("Chapitre", chap_list)
-            df_c = st.session_state.data[(st.session_state.data['Dossier'] == choix_dos) & (st.session_state.data['Chapitre'] == chap_sel) & (st.session_state.data['Note'] > 0)].copy()
-            if not df_c.empty:
-                df_c['J_Order'] = df_c['J_Type'].replace({'J0':0, 'J1':1, 'J3':3, 'J7':7, 'J14':14, 'J30':30, 'RAP':99})
-                df_avg = df_c.groupby(['J_Type', 'J_Order'])['Note'].mean().reset_index().sort_values('J_Order')
-                fig = go.Figure([go.Scatter(x=df_avg['J_Type'], y=df_avg['Note'], mode='lines+markers')])
-                fig.update_layout(yaxis=dict(range=[0, 20])); st.plotly_chart(fig)
-                st.table(df_c[['J_Type', 'Date', 'Note']].sort_values('Date'))
+            df_c = st.session_state.data[(st.session_state.data['Dossier'] == choix_dos) & (st.session_state.data['Chapitre'] == chap_sel)].copy()
+            # Calcul moyenne
+            def moy(x): 
+                notes = [float(n) for n in str(x).split(',') if n != '0']
+                return sum(notes)/len(notes) if notes else 0
+            df_c['Moyenne'] = df_c['Note'].apply(moy)
+            df_plot = df_c[df_c['Moyenne'] > 0]
+            if not df_plot.empty:
+                fig = go.Figure([go.Scatter(x=df_plot['J_Type'], y=df_plot['Moyenne'], mode='lines+markers')])
+                st.plotly_chart(fig)
+            st.table(df_c[['Chapitre', 'J_Type', 'Date', 'Note']])
