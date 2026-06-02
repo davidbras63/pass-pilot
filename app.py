@@ -43,22 +43,21 @@ with st.sidebar.expander("🛠️ Réglages", expanded=False):
         with open(CONFIG_FILE, "w") as f: json.dump(st.session_state.config, f)
         st.rerun()
 
-# Réinitialisation forcée des champs avec des keys spécifiques
 nom_dossier = st.sidebar.text_input("Nouveau Dossier", key="input_dossier")
-if st.sidebar.button("➕ Créer Dossier"):
-    if nom_dossier:
-        st.session_state.config['dossiers'][nom_dossier] = []
-        with open(CONFIG_FILE, "w") as f: json.dump(st.session_state.config, f)
-        st.rerun()
+if st.sidebar.button("➕ Créer Dossier") and nom_dossier:
+    st.session_state.config['dossiers'][nom_dossier] = []
+    with open(CONFIG_FILE, "w") as f: json.dump(st.session_state.config, f)
+    st.session_state["input_dossier"] = ""
+    st.rerun()
 
 choix_dos = st.sidebar.selectbox("Dossier", list(st.session_state.config['dossiers'].keys()))
 
 nom_matiere = st.sidebar.text_input("Nom Matière", key="input_matiere")
-if st.sidebar.button("➕ Ajouter Matière"):
-    if nom_matiere:
-        st.session_state.config['dossiers'][choix_dos].append(nom_matiere)
-        with open(CONFIG_FILE, "w") as f: json.dump(st.session_state.config, f)
-        st.rerun()
+if st.sidebar.button("➕ Ajouter Matière") and nom_matiere:
+    st.session_state.config['dossiers'][choix_dos].append(nom_matiere)
+    with open(CONFIG_FILE, "w") as f: json.dump(st.session_state.config, f)
+    st.session_state["input_matiere"] = ""
+    st.rerun()
 
 page = st.sidebar.radio("Navigation", ["Dashboard", "Planning & Saisie", "Graphiques"])
 
