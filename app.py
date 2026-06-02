@@ -34,7 +34,6 @@ if 'config' not in st.session_state: st.session_state.config = load_config()
 # --- SIDEBAR ---
 st.sidebar.title("⚙️ Pilot Expert")
 
-# --- CALLBACKS POUR NETTOYAGE ---
 if 'input_dossier' not in st.session_state: st.session_state.input_dossier = ""
 if 'input_matiere' not in st.session_state: st.session_state.input_matiere = ""
 
@@ -94,9 +93,23 @@ if page == "Dashboard":
         st.table(rattrapages[['Matiere', 'Chapitre', 'J_Type', 'Date', 'Note']])
         for _, row in rattrapages.iterrows():
             if st.button(f"Réintégrer {row['Chapitre']}", key=f"btn_{row['ID']}"):
-                d = dt.date.today(); dt_tr = d + dt.timedelta(days=1)
-                n_r = {'ID':str(uuid.uuid4()),'Dossier':choix_dos,'Matiere':row['Matiere'],'Chapitre':row['Chapitre'],'J_Type':'RAP','Date':str(dt_tr),'Note':0,'Statut':'À faire'}
-                st.session_state.data = pd.concat([st.session_state.data, pd.DataFrame([n_r])]); st.session_state.data = st.session_state.data[st.session_state.data['ID'] != row['ID']]; save_data(st.session_state.data); st.rerun()
+                cad = sorted(st.session_state.config['cadencier'])
+                j_actuel_val = int(str(row['J_Type']).replace('J', ''))
+                prochain_j_val = next((j for j in cad if j > j_actuel_val), None)
+                date_prochain_j = None
+                if prochain_j_val:
+                    match = st.session_state.data[(st.session_state.data['Chapitre'] == row['Chapitre']) & (st.session_state.data['J_Type'] == f'J{prochain_j_val}')]
+                    if not match.empty: date_prochain_j = match.iloc[0]['Date']
+                limite = date_prochain_j if date_prochain_j else dt.date.today() + dt.timedelta(days=15)
+                dt_tr = None
+                for i in range(1, (limite - dt.date.today()).days + 1):
+                    t = dt.date.today() + dt.timedelta(days=i)
+                    nb = len(st.session_state.data[(pd.to_datetime(st.session_state.data['Date']).dt.date == t) & (st.session_state.data['Dossier'] == choix_dos)])
+                    if nb < st.session_state.config.get('cours_max', 5): dt_tr = t; break
+                if dt_tr:
+                    n_r = {'ID':str(uuid.uuid4()),'Dossier':choix_dos,'Matiere':row['Matiere'],'Chapitre':row['Chapitre'],'J_Type':'RAP','Date':dt_tr,'Note':0,'Statut':'À faire'}
+                    st.session_state.data = pd.concat([st.session_state.data, pd.DataFrame([n_r])]); st.session_state.data = st.session_state.data[st.session_state.data['ID'] != row['ID']]; save_data(st.session_state.data); st.rerun()
+                else: st.error("Impossible de placer le rattrapage avant le prochain J !")
     else: st.write("Aucun rattrapage en attente.")
 
 # --- PLANNING & SAISIE ---
@@ -108,14 +121,16 @@ elif page == "Planning & Saisie":
             d0 = st.date_input("Date J0")
             dex = st.date_input("Date Examen", value=None)
             if st.form_submit_button("Générer Planning"):
-                if dex:
-                    new_rows = []
-                    for j in [0] + st.session_state.config['cadencier']:
-                        date_j = d0 + dt.timedelta(days=j)
-                        if date_j <= dex:
-                            new_rows.append({'ID': str(uuid.uuid4()), 'Dossier': choix_dos, 'Matiere': mat, 'Chapitre': chap, 'J_Type': f'J{j}', 'Date': str(date_j), 'Note': 0, 'Statut': 'À faire'})
-                    st.session_state.data = pd.concat([st.session_state.data, pd.DataFrame(new_rows)])
-                    save_data(st.session_state.data); st.rerun()
+                if dex and chap:
+                    if not ((st.session_state.data['Dossier'] == choix_dos) & (st.session_state.data['Chapitre'] == chap)).any():
+                        new_rows = []
+                        for j in [0] + st.session_state.config['cadencier']:
+                            date_j = d0 + dt.timedelta(days=j)
+                            if date_j <= dex:
+                                new_rows.append({'ID': str(uuid.uuid4()), 'Dossier': choix_dos, 'Matiere': mat, 'Chapitre': chap, 'J_Type': f'J{j}', 'Date': date_j, 'Note': 0, 'Statut': 'À faire'})
+                        st.session_state.data = pd.concat([st.session_state.data, pd.DataFrame(new_rows)])
+                        save_data(st.session_state.data); st.rerun()
+                    else: st.error("Ce chapitre existe déjà.")
 
     st.subheader("🗓️ Planning Hebdomadaire")
     cols = st.columns(7)
@@ -156,10 +171,11 @@ elif page == "Graphiques":
     mat_list = st.session_state.config['dossiers'].get(choix_dos, [])
     if mat_list:
         mat_sel = st.selectbox("Matière", mat_list)
+        # Correction ici : on filtre bien tous les chapitres de la matière
         chap_list = st.session_state.data[(st.session_state.data['Dossier'] == choix_dos) & (st.session_state.data['Matiere'] == mat_sel)]['Chapitre'].unique()
-        if chap_list.size > 0:
+        if len(chap_list) > 0:
             chap_sel = st.selectbox("Chapitre", chap_list)
-            df_c = st.session_state.data[(st.session_state.data['Dossier'] == choix_dos) & (st.session_state.data['Chapitre'] == chap_sel) & (st.session_state.data['Note'] > 0)]
+            df_c = st.session_state.data[(st.session_state.data['Dossier'] == choix_dos) & (st.session_state.data['Chapitre'] == chap_sel) & (st.session_state.data['Note'] > 0)].sort_values('Date')
             if not df_c.empty:
                 fig = go.Figure([go.Scatter(x=df_c['J_Type'], y=df_c['Note'], mode='lines+markers')])
                 fig.update_layout(yaxis=dict(range=[0, 20])); st.plotly_chart(fig, use_container_width=True)
