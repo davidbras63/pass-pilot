@@ -33,6 +33,25 @@ if 'config' not in st.session_state: st.session_state.config = load_config()
 
 # --- SIDEBAR ---
 st.sidebar.title("⚙️ Pilot Expert")
+
+# --- CALLBACKS POUR NETTOYAGE ---
+if 'input_dossier' not in st.session_state: st.session_state.input_dossier = ""
+if 'input_matiere' not in st.session_state: st.session_state.input_matiere = ""
+
+def action_creer_dossier():
+    nom = st.session_state.input_dossier
+    if nom and nom not in st.session_state.config['dossiers']:
+        st.session_state.config['dossiers'][nom] = []
+        with open(CONFIG_FILE, "w") as f: json.dump(st.session_state.config, f)
+        st.session_state.input_dossier = ""
+
+def action_ajouter_matiere():
+    mat = st.session_state.input_matiere
+    if mat and mat not in st.session_state.config['dossiers'][choix_dos]:
+        st.session_state.config['dossiers'][choix_dos].append(mat)
+        with open(CONFIG_FILE, "w") as f: json.dump(st.session_state.config, f)
+        st.session_state.input_matiere = ""
+
 with st.sidebar.expander("🛠️ Réglages", expanded=False):
     st.session_state.config['cours_max'] = st.number_input("Max cours/jour", 1, 20, st.session_state.config.get('cours_max', 5))
     cad_str = st.text_input("Cadencier (jours)", ",".join(map(str, st.session_state.config['cadencier'])))
@@ -43,25 +62,15 @@ with st.sidebar.expander("🛠️ Réglages", expanded=False):
         with open(CONFIG_FILE, "w") as f: json.dump(st.session_state.config, f)
         st.rerun()
 
-# --- SAISIE SIDEBAR CORRIGÉE ---
-nom_dossier = st.sidebar.text_input("Nouveau Dossier", key="input_dossier")
-if st.sidebar.button("➕ Créer Dossier") and nom_dossier:
-    if nom_dossier not in st.session_state.config['dossiers']:
-        st.session_state.config['dossiers'][nom_dossier] = []
-        with open(CONFIG_FILE, "w") as f: json.dump(st.session_state.config, f)
-        st.session_state["input_dossier"] = ""
-        st.rerun()
+st.sidebar.text_input("Nouveau Dossier", key="input_dossier")
+st.sidebar.button("➕ Créer Dossier", on_click=action_creer_dossier)
 
 dossiers_liste = list(st.session_state.config['dossiers'].keys())
 if not dossiers_liste: st.stop()
 choix_dos = st.sidebar.selectbox("Dossier", dossiers_liste)
 
-nom_matiere = st.sidebar.text_input("Nom Matière", key="input_matiere")
-if st.sidebar.button("➕ Ajouter Matière") and nom_matiere:
-    st.session_state.config['dossiers'][choix_dos].append(nom_matiere)
-    with open(CONFIG_FILE, "w") as f: json.dump(st.session_state.config, f)
-    st.session_state["input_matiere"] = ""
-    st.rerun()
+st.sidebar.text_input("Nom Matière", key="input_matiere")
+st.sidebar.button("➕ Ajouter Matière", on_click=action_ajouter_matiere)
 
 page = st.sidebar.radio("Navigation", ["Dashboard", "Planning & Saisie", "Graphiques"])
 
