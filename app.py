@@ -43,14 +43,18 @@ with st.sidebar.expander("🛠️ Réglages", expanded=False):
         with open(CONFIG_FILE, "w") as f: json.dump(st.session_state.config, f)
         st.rerun()
 
-nom_dossier = st.sidebar.text_input("Nouveau Dossier")
+nom_dossier = st.sidebar.text_input("Nouveau Dossier", key="new_dossier")
 if st.sidebar.button("➕ Créer Dossier") and nom_dossier:
-    st.session_state.config['dossiers'][nom_dossier] = []; st.rerun()
+    st.session_state.config['dossiers'][nom_dossier] = []
+    with open(CONFIG_FILE, "w") as f: json.dump(st.session_state.config, f)
+    st.rerun()
 
 choix_dos = st.sidebar.selectbox("Dossier", list(st.session_state.config['dossiers'].keys()))
-nom_matiere = st.sidebar.text_input("Nom Matière")
+nom_matiere = st.sidebar.text_input("Nom Matière", key="new_matiere")
 if st.sidebar.button("➕ Ajouter Matière") and nom_matiere:
-    st.session_state.config['dossiers'][choix_dos].append(nom_matiere); st.rerun()
+    st.session_state.config['dossiers'][choix_dos].append(nom_matiere)
+    with open(CONFIG_FILE, "w") as f: json.dump(st.session_state.config, f)
+    st.rerun()
 
 page = st.sidebar.radio("Navigation", ["Dashboard", "Planning & Saisie", "Graphiques"])
 
@@ -113,77 +117,69 @@ elif page == "Planning & Saisie":
                     st.session_state.data = st.session_state.data.drop_duplicates(subset=['Dossier', 'Chapitre', 'J_Type', 'Date'], keep='first')
                     save_data(st.session_state.data); st.rerun()
 
-    st.subheader("🗓️ Planning Hebdomadaire")
-    cols = st.columns(7)
-    jours = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"]
-    today = dt.date.today()
-    start_week = today - dt.timedelta(days=today.weekday())
-    for i, col in enumerate(cols):
-        day = start_week + dt.timedelta(days=i)
-        with col:
-            st.markdown(f"**{jours[i]}**\n{day.strftime('%d/%m')}")
-            temp_df = st.session_state.data.copy()
-            temp_df['Date_Obj'] = pd.to_datetime(temp_df['Date']).dt.date
-            df_day = temp_df[(temp_df['Date_Obj'] == day) & (temp_df['Dossier'] == choix_dos)]
-            for _, r in df_day.iterrows(): st.caption(f"{r['Chapitre']} ({r['J_Type']})")
+    st.subheader("🗓️ Modifier Planning")
+    df_planning = st.session_state.data[st.session_state.data['Dossier'] == choix_dos].copy()
+    df_planning['Fait'] = df_planning['Statut'] == 'Fait'
+    edited_df = st.data_editor(
+        df_planning[['Chapitre', 'J_Type', 'Date', 'Fait']],
+        column_config={"Date": st.column_config.DateColumn("Date")},
+        use_container_width=True
+    )
+    if st.button("💾 Enregistrer Planning"):
+        for i, row in edited_df.iterrows():
+            mask = st.session_state.data['ID'] == df_planning.loc[i, 'ID']
+            st.session_state.data.loc[mask, 'Date'] = row['Date']
+            st.session_state.data.loc[mask, 'Statut'] = 'Fait' if row['Fait'] else 'À faire'
+        save_data(st.session_state.data); st.rerun()
 
     st.divider()
     st.subheader(f"Saisie Notes - Aujourd'hui")
+    today = dt.date.today()
     temp_df = st.session_state.data.copy()
     temp_df['Date_Obj'] = pd.to_datetime(temp_df['Date']).dt.date
     df_today = temp_df[(temp_df['Date_Obj'] == today) & (temp_df['Dossier'] == choix_dos)].copy()
     if not df_today.empty:
         edited = st.data_editor(df_today[['ID', 'Chapitre', 'J_Type', 'Statut', 'Note']], column_config={"ID": None}, hide_index=True, use_container_width=True)
-        if st.button("💾 Enregistrer"):
+        if st.button("💾 Enregistrer Notes"):
             for _, row in edited.iterrows():
                 mask = st.session_state.data['ID'] == row['ID']
                 st.session_state.data.loc[mask, 'Note'] = row['Note']
                 st.session_state.data.loc[mask, 'Statut'] = row['Statut']
-            save_data(st.session_state.data)
-            st.success("Notes enregistrées avec succès !")
-            st.session_state.page = "Dashboard"; st.rerun()
+            save_data(st.session_state.data); st.success("Notes enregistrées !"); st.rerun()
     else:
         st.info("Aucun chapitre prévu aujourd'hui.")
 
 # --- GRAPHIQUES ---
 elif page == "Graphiques":
     st.title("📊 Analyse de Progression")
-    
     matieres_dispos = st.session_state.config['dossiers'].get(choix_dos, [])
     if not matieres_dispos:
         st.warning("Aucune matière créée dans ce dossier.")
     else:
         mat_sel = st.selectbox("Choisir une Matière", matieres_dispos)
-        
-        chapitres_dispos = st.session_state.data[
-            (st.session_state.data['Dossier'] == choix_dos) & 
-            (st.session_state.data['Matiere'] == mat_sel)
-        ]['Chapitre'].unique()
+        chapitres_dispos = st.session_state.data[(st.session_state.data['Dossier'] == choix_dos) & (st.session_state.data['Matiere'] == mat_sel)]['Chapitre'].unique()
         
         if len(chapitres_dispos) == 0:
             st.info("Aucun chapitre pour cette matière.")
         else:
             chap_sel = st.selectbox("Choisir un Chapitre", chapitres_dispos)
-            
             df_chap = st.session_state.data[
                 (st.session_state.data['Dossier'] == choix_dos) & 
                 (st.session_state.data['Matiere'] == mat_sel) & 
-                (st.session_state.data['Chapitre'] == chap_sel)
+                (st.session_state.data['Chapitre'] == chap_sel) &
+                (st.session_state.data['Note'] > 0)
             ].sort_values('Date')
 
-            fig = go.Figure()
-            fig.add_trace(go.Scatter(
-                x=df_chap['J_Type'], y=df_chap['Note'],
-                mode='lines+markers', name='Progression',
-                line=dict(color='#00CC96', width=3)
-            ))
-            
-            fig.update_layout(
-                title=f"Progression : {chap_sel}",
-                xaxis_title="Étapes (J)",
-                yaxis_title="Note / 20",
-                yaxis=dict(range=[0, 20]),
-                template="plotly_white"
-            )
-            st.plotly_chart(fig, use_container_width=True)
+            if not df_chap.empty:
+                fig = go.Figure()
+                fig.add_trace(go.Scatter(
+                    x=df_chap['J_Type'], y=df_chap['Note'],
+                    mode='lines+markers', name='Progression',
+                    line=dict(color='#00CC96', width=3)
+                ))
+                fig.update_layout(title=f"Progression : {chap_sel}", xaxis_title="Jours", yaxis_title="Note", yaxis=dict(range=[0, 20]), template="plotly_white")
+                st.plotly_chart(fig, use_container_width=True)
+            else:
+                st.info("Aucune note saisie pour ce chapitre.")
+                
             st.table(df_chap[['J_Type', 'Date', 'Note']])
