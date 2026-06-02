@@ -4,6 +4,7 @@ import datetime as dt
 import os
 import json
 import uuid
+import plotly.graph_objects as go
 import numpy as np
 
 st.set_page_config(layout="wide")
@@ -32,7 +33,10 @@ if 'config' not in st.session_state: st.session_state.config = load_config()
 
 # --- SIDEBAR ---
 st.sidebar.title("⚙️ Pilot Expert")
+
 if 'input_dossier' not in st.session_state: st.session_state.input_dossier = ""
+if 'input_matiere' not in st.session_state: st.session_state.input_matiere = ""
+
 def action_creer_dossier():
     nom = st.session_state.input_dossier
     if nom and nom not in st.session_state.config['dossiers']:
@@ -40,8 +44,19 @@ def action_creer_dossier():
         with open(CONFIG_FILE, "w") as f: json.dump(st.session_state.config, f)
         st.session_state.input_dossier = ""
 
-with st.sidebar.expander("🛠️ Réglages"):
+def action_ajouter_matiere():
+    mat = st.session_state.input_matiere
+    if mat and mat not in st.session_state.config['dossiers'][choix_dos]:
+        st.session_state.config['dossiers'][choix_dos].append(mat)
+        with open(CONFIG_FILE, "w") as f: json.dump(st.session_state.config, f)
+        st.session_state.input_matiere = ""
+
+with st.sidebar.expander("🛠️ Réglages", expanded=False):
     st.session_state.config['cours_max'] = st.number_input("Max cours/jour", 1, 20, st.session_state.config.get('cours_max', 5))
+    cad_str = st.text_input("Cadencier (jours)", ",".join(map(str, st.session_state.config['cadencier'])))
+    st.session_state.config['cadencier'] = [int(x.strip()) for x in cad_str.split(",")]
+    for j in st.session_state.config['cadencier']:
+        st.session_state.config['seuils'][str(j)] = st.slider(f"Seuil Note J{j}", 10, 20, int(st.session_state.config['seuils'].get(str(j), 12)))
     if st.button("💾 Enregistrer"):
         with open(CONFIG_FILE, "w") as f: json.dump(st.session_state.config, f)
         st.rerun()
@@ -51,32 +66,32 @@ st.sidebar.button("➕ Créer Dossier", on_click=action_creer_dossier)
 dossiers_liste = list(st.session_state.config['dossiers'].keys())
 if not dossiers_liste: st.stop()
 choix_dos = st.sidebar.selectbox("Dossier", dossiers_liste)
+st.sidebar.text_input("Nom Matière", key="input_matiere")
+st.sidebar.button("➕ Ajouter Matière", on_click=action_ajouter_matiere)
 page = st.sidebar.radio("Navigation", ["Dashboard", "Planning & Saisie", "Graphiques"])
 
 # --- DASHBOARD ---
 if page == "Dashboard":
     st.title(f"🎯 Dashboard : {choix_dos}")
-    st.subheader("⚠️ Rattrapages à traiter")
-    df_d = st.session_state.data[st.session_state.data['Dossier'] == choix_dos].copy()
-    
-    # Filtre strict : Note doit être une valeur réelle, pas NaN, pas zéro
-    def est_a_rattraper(row):
-        if pd.isna(row['Note']) or str(row['Note']) == 'nan': return False
-        try:
-            valeurs = [float(n) for n in str(row['Note']).split(',') if n != 'nan']
-            if not valeurs or valeurs[-1] == 0: return False
-            seuil = int(st.session_state.config['seuils'].get(str(row['J_Type']).replace('J','').replace('RAP','1'), 12))
-            return row['Date'] <= dt.date.today() and valeurs[-1] < seuil
-        except: return False
-
-    rattrapages = df_d[df_d.apply(est_a_rattraper, axis=1)]
-    for _, row in rattrapages.iterrows():
+    if st.button("❌ Supprimer ce Dossier"):
+        del st.session_state.config['dossiers'][choix_dos]
+        with open(CONFIG_FILE, "w") as f: json.dump(st.session_state.config, f)
+        st.session_state.data = st.session_state.data[st.session_state.data['Dossier'] != choix_dos]
+        save_data(st.session_state.data); st.rerun()
+    for m in st.session_state.config['dossiers'].get(choix_dos, []):
         c1, c2 = st.columns([4, 1])
-        c1.write(f"📚 {row['Matiere']} | {row['Chapitre']} ({row['J_Type']}) - Note: {row['Note']}")
-        if c2.button("Réintégrer", key=f"btn_{row['ID']}"):
-            n_r = {'ID':str(uuid.uuid4()),'Dossier':choix_dos,'Matiere':row['Matiere'],'Chapitre':row['Chapitre'],'J_Type':'RAP','Date':dt.date.today(),'Note':np.nan,'Statut':'À faire'}
-            st.session_state.data = pd.concat([st.session_state.data, pd.DataFrame([n_r])])
-            save_data(st.session_state.data); st.rerun()
+        c1.info(f"📚 {m}")
+        if c2.button("🗑️", key=f"del_{m}"): st.session_state.config['dossiers'][choix_dos].remove(m); st.rerun()
+    
+    st.subheader("⚠️ Rattrapages à traiter")
+    df_dos = st.session_state.data[st.session_state.data['Dossier'] == choix_dos].copy()
+    for _, row in df_dos.iterrows():
+        if pd.notna(row['Note']) and row['Note'] != 'nan':
+            notes = [float(n) for n in str(row['Note']).split(',') if n != 'nan']
+            if notes and notes[-1] < int(st.session_state.config['seuils'].get(str(row['J_Type']).replace('J','').replace('RAP','1'), 12)) and row['Date'] <= dt.date.today():
+                if st.button(f"Réintégrer {row['Chapitre']} ({row['J_Type']})", key=f"btn_{row['ID']}"):
+                    n_r = {'ID':str(uuid.uuid4()),'Dossier':choix_dos,'Matiere':row['Matiere'],'Chapitre':row['Chapitre'],'J_Type':'RAP','Date':dt.date.today(),'Note':np.nan,'Statut':'À faire'}
+                    st.session_state.data = pd.concat([st.session_state.data, pd.DataFrame([n_r])]); save_data(st.session_state.data); st.rerun()
 
 # --- PLANNING & SAISIE ---
 elif page == "Planning & Saisie":
@@ -92,7 +107,31 @@ elif page == "Planning & Saisie":
                         rows.append({'ID': str(uuid.uuid4()), 'Dossier': choix_dos, 'Matiere': mat, 'Chapitre': chap, 'J_Type': f'J{j}', 'Date': d0 + dt.timedelta(days=j), 'Note': np.nan, 'Statut': 'À faire'})
                     st.session_state.data = pd.concat([st.session_state.data, pd.DataFrame(rows)])
                     save_data(st.session_state.data); st.rerun()
-                else: st.error("Doublon détecté.")
+    
+    st.subheader("🗓️ Planning Hebdomadaire")
+    cols = st.columns(7)
+    today = dt.date.today()
+    start_week = today - dt.timedelta(days=today.weekday())
+    for i, col in enumerate(cols):
+        day = start_week + dt.timedelta(days=i)
+        with col:
+            st.markdown(f"**{day.strftime('%d/%m')}**")
+            df_day = st.session_state.data[(pd.to_datetime(st.session_state.data['Date']).dt.date == day) & (st.session_state.data['Dossier'] == choix_dos)]
+            for idx, r in df_day.iterrows():
+                with st.popover(f"{r['Chapitre']} ({r['J_Type']})"):
+                    if st.button("Valider", key=f"v_{r['ID']}"): st.session_state.data.at[idx, 'Statut'] = 'Fait'; save_data(st.session_state.data); st.rerun()
+    
+    st.subheader("Saisie Notes")
+    df_today = st.session_state.data[(pd.to_datetime(st.session_state.data['Date']).dt.date == today) & (st.session_state.data['Dossier'] == choix_dos)]
+    if not df_today.empty:
+        c_sel = st.selectbox("Chapitre", df_today['Chapitre'].unique())
+        row = df_today[df_today['Chapitre'] == c_sel].iloc[0]
+        n_input = st.number_input("Note", 0.0, 20.0, 0.0)
+        if st.button("Ajouter Note"):
+            actuel = str(row['Note'])
+            new = str(n_input) if (actuel == 'nan' or actuel == '0') else actuel + "," + str(n_input)
+            st.session_state.data.loc[st.session_state.data['ID'] == row['ID'], 'Note'] = new
+            save_data(st.session_state.data); st.rerun()
 
 # --- GRAPHIQUES ---
 elif page == "Graphiques":
@@ -103,7 +142,10 @@ elif page == "Graphiques":
         if len(chap_list) > 0:
             chap_sel = st.selectbox("Chapitre", chap_list)
             df_c = st.session_state.data[(st.session_state.data['Dossier'] == choix_dos) & (st.session_state.data['Chapitre'] == chap_sel)].copy()
-            # Nettoyage : uniquement les notes saisies
-            df_clean = df_c[df_c['Note'].notna() & (df_c['Note'] != 'nan') & (df_c['Note'] != 0)]
-            if not df_clean.empty:
-                st.table(df_clean[['J_Type', 'Date', 'Note']])
+            df_c = df_c[pd.notna(df_c['Note']) & (df_c['Note'] != 'nan')]
+            def moy(x): return sum([float(n) for n in str(x).split(',') if n != 'nan'])/len([float(n) for n in str(x).split(',') if n != 'nan'])
+            df_c['Moyenne'] = df_c['Note'].apply(moy)
+            if not df_c.empty:
+                fig = go.Figure([go.Scatter(x=df_c['J_Type'], y=df_c['Moyenne'], mode='lines+markers')])
+                st.plotly_chart(fig)
+            st.table(df_c[['J_Type', 'Date', 'Note']])
