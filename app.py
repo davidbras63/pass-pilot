@@ -25,7 +25,7 @@ def save_data(df):
 def load_config():
     if os.path.exists(CONFIG_FILE):
         with open(CONFIG_FILE, "r") as f: return json.load(f)
-    return {'cours_max': 5, 'cadencier': [1, 3, 7, 14, 30], 'seuils': {1: 12, 3: 12, 7: 14, 14: 14, 30: 16}, 'dossiers': {"PASS": []}}
+    return {'cours_max': 5, 'cadencier': [1, 3, 7, 14, 30], 'seuils': {'1': 12, '3': 12, '7': 14, '14': 14, '30': 16}, 'dossiers': {"PASS": []}}
 
 if 'data' not in st.session_state: st.session_state.data = load_data()
 if 'config' not in st.session_state: st.session_state.config = load_config()
@@ -56,6 +56,13 @@ page = st.sidebar.radio("Navigation", ["Dashboard", "Planning & Saisie", "Graphi
 # --- DASHBOARD ---
 if page == "Dashboard":
     st.title(f"🎯 Dashboard : {choix_dos}")
+    
+    # Suppression Dossier
+    if st.button("❌ Supprimer ce Dossier"):
+        del st.session_state.config['dossiers'][choix_dos]
+        with open(CONFIG_FILE, "w") as f: json.dump(st.session_state.config, f)
+        st.rerun()
+        
     for m in st.session_state.config['dossiers'].get(choix_dos, []):
         c1, c2 = st.columns([4, 1])
         c1.info(f"📚 {m}")
@@ -63,11 +70,17 @@ if page == "Dashboard":
    
     st.subheader("⚠️ Rattrapages à traiter")
     df_dos = st.session_state.data[st.session_state.data['Dossier'] == choix_dos]
-    rattrapages = df_dos[(df_dos['Note'] > 0) & (df_dos['Note'] < 12)]
+    
+    # Filtrage dynamique par palier
+    def est_en_rattrapage(row):
+        j_str = row['J_Type'].replace('J', '')
+        seuil = int(st.session_state.config['seuils'].get(j_str, 12))
+        return row['Note'] > 0 and row['Note'] < seuil
+
+    rattrapages = df_dos[df_dos.apply(est_en_rattrapage, axis=1)]
    
     if not rattrapages.empty:
         st.table(rattrapages[['Matiere', 'Chapitre', 'J_Type', 'Date', 'Note']])
-        # BOUTON INTELLIGENT
         for _, row in rattrapages.iterrows():
             if st.button(f"Réintégrer {row['Chapitre']}", key=f"btn_{row['ID']}"):
                 d = dt.date.today(); dt_tr = None
