@@ -43,14 +43,18 @@ with st.sidebar.expander("🛠️ Réglages", expanded=False):
         with open(CONFIG_FILE, "w") as f: json.dump(st.session_state.config, f)
         st.rerun()
 
+# --- SAISIE SIDEBAR CORRIGÉE ---
 nom_dossier = st.sidebar.text_input("Nouveau Dossier", key="input_dossier")
 if st.sidebar.button("➕ Créer Dossier") and nom_dossier:
-    st.session_state.config['dossiers'][nom_dossier] = []
-    with open(CONFIG_FILE, "w") as f: json.dump(st.session_state.config, f)
-    st.session_state["input_dossier"] = ""
-    st.rerun()
+    if nom_dossier not in st.session_state.config['dossiers']:
+        st.session_state.config['dossiers'][nom_dossier] = []
+        with open(CONFIG_FILE, "w") as f: json.dump(st.session_state.config, f)
+        st.session_state["input_dossier"] = ""
+        st.rerun()
 
-choix_dos = st.sidebar.selectbox("Dossier", list(st.session_state.config['dossiers'].keys()))
+dossiers_liste = list(st.session_state.config['dossiers'].keys())
+if not dossiers_liste: st.stop()
+choix_dos = st.sidebar.selectbox("Dossier", dossiers_liste)
 
 nom_matiere = st.sidebar.text_input("Nom Matière", key="input_matiere")
 if st.sidebar.button("➕ Ajouter Matière") and nom_matiere:
