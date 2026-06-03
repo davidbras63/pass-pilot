@@ -211,23 +211,26 @@ elif page == "Graphiques":
     if len(chapitres) > 0:
         sel_chap = st.selectbox("Choisir un chapitre", chapitres)
         
+        # Récupération directe depuis le DataFrame global
         df_notes = st.session_state.data[
             (st.session_state.data['Dossier'] == choix_dos) & 
             (st.session_state.data['Chapitre'] == sel_chap) & 
             (st.session_state.data['Note'] > 0)
         ].copy()
         
-        df_notes = df_notes.sort_values(by='Date')
-        
         if not df_notes.empty:
-            # Graphique Altair compact et visuel
+            # Conversion pour tri propre (J0, J1, J3...)
+            df_notes['Order'] = df_notes['J_Type'].str.extract('(\d+)').fillna(0).astype(int)
+            df_notes = df_notes.sort_values(by='Order')
+            
+            # Graphique compact
             chart = alt.Chart(df_notes).mark_line(point=True, strokeWidth=2).encode(
                 x=alt.X('J_Type', sort=None, title="Jours de révision"),
                 y=alt.Y('Note', scale=alt.Scale(domain=[0, 20]), title="Note"),
                 tooltip=['J_Type', 'Note']
-            ).properties(width=500, height=300)
+            ).properties(width=400, height=250)
             st.altair_chart(chart, use_container_width=False)
         else:
-            st.warning("Aucune note saisie pour ce chapitre pour le moment.")
+            st.warning("Aucune note saisie pour ce chapitre (les notes doivent être > 0).")
     else:
         st.info("Aucun chapitre trouvé pour cette matière.")
