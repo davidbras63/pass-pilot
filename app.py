@@ -160,15 +160,11 @@ elif page == "Planning & Saisie":
             st.markdown(f"**{day.strftime('%d/%m')}**")
             temp = st.session_state.data[(pd.to_datetime(st.session_state.data['Date']).dt.date == day) & (st.session_state.data['Dossier'] == choix_dos)]
             for _, r in temp.iterrows():
-                # --- Modification chirurgicale ---
+                # --- Modification chirurgicale compacte ---
                 c_icon, c_check = st.columns([0.2, 1])
                 with c_icon:
-                    with st.popover("📅"):
-                        nouvelle_date = st.date_input("Date:", r['Date'], key=f"d_{r['ID']}")
-                        if st.button("OK", key=f"btn_{r['ID']}"):
-                            st.session_state.data.loc[st.session_state.data['ID'] == r['ID'], 'Date'] = nouvelle_date
-                            save_data(st.session_state.data)
-                            st.rerun()
+                    if st.button("✏️", key=f"btn_{r['ID']}", help="Modifier date"):
+                        st.session_state[f"edit_{r['ID']}"] = True
                 with c_check:
                     est_fait = r['Statut'] == 'Fait'
                     if st.checkbox(f"{r['Chapitre']} ({r['J_Type']})", value=est_fait, key=f"chk_{r['ID']}"):
@@ -183,7 +179,15 @@ elif page == "Planning & Saisie":
                             st.session_state.data.loc[mask, 'Statut'] = 'À faire'
                             save_data(st.session_state.data)
                             st.rerun()
-                # -----------------------------------
+                
+                if st.session_state.get(f"edit_{r['ID']}", False):
+                    nouvelle_date = st.date_input("Nouvelle date pour " + r['Chapitre'], r['Date'], key=f"d_{r['ID']}")
+                    if st.button("Confirmer", key=f"save_{r['ID']}"):
+                        st.session_state.data.loc[st.session_state.data['ID'] == r['ID'], 'Date'] = nouvelle_date
+                        st.session_state[f"edit_{r['ID']}"] = False
+                        save_data(st.session_state.data)
+                        st.rerun()
+                # -------------------------------------------
 
     st.divider()
     st.subheader("Saisie Notes - Aujourd'hui")
