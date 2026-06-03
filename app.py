@@ -114,7 +114,9 @@ elif page == "Planning & Saisie":
             if st.form_submit_button("Générer Planning"):
                 if dex:
                     new_rows = []
-                    for j in [0] + st.session_state.config['cadencier']:
+                    # Correction ici : on ajoute le J0 séparément, puis on itère sur les jours du cadencier
+                    new_rows.append({'ID': str(uuid.uuid4()), 'Dossier': choix_dos, 'Matiere': mat, 'Chapitre': chap, 'J_Type': 'J0', 'Date': str(d0), 'Note': 0, 'Statut': 'À faire'})
+                    for j in st.session_state.config['cadencier']:
                         date_j = d0 + dt.timedelta(days=j)
                         if date_j <= dex:
                             new_rows.append({'ID': str(uuid.uuid4()), 'Dossier': choix_dos, 'Matiere': mat, 'Chapitre': chap, 'J_Type': f'J{j}', 'Date': str(date_j), 'Note': 0, 'Statut': 'À faire'})
@@ -156,4 +158,3 @@ elif page == "Graphiques":
     for mat in st.session_state.config['dossiers'].get(choix_dos, []):
         st.subheader(f"📚 {mat}")
         st.table(st.session_state.data[(st.session_state.data['Matiere'] == mat) & (st.session_state.data['Note'] > 0)][['Date', 'Note']].tail(3))
-
