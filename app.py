@@ -97,29 +97,36 @@ if page == "Dashboard":
         st.table(rattrapages[['Matiere', 'Chapitre', 'J_Type', 'Date', 'Note']])
         for _, row in rattrapages.iterrows():
             if st.button(f"Réintégrer {row['Chapitre']}", key=f"btn_{row['ID']}"):
-                # Identification de la date limite : le prochain J du même chapitre
-                dates_suivantes = st.session_state.data[
+                # 1. Identifier la prochaine échéance de ce chapitre (J suivant)
+                future_dates = st.session_state.data[
                     (st.session_state.data['Chapitre'] == row['Chapitre']) & 
                     (st.session_state.data['Date'] > row['Date'])
-                ].sort_values('Date')
+                ]['Date']
+                date_limite = min(future_dates) if not future_dates.empty else None
                 
-                date_limite = dates_suivantes['Date'].iloc[0] if not dates_suivantes.empty else dt.date.today() + dt.timedelta(days=30)
-                
-                # Recherche date dispo
-                date_candidat = dt.date.today() + dt.timedelta(days=1)
-                trouve = False
-                while date_candidat < date_limite and not trouve:
-                    count = len(st.session_state.data[(pd.to_datetime(st.session_state.data['Date']).dt.date == date_candidat) & (st.session_state.data['Dossier'] == choix_dos)])
-                    if date_candidat.weekday() != 6 and count < st.session_state.config.get('cours_max', 5):
-                        trouve = True
+                # 2. Chercher une place avant cette limite
+                if date_limite:
+                    date_candidat = dt.date.today() + dt.timedelta(days=1)
+                    trouve = False
+                    while date_candidat < date_limite and not trouve:
+                        count = len(st.session_state.data[(pd.to_datetime(st.session_state.data['Date']).dt.date == date_candidat) & (st.session_state.data['Dossier'] == choix_dos)])
+                        # Condition : pas dimanche, pas complet, pas déjà une révision pour ce chapitre ce jour-là
+                        deja_occupe = date_candidat in st.session_state.data[st.session_state.data['Chapitre'] == row['Chapitre']]['Date'].tolist()
+                        if not deja_occupe and date_candidat.weekday() != 6 and count < st.session_state.config.get('cours_max', 5):
+                            trouve = True
+                        else:
+                            date_candidat += dt.timedelta(days=1)
+                    
+                    if trouve:
+                        n_r = {'ID': str(uuid.uuid4()), 'Dossier': choix_dos, 'Matiere': row['Matiere'], 'Chapitre': row['Chapitre'], 'J_Type': 'RAP', 'Date': date_candidat, 'Note': 0, 'Statut': 'À faire'}
+                        st.session_state.data = pd.concat([st.session_state.data, pd.DataFrame([n_r])])
+                        st.session_state.data = st.session_state.data[st.session_state.data['ID'] != row['ID']]
+                        save_data(st.session_state.data)
+                        st.rerun()
                     else:
-                        date_candidat += dt.timedelta(days=1)
-                
-                n_r = {'ID': str(uuid.uuid4()), 'Dossier': choix_dos, 'Matiere': row['Matiere'], 'Chapitre': row['Chapitre'], 'J_Type': 'RAP', 'Date': date_candidat, 'Note': 0, 'Statut': 'À faire'}
-                st.session_state.data = pd.concat([st.session_state.data, pd.DataFrame([n_r])])
-                st.session_state.data = st.session_state.data[st.session_state.data['ID'] != row['ID']]
-                save_data(st.session_state.data)
-                st.rerun()
+                        st.error("Impossible de réintégrer : aucune place disponible avant le prochain J.")
+                else:
+                    st.error("Aucune échéance future trouvée pour ce chapitre.")
 
 # --- PLANNING & SAISIE ---
 elif page == "Planning & Saisie":
