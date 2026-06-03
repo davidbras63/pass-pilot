@@ -106,8 +106,31 @@ if page == "Dashboard":
         st.table(rattrapages[['Matiere', 'Chapitre', 'J_Type', 'Date', 'Note']])
         for _, row in rattrapages.iterrows():
             if st.button(f"Réintégrer {row['Chapitre']}", key=f"btn_{row['ID']}"):
-                d_tr = dt.date.today() + dt.timedelta(days=1)
-                n_r = {'ID':str(uuid.uuid4()),'Dossier':choix_dos,'Matiere':row['Matiere'],'Chapitre':row['Chapitre'],'J_Type':'RAP','Date':d_tr,'Note':0,'Statut':'À faire'}
+                # LOGIQUE MODIFIÉE : Recherche de date disponible
+                date_candidat = dt.date.today() + dt.timedelta(days=1)
+                trouve = False
+                # Limite arbitraire de 60 jours pour éviter les boucles infinies
+                while not trouve and (date_candidat - dt.date.today()).days < 60:
+                    count = len(st.session_state.data[
+                        (pd.to_datetime(st.session_state.data['Date']).dt.date == date_candidat) & 
+                        (st.session_state.data['Dossier'] == choix_dos)
+                    ])
+                    # Vérifier dimanche (weekday 6) et quota
+                    if date_candidat.weekday() != 6 and count < st.session_state.config.get('cours_max', 5):
+                        trouve = True
+                    else:
+                        date_candidat += dt.timedelta(days=1)
+                
+                n_r = {
+                    'ID': str(uuid.uuid4()), 
+                    'Dossier': choix_dos, 
+                    'Matiere': row['Matiere'], 
+                    'Chapitre': row['Chapitre'], 
+                    'J_Type': 'RAP', 
+                    'Date': date_candidat, 
+                    'Note': 0, 
+                    'Statut': 'À faire'
+                }
                 st.session_state.data = pd.concat([st.session_state.data, pd.DataFrame([n_r])])
                 st.session_state.data = st.session_state.data[st.session_state.data['ID'] != row['ID']]
                 save_data(st.session_state.data)
