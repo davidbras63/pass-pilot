@@ -70,7 +70,10 @@ if page == "Dashboard":
     for m in st.session_state.config['dossiers'].get(choix_dos, []):
         c1, c2 = st.columns([4, 1])
         c1.info(f"📚 {m}")
-        if c2.button("🗑️", key=f"del_{m}"): st.session_state.config['dossiers'][choix_dos].remove(m); with open(CONFIG_FILE, "w") as f: json.dump(st.session_state.config, f); st.rerun()
+        if c2.button("🗑️", key=f"del_{m}"): 
+            st.session_state.config['dossiers'][choix_dos].remove(m)
+            with open(CONFIG_FILE, "w") as f: json.dump(st.session_state.config, f)
+            st.rerun()
    
     st.subheader("⚠️ Rattrapages à traiter")
     df_dos = st.session_state.data[st.session_state.data['Dossier'] == choix_dos]
