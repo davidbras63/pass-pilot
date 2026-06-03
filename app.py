@@ -202,38 +202,36 @@ elif page == "Planning & Saisie":
 elif page == "Graphiques":
     st.title("📊 Progression")
     
-    # Récupération de la liste des matières
     matieres = st.session_state.config['dossiers'].get(choix_dos, [])
     sel_mat = st.selectbox("Choisir une matière", matieres)
     
-    # Récupération directe depuis st.session_state.data
     df_mat = st.session_state.data[(st.session_state.data['Dossier'] == choix_dos) & (st.session_state.data['Matiere'] == sel_mat)]
     chapitres = df_mat['Chapitre'].unique()
     
     if len(chapitres) > 0:
         sel_chap = st.selectbox("Choisir un chapitre", chapitres)
         
-        # Filtre sur les notes saisies dans le dataframe global actuel
+        # On extrait les données et on force la conversion numérique des notes
         df_notes = st.session_state.data[
             (st.session_state.data['Dossier'] == choix_dos) & 
-            (st.session_state.data['Chapitre'] == sel_chap) & 
-            (st.session_state.data['Note'] > 0)
+            (st.session_state.data['Chapitre'] == sel_chap)
         ].copy()
         
+        # Conversion forcée pour être sûr que les chiffres sont lus
+        df_notes['Note_Num'] = pd.to_numeric(df_notes['Note'], errors='coerce')
+        df_notes = df_notes[df_notes['Note_Num'] > 0]
+        
         if not df_notes.empty:
-            # Tri par numéro J (extraction du chiffre)
             df_notes['Order'] = df_notes['J_Type'].astype(str).str.extract('(\d+)').fillna(0).astype(int)
             df_notes = df_notes.sort_values(by='Order')
             
-            # Graphique Altair
             chart = alt.Chart(df_notes).mark_line(point=True, strokeWidth=2).encode(
                 x=alt.X('J_Type', sort=None, title="Jours de révision"),
-                y=alt.Y('Note', scale=alt.Scale(domain=[0, 20]), title="Note"),
-                tooltip=['J_Type', 'Note']
+                y=alt.Y('Note_Num', scale=alt.Scale(domain=[0, 20]), title="Note"),
+                tooltip=['J_Type', 'Note_Num']
             ).properties(width=400, height=250)
             st.altair_chart(chart, use_container_width=False)
         else:
-            st.warning(f"Aucune note trouvée pour '{sel_chap}'. (Les notes doivent être > 0)")
+            st.warning(f"Aucune note > 0 trouvée pour '{sel_chap}'.")
     else:
         st.info("Aucun chapitre trouvé pour cette matière.")
-
