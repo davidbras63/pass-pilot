@@ -95,39 +95,42 @@ if page == "Dashboard":
         return row['Note'] > 0 and row['Note'] < seuil and row['Statut'] != 'Traité'
    
     rattrapages = df_dos[df_dos.apply(est_en_rattrapage, axis=1)]
-    st.table(rattrapages[['Matiere', 'Chapitre', 'J_Type', 'Date', 'Note']])
-    for _, row in rattrapages.iterrows():
-        if st.button(f"Réintégrer {row['Chapitre']}", key=f"btn_{row['ID']}"):
-            future_dates = st.session_state.data[(st.session_state.data['Chapitre'] == row['Chapitre']) & (st.session_state.data['Date'] > row['Date'])]['Date']
-            date_limite = min(future_dates) if not future_dates.empty else None
-            if date_limite:
-                date_candidat = dt.date.today() + dt.timedelta(days=1)
-                trouve = False
-                while date_candidat < date_limite and not trouve:
-                    count = len(st.session_state.data[(pd.to_datetime(st.session_state.data['Date']).dt.date == date_candidat) & (st.session_state.data['Dossier'] == choix_dos)])
-                    deja_occupe = date_candidat in st.session_state.data[st.session_state.data['Chapitre'] == row['Chapitre']]['Date'].tolist()
-                    if not deja_occupe and date_candidat.weekday() != 6 and count < st.session_state.config.get('cours_max', 5):
-                        trouve = True
+    
+    # CORRECTION ICI : on vérifie que le tableau n'est pas vide avant de l'afficher
+    if not rattrapages.empty:
+        st.table(rattrapages[['Matiere', 'Chapitre', 'J_Type', 'Date', 'Note']])
+        for _, row in rattrapages.iterrows():
+            if st.button(f"Réintégrer {row['Chapitre']}", key=f"btn_{row['ID']}"):
+                future_dates = st.session_state.data[(st.session_state.data['Chapitre'] == row['Chapitre']) & (st.session_state.data['Date'] > row['Date'])]['Date']
+                date_limite = min(future_dates) if not future_dates.empty else None
+                if date_limite:
+                    date_candidat = dt.date.today() + dt.timedelta(days=1)
+                    trouve = False
+                    while date_candidat < date_limite and not trouve:
+                        count = len(st.session_state.data[(pd.to_datetime(st.session_state.data['Date']).dt.date == date_candidat) & (st.session_state.data['Dossier'] == choix_dos)])
+                        deja_occupe = date_candidat in st.session_state.data[st.session_state.data['Chapitre'] == row['Chapitre']]['Date'].tolist()
+                        if not deja_occupe and date_candidat.weekday() != 6 and count < st.session_state.config.get('cours_max', 5):
+                            trouve = True
+                        else:
+                            date_candidat += dt.timedelta(days=1)
+                    if trouve:
+                        n_r = {'ID': str(uuid.uuid4()), 'Dossier': choix_dos, 'Matiere': row['Matiere'], 'Chapitre': row['Chapitre'], 'J_Type': 'RAP', 'Date': date_candidat, 'Note': 0, 'Statut': 'À faire'}
+                        st.session_state.data = pd.concat([st.session_state.data, pd.DataFrame([n_r])])
+                        st.session_state.data.loc[st.session_state.data['ID'] == row['ID'], 'Statut'] = 'Traité'
+                        save_data(st.session_state.data)
+                        st.rerun()
                     else:
-                        date_candidat += dt.timedelta(days=1)
-                if trouve:
-                    n_r = {'ID': str(uuid.uuid4()), 'Dossier': choix_dos, 'Matiere': row['Matiere'], 'Chapitre': row['Chapitre'], 'J_Type': 'RAP', 'Date': date_candidat, 'Note': 0, 'Statut': 'À faire'}
-                    st.session_state.data = pd.concat([st.session_state.data, pd.DataFrame([n_r])])
-                    st.session_state.data.loc[st.session_state.data['ID'] == row['ID'], 'Statut'] = 'Traité'
-                    save_data(st.session_state.data)
-                    st.rerun()
+                        st.error("Rattrapage impossible avant le J suivant.")
+                        time.sleep(2)
+                        st.session_state.data.loc[st.session_state.data['ID'] == row['ID'], 'Statut'] = 'Traité'
+                        save_data(st.session_state.data)
+                        st.rerun()
                 else:
-                    st.error("Rattrapage impossible avant le J suivant.")
+                    st.error("Aucune échéance future trouvée.")
                     time.sleep(2)
                     st.session_state.data.loc[st.session_state.data['ID'] == row['ID'], 'Statut'] = 'Traité'
                     save_data(st.session_state.data)
                     st.rerun()
-            else:
-                st.error("Aucune échéance future trouvée.")
-                time.sleep(2)
-                st.session_state.data.loc[st.session_state.data['ID'] == row['ID'], 'Statut'] = 'Traité'
-                save_data(st.session_state.data)
-                st.rerun()
 
 # --- PLANNING & SAISIE ---
 elif page == "Planning & Saisie":
