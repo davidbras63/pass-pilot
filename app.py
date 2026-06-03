@@ -92,44 +92,42 @@ if page == "Dashboard":
     def est_en_rattrapage(row):
         j_str = str(row['J_Type']).replace('J', '')
         seuil = int(st.session_state.config['seuils'].get(j_str, 12))
-        return row['Note'] > 0 and row['Note'] < seuil
+        return row['Note'] > 0 and row['Note'] < seuil and row['Statut'] != 'Traité'
    
     rattrapages = df_dos[df_dos.apply(est_en_rattrapage, axis=1)]
-    if not rattrapages.empty:
-        st.table(rattrapages[['Matiere', 'Chapitre', 'J_Type', 'Date', 'Note']])
-        for _, row in rattrapages.iterrows():
-            if st.button(f"Réintégrer {row['Chapitre']}", key=f"btn_{row['ID']}"):
-                # Correction : On ne supprime plus la ligne, on ajoute juste une ligne de rattrapage
-                future_dates = st.session_state.data[
-                    (st.session_state.data['Chapitre'] == row['Chapitre']) &
-                    (st.session_state.data['Date'] > row['Date'])
-                ]['Date']
-                date_limite = min(future_dates) if not future_dates.empty else None
-               
-                if date_limite:
-                    date_candidat = dt.date.today() + dt.timedelta(days=1)
-                    trouve = False
-                    while date_candidat < date_limite and not trouve:
-                        count = len(st.session_state.data[(pd.to_datetime(st.session_state.data['Date']).dt.date == date_candidat) & (st.session_state.data['Dossier'] == choix_dos)])
-                        deja_occupe = date_candidat in st.session_state.data[st.session_state.data['Chapitre'] == row['Chapitre']]['Date'].tolist()
-                        if not deja_occupe and date_candidat.weekday() != 6 and count < st.session_state.config.get('cours_max', 5):
-                            trouve = True
-                        else:
-                            date_candidat += dt.timedelta(days=1)
-                   
-                    if trouve:
-                        n_r = {'ID': str(uuid.uuid4()), 'Dossier': choix_dos, 'Matiere': row['Matiere'], 'Chapitre': row['Chapitre'], 'J_Type': 'RAP', 'Date': date_candidat, 'Note': 0, 'Statut': 'À faire'}
-                        st.session_state.data = pd.concat([st.session_state.data, pd.DataFrame([n_r])])
-                        # On change juste le statut de l'ancienne note pour ne plus la traiter en boucle
-                        st.session_state.data.loc[st.session_state.data['ID'] == row['ID'], 'Statut'] = 'Traité'
-                        save_data(st.session_state.data)
-                        st.rerun()
+    st.table(rattrapages[['Matiere', 'Chapitre', 'J_Type', 'Date', 'Note']])
+    for _, row in rattrapages.iterrows():
+        if st.button(f"Réintégrer {row['Chapitre']}", key=f"btn_{row['ID']}"):
+            future_dates = st.session_state.data[(st.session_state.data['Chapitre'] == row['Chapitre']) & (st.session_state.data['Date'] > row['Date'])]['Date']
+            date_limite = min(future_dates) if not future_dates.empty else None
+            if date_limite:
+                date_candidat = dt.date.today() + dt.timedelta(days=1)
+                trouve = False
+                while date_candidat < date_limite and not trouve:
+                    count = len(st.session_state.data[(pd.to_datetime(st.session_state.data['Date']).dt.date == date_candidat) & (st.session_state.data['Dossier'] == choix_dos)])
+                    deja_occupe = date_candidat in st.session_state.data[st.session_state.data['Chapitre'] == row['Chapitre']]['Date'].tolist()
+                    if not deja_occupe and date_candidat.weekday() != 6 and count < st.session_state.config.get('cours_max', 5):
+                        trouve = True
                     else:
-                        st.error("Rattrapage impossible avant le J suivant.")
-                        time.sleep(2)
+                        date_candidat += dt.timedelta(days=1)
+                if trouve:
+                    n_r = {'ID': str(uuid.uuid4()), 'Dossier': choix_dos, 'Matiere': row['Matiere'], 'Chapitre': row['Chapitre'], 'J_Type': 'RAP', 'Date': date_candidat, 'Note': 0, 'Statut': 'À faire'}
+                    st.session_state.data = pd.concat([st.session_state.data, pd.DataFrame([n_r])])
+                    st.session_state.data.loc[st.session_state.data['ID'] == row['ID'], 'Statut'] = 'Traité'
+                    save_data(st.session_state.data)
+                    st.rerun()
                 else:
-                    st.error("Aucune échéance future trouvée, réintégration impossible.")
+                    st.error("Rattrapage impossible avant le J suivant.")
                     time.sleep(2)
+                    st.session_state.data.loc[st.session_state.data['ID'] == row['ID'], 'Statut'] = 'Traité'
+                    save_data(st.session_state.data)
+                    st.rerun()
+            else:
+                st.error("Aucune échéance future trouvée.")
+                time.sleep(2)
+                st.session_state.data.loc[st.session_state.data['ID'] == row['ID'], 'Statut'] = 'Traité'
+                save_data(st.session_state.data)
+                st.rerun()
 
 # --- PLANNING & SAISIE ---
 elif page == "Planning & Saisie":
@@ -197,29 +195,17 @@ elif page == "Planning & Saisie":
 
 elif page == "Graphiques":
     st.title("📊 Progression")
-    
     matieres = st.session_state.config['dossiers'].get(choix_dos, [])
     sel_mat = st.selectbox("Choisir une matière", matieres)
-    
     df_mat = st.session_state.data[(st.session_state.data['Dossier'] == choix_dos) & (st.session_state.data['Matiere'] == sel_mat)]
     chapitres = df_mat['Chapitre'].unique()
-    
     if len(chapitres) > 0:
         sel_chap = st.selectbox("Choisir un chapitre", chapitres)
-        
-        # On récupère toutes les notes pour ce chapitre
-        df_notes = st.session_state.data[
-            (st.session_state.data['Dossier'] == choix_dos) & 
-            (st.session_state.data['Chapitre'] == sel_chap)
-        ].copy()
-        
+        df_notes = st.session_state.data[(st.session_state.data['Dossier'] == choix_dos) & (st.session_state.data['Chapitre'] == sel_chap)].copy()
         df_notes['Note_Num'] = pd.to_numeric(df_notes['Note'], errors='coerce')
-        # On garde tout, même si c'est 0 (pour voir la courbe globale)
-        
         if not df_notes.empty:
             df_notes['Order'] = df_notes['J_Type'].astype(str).str.extract('(\d+)').fillna(0).astype(int)
             df_notes = df_notes.sort_values(by='Order')
-            
             chart = alt.Chart(df_notes).mark_line(point=True, strokeWidth=2).encode(
                 x=alt.X('J_Type', sort=None, title="Jours de révision"),
                 y=alt.Y('Note_Num', scale=alt.Scale(domain=[0, 20]), title="Note"),
@@ -227,6 +213,6 @@ elif page == "Graphiques":
             ).properties(width=400, height=250)
             st.altair_chart(chart, use_container_width=False)
         else:
-            st.warning("Aucune donnée trouvée.")
+            st.warning("Aucune donnée trouvée pour ce chapitre.")
     else:
-        st.info("Aucun chapitre trouvé.")
+        st.info("Aucun chapitre trouvé pour cette matière.")
