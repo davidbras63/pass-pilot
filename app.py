@@ -30,6 +30,21 @@ def load_config():
 if 'data' not in st.session_state: st.session_state.data = load_data()
 if 'config' not in st.session_state: st.session_state.config = load_config()
 
+# --- FONCTIONS DE RÉINITIALISATION (CORRECTION BUG) ---
+def reset_dossier():
+    nom = st.session_state.d_in
+    if nom and nom not in st.session_state.config['dossiers']:
+        st.session_state.config['dossiers'][nom] = []
+        with open(CONFIG_FILE, "w") as f: json.dump(st.session_state.config, f)
+    st.session_state.d_in = ""
+
+def reset_matiere():
+    nom = st.session_state.m_in
+    if nom and nom not in st.session_state.config['dossiers'][choix_dos]:
+        st.session_state.config['dossiers'][choix_dos].append(nom)
+        with open(CONFIG_FILE, "w") as f: json.dump(st.session_state.config, f)
+    st.session_state.m_in = ""
+
 # --- SIDEBAR ---
 st.sidebar.title("⚙️ Pilot Expert")
 
@@ -44,25 +59,15 @@ with st.sidebar.expander("🛠️ Réglages", expanded=False):
         with open(CONFIG_FILE, "w") as f: json.dump(st.session_state.config, f)
         st.rerun()
 
-# CORRECTION : Gestion Dossiers
-new_dossier = st.sidebar.text_input("Nouveau Dossier", key="in_dossier")
-if st.sidebar.button("➕ Créer Dossier"):
-    if st.session_state.in_dossier:
-        st.session_state.config['dossiers'][st.session_state.in_dossier] = []
-        with open(CONFIG_FILE, "w") as f: json.dump(st.session_state.config, f)
-        st.session_state.in_dossier = "" # Vide le champ avant le rerun
-        st.rerun()
+# Gestion Dossiers
+st.sidebar.text_input("Nouveau Dossier", key="d_in")
+st.sidebar.button("➕ Créer Dossier", on_click=reset_dossier)
 
 choix_dos = st.sidebar.selectbox("Dossier", list(st.session_state.config['dossiers'].keys()))
 
-# CORRECTION : Gestion Matières
-new_matiere = st.sidebar.text_input("Nom Matière", key="in_matiere")
-if st.sidebar.button("➕ Ajouter Matière"):
-    if st.session_state.in_matiere:
-        st.session_state.config['dossiers'][choix_dos].append(st.session_state.in_matiere)
-        with open(CONFIG_FILE, "w") as f: json.dump(st.session_state.config, f)
-        st.session_state.in_matiere = "" # Vide le champ avant le rerun
-        st.rerun()
+# Gestion Matières
+st.sidebar.text_input("Nom Matière", key="m_in")
+st.sidebar.button("➕ Ajouter Matière", on_click=reset_matiere)
 
 page = st.sidebar.radio("Navigation", ["Dashboard", "Planning & Saisie", "Graphiques"])
 
@@ -75,13 +80,17 @@ if page == "Dashboard":
         st.session_state.data = st.session_state.data[st.session_state.data['Dossier'] != choix_dos]
         save_data(st.session_state.data)
         st.rerun()
+    
     for m in st.session_state.config['dossiers'].get(choix_dos, []):
         c1, c2 = st.columns([4, 1])
         c1.info(f"📚 {m}")
         if c2.button("🗑️", key=f"del_{m}"):
             st.session_state.config['dossiers'][choix_dos].remove(m)
             with open(CONFIG_FILE, "w") as f: json.dump(st.session_state.config, f)
-            st.session_state.data = st.session_state.data[(st.session_state.data['Dossier'] != choix_dos) | (st.session_state.data['Matiere'] != m)]
+            st.session_state.data = st.session_state.data[
+                (st.session_state.data['Dossier'] != choix_dos) | 
+                (st.session_state.data['Matiere'] != m)
+            ]
             save_data(st.session_state.data)
             st.rerun()
 
@@ -91,6 +100,7 @@ if page == "Dashboard":
         j_str = str(row['J_Type']).replace('J', '')
         seuil = int(st.session_state.config['seuils'].get(j_str, 12))
         return row['Note'] > 0 and row['Note'] < seuil
+    
     rattrapages = df_dos[df_dos.apply(est_en_rattrapage, axis=1)]
     if not rattrapages.empty:
         st.table(rattrapages[['Matiere', 'Chapitre', 'J_Type', 'Date', 'Note']])
@@ -98,7 +108,10 @@ if page == "Dashboard":
             if st.button(f"Réintégrer {row['Chapitre']}", key=f"btn_{row['ID']}"):
                 d_tr = dt.date.today() + dt.timedelta(days=1)
                 n_r = {'ID':str(uuid.uuid4()),'Dossier':choix_dos,'Matiere':row['Matiere'],'Chapitre':row['Chapitre'],'J_Type':'RAP','Date':d_tr,'Note':0,'Statut':'À faire'}
-                st.session_state.data = pd.concat([st.session_state.data, pd.DataFrame([n_r])]); st.session_state.data = st.session_state.data[st.session_state.data['ID'] != row['ID']]; save_data(st.session_state.data); st.rerun()
+                st.session_state.data = pd.concat([st.session_state.data, pd.DataFrame([n_r])])
+                st.session_state.data = st.session_state.data[st.session_state.data['ID'] != row['ID']]
+                save_data(st.session_state.data)
+                st.rerun()
 
 # --- PLANNING & SAISIE ---
 elif page == "Planning & Saisie":
@@ -116,7 +129,8 @@ elif page == "Planning & Saisie":
                         if d_j <= dex:
                             new_rows.append({'ID': str(uuid.uuid4()), 'Dossier': choix_dos, 'Matiere': mat, 'Chapitre': chap, 'J_Type': f'J{j}', 'Date': d_j, 'Note': 0, 'Statut': 'À faire'})
                     st.session_state.data = pd.concat([st.session_state.data, pd.DataFrame(new_rows)]).drop_duplicates(subset=['Dossier', 'Chapitre', 'J_Type', 'Date'])
-                    save_data(st.session_state.data); st.rerun()
+                    save_data(st.session_state.data)
+                    st.rerun()
 
     st.subheader("🗓️ Planning Hebdomadaire")
     cols = st.columns(7)
@@ -138,7 +152,8 @@ elif page == "Planning & Saisie":
             for _, row in edited.iterrows():
                 mask = st.session_state.data['ID'] == row['ID']
                 st.session_state.data.loc[mask, ['Note', 'Statut']] = [row['Note'], row['Statut']]
-            save_data(st.session_state.data); st.rerun()
+            save_data(st.session_state.data)
+            st.rerun()
 
 elif page == "Graphiques":
     st.title("📊 Progression")
