@@ -74,7 +74,7 @@ if page == "Dashboard":
         st.session_state.data = st.session_state.data[st.session_state.data['Dossier'] != choix_dos]
         save_data(st.session_state.data)
         st.rerun()
-    
+   
     for m in st.session_state.config['dossiers'].get(choix_dos, []):
         c1, c2 = st.columns([4, 1])
         c1.info(f"📚 {m}")
@@ -91,18 +91,18 @@ if page == "Dashboard":
         j_str = str(row['J_Type']).replace('J', '')
         seuil = int(st.session_state.config['seuils'].get(j_str, 12))
         return row['Note'] > 0 and row['Note'] < seuil
-    
+   
     rattrapages = df_dos[df_dos.apply(est_en_rattrapage, axis=1)]
     if not rattrapages.empty:
         st.table(rattrapages[['Matiere', 'Chapitre', 'J_Type', 'Date', 'Note']])
         for _, row in rattrapages.iterrows():
             if st.button(f"Réintégrer {row['Chapitre']}", key=f"btn_{row['ID']}"):
                 future_dates = st.session_state.data[
-                    (st.session_state.data['Chapitre'] == row['Chapitre']) & 
+                    (st.session_state.data['Chapitre'] == row['Chapitre']) &
                     (st.session_state.data['Date'] > row['Date'])
                 ]['Date']
                 date_limite = min(future_dates) if not future_dates.empty else None
-                
+               
                 if date_limite:
                     date_candidat = dt.date.today() + dt.timedelta(days=1)
                     trouve = False
@@ -113,7 +113,7 @@ if page == "Dashboard":
                             trouve = True
                         else:
                             date_candidat += dt.timedelta(days=1)
-                    
+                   
                     if trouve:
                         n_r = {'ID': str(uuid.uuid4()), 'Dossier': choix_dos, 'Matiere': row['Matiere'], 'Chapitre': row['Chapitre'], 'J_Type': 'RAP', 'Date': date_candidat, 'Note': 0, 'Statut': 'À faire'}
                         st.session_state.data = pd.concat([st.session_state.data, pd.DataFrame([n_r])])
@@ -159,7 +159,20 @@ elif page == "Planning & Saisie":
         with col:
             st.markdown(f"**{day.strftime('%d/%m')}**")
             temp = st.session_state.data[(pd.to_datetime(st.session_state.data['Date']).dt.date == day) & (st.session_state.data['Dossier'] == choix_dos)]
-            for _, r in temp.iterrows(): st.caption(f"{r['Chapitre']} ({r['J_Type']})")
+            for _, r in temp.iterrows():
+                est_fait = r['Statut'] == 'Fait'
+                if st.checkbox(f"{r['Chapitre']} ({r['J_Type']})", value=est_fait, key=f"chk_{r['ID']}"):
+                    if not est_fait:
+                        mask = st.session_state.data['ID'] == r['ID']
+                        st.session_state.data.loc[mask, 'Statut'] = 'Fait'
+                        save_data(st.session_state.data)
+                        st.rerun()
+                else:
+                    if est_fait:
+                        mask = st.session_state.data['ID'] == r['ID']
+                        st.session_state.data.loc[mask, 'Statut'] = 'À faire'
+                        save_data(st.session_state.data)
+                        st.rerun()
 
     st.divider()
     st.subheader("Saisie Notes - Aujourd'hui")
