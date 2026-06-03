@@ -160,6 +160,14 @@ elif page == "Planning & Saisie":
             st.markdown(f"**{day.strftime('%d/%m')}**")
             temp = st.session_state.data[(pd.to_datetime(st.session_state.data['Date']).dt.date == day) & (st.session_state.data['Dossier'] == choix_dos)]
             for _, r in temp.iterrows():
+                # --- Injection chirurgicale pour déplacer la date ---
+                with st.popover("📅"):
+                    nouvelle_date = st.date_input("Déplacer vers le :", r['Date'], key=f"d_{r['ID']}")
+                    if st.button("Confirmer", key=f"btn_d_{r['ID']}"):
+                        st.session_state.data.loc[st.session_state.data['ID'] == r['ID'], 'Date'] = nouvelle_date
+                        save_data(st.session_state.data)
+                        st.rerun()
+                # -----------------------------------------------------
                 est_fait = r['Statut'] == 'Fait'
                 if st.checkbox(f"{r['Chapitre']} ({r['J_Type']})", value=est_fait, key=f"chk_{r['ID']}"):
                     if not est_fait:
