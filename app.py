@@ -121,7 +121,7 @@ if page == "Dashboard":
                         save_data(st.session_state.data)
                         st.rerun()
                     else:
-                        st.error(f"Impossible de réintégrer {row['Chapitre']} : aucune place disponible avant le prochain J.")
+                        st.error("Rattrapage impossible avant le J suivant.")
                         st.session_state.data = st.session_state.data[st.session_state.data['ID'] != row['ID']]
                         save_data(st.session_state.data)
                         st.rerun()
