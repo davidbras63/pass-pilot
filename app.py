@@ -200,19 +200,32 @@ elif page == "Planning & Saisie":
 
 elif page == "Graphiques":
     st.title("📊 Progression")
-    df_dos = st.session_state.data[st.session_state.data['Dossier'] == choix_dos]
     
-    matieres = df_dos['Matiere'].unique()
+    # 1. Liste toutes les matières configurées pour le dossier actuel
+    matieres = st.session_state.config['dossiers'].get(choix_dos, [])
     sel_mat = st.selectbox("Choisir une matière", matieres)
     
-    chapitres = df_dos[df_dos['Matiere'] == sel_mat]['Chapitre'].unique()
-    sel_chap = st.selectbox("Choisir un chapitre", chapitres)
+    # 2. Filtrer les données pour cette matière et ce dossier
+    df_mat = st.session_state.data[(st.session_state.data['Dossier'] == choix_dos) & (st.session_state.data['Matiere'] == sel_mat)]
+    chapitres = df_mat['Chapitre'].unique()
     
-    df_chap = df_dos[(df_dos['Matiere'] == sel_mat) & (df_dos['Chapitre'] == sel_chap)].copy()
-    # On filtre pour ne garder que les entrées où une note > 0 a été saisie
-    df_notes = df_chap[df_chap['Note'] > 0].sort_values(by='Date')
-    
-    if not df_notes.empty:
-        st.line_chart(df_notes.set_index('J_Type')['Note'])
+    if len(chapitres) > 0:
+        sel_chap = st.selectbox("Choisir un chapitre", chapitres)
+        
+        # 3. Filtrer pour le chapitre choisi ET ne garder que les notes saisies (Note > 0)
+        df_notes = st.session_state.data[
+            (st.session_state.data['Dossier'] == choix_dos) & 
+            (st.session_state.data['Chapitre'] == sel_chap) & 
+            (st.session_state.data['Note'] > 0)
+        ].copy()
+        
+        # Tri temporel pour que la courbe suive l'évolution
+        df_notes = df_notes.sort_values(by='Date')
+        
+        if not df_notes.empty:
+            # Affichage graphique
+            st.line_chart(df_notes.set_index('J_Type')['Note'])
+        else:
+            st.warning("Aucune note saisie pour ce chapitre pour le moment.")
     else:
-        st.warning("Aucune note saisie pour ce chapitre pour le moment.")
+        st.info("Aucun chapitre trouvé pour cette matière.")
