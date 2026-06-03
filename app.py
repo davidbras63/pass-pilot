@@ -200,3 +200,19 @@ elif page == "Planning & Saisie":
 
 elif page == "Graphiques":
     st.title("📊 Progression")
+    df_dos = st.session_state.data[st.session_state.data['Dossier'] == choix_dos]
+    
+    matieres = df_dos['Matiere'].unique()
+    sel_mat = st.selectbox("Choisir une matière", matieres)
+    
+    chapitres = df_dos[df_dos['Matiere'] == sel_mat]['Chapitre'].unique()
+    sel_chap = st.selectbox("Choisir un chapitre", chapitres)
+    
+    df_chap = df_dos[(df_dos['Matiere'] == sel_mat) & (df_dos['Chapitre'] == sel_chap)].copy()
+    # On filtre pour ne garder que les entrées où une note > 0 a été saisie
+    df_notes = df_chap[df_chap['Note'] > 0].sort_values(by='Date')
+    
+    if not df_notes.empty:
+        st.line_chart(df_notes.set_index('J_Type')['Note'])
+    else:
+        st.warning("Aucune note saisie pour ce chapitre pour le moment.")
