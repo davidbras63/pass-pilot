@@ -5,6 +5,7 @@ import os
 import json
 import uuid
 import time
+import altair as alt
 
 st.set_page_config(layout="wide")
 
@@ -201,30 +202,31 @@ elif page == "Planning & Saisie":
 elif page == "Graphiques":
     st.title("📊 Progression")
     
-    # 1. Liste toutes les matières configurées pour le dossier actuel
     matieres = st.session_state.config['dossiers'].get(choix_dos, [])
     sel_mat = st.selectbox("Choisir une matière", matieres)
     
-    # 2. Filtrer les données pour cette matière et ce dossier
     df_mat = st.session_state.data[(st.session_state.data['Dossier'] == choix_dos) & (st.session_state.data['Matiere'] == sel_mat)]
     chapitres = df_mat['Chapitre'].unique()
     
     if len(chapitres) > 0:
         sel_chap = st.selectbox("Choisir un chapitre", chapitres)
         
-        # 3. Filtrer pour le chapitre choisi ET ne garder que les notes saisies (Note > 0)
         df_notes = st.session_state.data[
             (st.session_state.data['Dossier'] == choix_dos) & 
             (st.session_state.data['Chapitre'] == sel_chap) & 
             (st.session_state.data['Note'] > 0)
         ].copy()
         
-        # Tri temporel pour que la courbe suive l'évolution
         df_notes = df_notes.sort_values(by='Date')
         
         if not df_notes.empty:
-            # Affichage graphique
-            st.line_chart(df_notes.set_index('J_Type')['Note'])
+            # Graphique Altair compact et visuel
+            chart = alt.Chart(df_notes).mark_line(point=True, strokeWidth=2).encode(
+                x=alt.X('J_Type', sort=None, title="Jours de révision"),
+                y=alt.Y('Note', scale=alt.Scale(domain=[0, 20]), title="Note"),
+                tooltip=['J_Type', 'Note']
+            ).properties(width=500, height=300)
+            st.altair_chart(chart, use_container_width=False)
         else:
             st.warning("Aucune note saisie pour ce chapitre pour le moment.")
     else:
