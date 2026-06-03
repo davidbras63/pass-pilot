@@ -202,16 +202,18 @@ elif page == "Planning & Saisie":
 elif page == "Graphiques":
     st.title("📊 Progression")
     
+    # Récupération de la liste des matières
     matieres = st.session_state.config['dossiers'].get(choix_dos, [])
     sel_mat = st.selectbox("Choisir une matière", matieres)
     
+    # Récupération directe depuis st.session_state.data
     df_mat = st.session_state.data[(st.session_state.data['Dossier'] == choix_dos) & (st.session_state.data['Matiere'] == sel_mat)]
     chapitres = df_mat['Chapitre'].unique()
     
     if len(chapitres) > 0:
         sel_chap = st.selectbox("Choisir un chapitre", chapitres)
         
-        # Récupération directe depuis le DataFrame global
+        # Filtre sur les notes saisies dans le dataframe global actuel
         df_notes = st.session_state.data[
             (st.session_state.data['Dossier'] == choix_dos) & 
             (st.session_state.data['Chapitre'] == sel_chap) & 
@@ -219,11 +221,11 @@ elif page == "Graphiques":
         ].copy()
         
         if not df_notes.empty:
-            # Conversion pour tri propre (J0, J1, J3...)
-            df_notes['Order'] = df_notes['J_Type'].str.extract('(\d+)').fillna(0).astype(int)
+            # Tri par numéro J (extraction du chiffre)
+            df_notes['Order'] = df_notes['J_Type'].astype(str).str.extract('(\d+)').fillna(0).astype(int)
             df_notes = df_notes.sort_values(by='Order')
             
-            # Graphique compact
+            # Graphique Altair
             chart = alt.Chart(df_notes).mark_line(point=True, strokeWidth=2).encode(
                 x=alt.X('J_Type', sort=None, title="Jours de révision"),
                 y=alt.Y('Note', scale=alt.Scale(domain=[0, 20]), title="Note"),
@@ -231,6 +233,7 @@ elif page == "Graphiques":
             ).properties(width=400, height=250)
             st.altair_chart(chart, use_container_width=False)
         else:
-            st.warning("Aucune note saisie pour ce chapitre (les notes doivent être > 0).")
+            st.warning(f"Aucune note trouvée pour '{sel_chap}'. (Les notes doivent être > 0)")
     else:
         st.info("Aucun chapitre trouvé pour cette matière.")
+
