@@ -44,12 +44,16 @@ with st.sidebar.expander("🛠️ Réglages", expanded=False):
 
 nom_dossier = st.sidebar.text_input("Nouveau Dossier", key="input_dossier")
 if st.sidebar.button("➕ Créer Dossier") and st.session_state.input_dossier:
-    st.session_state.config['dossiers'][st.session_state.input_dossier] = []; st.session_state.input_dossier = ""; st.rerun()
+    st.session_state.config['dossiers'][st.session_state.input_dossier] = []
+    with open(CONFIG_FILE, "w") as f: json.dump(st.session_state.config, f)
+    st.session_state.input_dossier = ""; st.rerun()
 
 choix_dos = st.sidebar.selectbox("Dossier", list(st.session_state.config['dossiers'].keys()))
 nom_matiere = st.sidebar.text_input("Nom Matière", key="input_matiere")
 if st.sidebar.button("➕ Ajouter Matière") and st.session_state.input_matiere:
-    st.session_state.config['dossiers'][choix_dos].append(st.session_state.input_matiere); st.session_state.input_matiere = ""; st.rerun()
+    st.session_state.config['dossiers'][choix_dos].append(st.session_state.input_matiere)
+    with open(CONFIG_FILE, "w") as f: json.dump(st.session_state.config, f)
+    st.session_state.input_matiere = ""; st.rerun()
 
 page = st.sidebar.radio("Navigation", ["Dashboard", "Planning & Saisie", "Graphiques"])
 
@@ -66,7 +70,7 @@ if page == "Dashboard":
     for m in st.session_state.config['dossiers'].get(choix_dos, []):
         c1, c2 = st.columns([4, 1])
         c1.info(f"📚 {m}")
-        if c2.button("🗑️", key=f"del_{m}"): st.session_state.config['dossiers'][choix_dos].remove(m); st.rerun()
+        if c2.button("🗑️", key=f"del_{m}"): st.session_state.config['dossiers'][choix_dos].remove(m); with open(CONFIG_FILE, "w") as f: json.dump(st.session_state.config, f); st.rerun()
    
     st.subheader("⚠️ Rattrapages à traiter")
     df_dos = st.session_state.data[st.session_state.data['Dossier'] == choix_dos]
@@ -142,7 +146,7 @@ elif page == "Planning & Saisie":
                 st.session_state.data.loc[mask, 'Statut'] = row['Statut']
             save_data(st.session_state.data)
             st.success("Notes enregistrées avec succès !")
-            st.session_state.page = "Dashboard"; st.rerun()
+            st.rerun()
     else:
         st.info("Aucun chapitre prévu aujourd'hui.")
 
@@ -152,4 +156,3 @@ elif page == "Graphiques":
     for mat in st.session_state.config['dossiers'].get(choix_dos, []):
         st.subheader(f"📚 {mat}")
         st.table(st.session_state.data[(st.session_state.data['Matiere'] == mat) & (st.session_state.data['Note'] > 0)][['Date', 'Note']].tail(3))
-
