@@ -33,19 +33,21 @@ if 'config' not in st.session_state: st.session_state.config = load_config()
 st.sidebar.title("⚙️ Pilot Expert")
 
 # Gestion Dossiers
-new_dossier = st.sidebar.text_input("Nouveau Dossier", value="", key="dossier_in")
+new_dossier = st.sidebar.text_input("Nouveau Dossier", key="dossier_in")
 if st.sidebar.button("➕ Créer Dossier") and new_dossier:
     st.session_state.config['dossiers'][new_dossier] = []
     with open(CONFIG_FILE, "w") as f: json.dump(st.session_state.config, f)
+    st.session_state.dossier_in = ""
     st.rerun()
 
 choix_dos = st.sidebar.selectbox("Dossier", list(st.session_state.config['dossiers'].keys()))
 
 # Gestion Matières
-new_matiere = st.sidebar.text_input("Nom Matière", value="", key="matiere_in")
+new_matiere = st.sidebar.text_input("Nom Matière", key="matiere_in")
 if st.sidebar.button("➕ Ajouter Matière") and new_matiere:
     st.session_state.config['dossiers'][choix_dos].append(new_matiere)
     with open(CONFIG_FILE, "w") as f: json.dump(st.session_state.config, f)
+    st.session_state.matiere_in = ""
     st.rerun()
 
 page = st.sidebar.radio("Navigation", ["Dashboard", "Planning & Saisie", "Graphiques"])
@@ -53,12 +55,29 @@ page = st.sidebar.radio("Navigation", ["Dashboard", "Planning & Saisie", "Graphi
 # --- DASHBOARD ---
 if page == "Dashboard":
     st.title(f"🎯 Dashboard : {choix_dos}")
+    
+    # Suppression Dossier complet (Dossier + données CSV)
     if st.button("❌ Supprimer ce Dossier"):
         del st.session_state.config['dossiers'][choix_dos]
         with open(CONFIG_FILE, "w") as f: json.dump(st.session_state.config, f)
+        st.session_state.data = st.session_state.data[st.session_state.data['Dossier'] != choix_dos]
+        save_data(st.session_state.data)
         st.rerun()
+    
     for m in st.session_state.config['dossiers'].get(choix_dos, []):
-        st.info(f"📚 {m}")
+        c1, c2 = st.columns([4, 1])
+        c1.info(f"📚 {m}")
+        
+        # Suppression Matière (Matière + données CSV)
+        if c2.button("🗑️", key=f"del_{m}"):
+            st.session_state.config['dossiers'][choix_dos].remove(m)
+            with open(CONFIG_FILE, "w") as f: json.dump(st.session_state.config, f)
+            st.session_state.data = st.session_state.data[
+                (st.session_state.data['Dossier'] != choix_dos) | 
+                (st.session_state.data['Matiere'] != m)
+            ]
+            save_data(st.session_state.data)
+            st.rerun()
 
 # --- PLANNING & SAISIE ---
 elif page == "Planning & Saisie":
