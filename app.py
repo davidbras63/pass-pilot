@@ -60,30 +60,27 @@ page = st.sidebar.radio("Navigation", ["Dashboard", "Planning & Saisie", "Graphi
 # --- DASHBOARD ---
 if page == "Dashboard":
     st.title(f"🎯 Dashboard : {choix_dos}")
-    
+   
     if st.button("❌ Supprimer ce Dossier"):
         del st.session_state.config['dossiers'][choix_dos]
         with open(CONFIG_FILE, "w") as f: json.dump(st.session_state.config, f)
         st.rerun()
-        
+       
     for m in st.session_state.config['dossiers'].get(choix_dos, []):
         c1, c2 = st.columns([4, 1])
         c1.info(f"📚 {m}")
-        if c2.button("🗑️", key=f"del_{m}"):
-            st.session_state.config['dossiers'][choix_dos].remove(m)
-            with open(CONFIG_FILE, "w") as f: json.dump(st.session_state.config, f)
-            st.rerun()
-    
+        if c2.button("🗑️", key=f"del_{m}"): st.session_state.config['dossiers'][choix_dos].remove(m); with open(CONFIG_FILE, "w") as f: json.dump(st.session_state.config, f); st.rerun()
+   
     st.subheader("⚠️ Rattrapages à traiter")
     df_dos = st.session_state.data[st.session_state.data['Dossier'] == choix_dos]
-    
+   
     def est_en_rattrapage(row):
         j_str = row['J_Type'].replace('J', '')
         seuil = int(st.session_state.config['seuils'].get(j_str, 12))
         return row['Note'] > 0 and row['Note'] < seuil
 
     rattrapages = df_dos[df_dos.apply(est_en_rattrapage, axis=1)]
-    
+   
     if not rattrapages.empty:
         st.table(rattrapages[['Matiere', 'Chapitre', 'J_Type', 'Date', 'Note']])
         for _, row in rattrapages.iterrows():
@@ -97,6 +94,8 @@ if page == "Dashboard":
                 if not dt_tr: dt_tr = d + dt.timedelta(days=1)
                 n_r = {'ID':str(uuid.uuid4()),'Dossier':choix_dos,'Matiere':row['Matiere'],'Chapitre':row['Chapitre'],'J_Type':'RAP','Date':str(dt_tr),'Note':0,'Statut':'À faire'}
                 st.session_state.data = pd.concat([st.session_state.data, pd.DataFrame([n_r])]); st.session_state.data = st.session_state.data[st.session_state.data['ID'] != row['ID']]; save_data(st.session_state.data); st.rerun()
+    else:
+        st.write("Aucun rattrapage en attente.")
 
 # --- PLANNING & SAISIE ---
 elif page == "Planning & Saisie":
@@ -109,16 +108,15 @@ elif page == "Planning & Saisie":
             if st.form_submit_button("Générer Planning"):
                 if dex:
                     new_rows = []
-                    # Injection chirurgicale : on ajoute le J0 ici
+                    # --- INJECTION CHIRURGICALE DU J0 SANS DOUBLON ---
                     new_rows.append({'ID': str(uuid.uuid4()), 'Dossier': choix_dos, 'Matiere': mat, 'Chapitre': chap, 'J_Type': 'J0', 'Date': str(d0), 'Note': 0, 'Statut': 'À faire'})
-                    # On ne boucle que sur le cadencier pour le reste
                     for j in st.session_state.config['cadencier']:
                         date_j = d0 + dt.timedelta(days=j)
                         if date_j <= dex:
                             new_rows.append({'ID': str(uuid.uuid4()), 'Dossier': choix_dos, 'Matiere': mat, 'Chapitre': chap, 'J_Type': f'J{j}', 'Date': str(date_j), 'Note': 0, 'Statut': 'À faire'})
                     st.session_state.data = pd.concat([st.session_state.data, pd.DataFrame(new_rows)])
-                    save_data(st.session_state.data)
-                    st.rerun()
+                    st.session_state.data = st.session_state.data.drop_duplicates(subset=['Dossier', 'Chapitre', 'J_Type', 'Date'], keep='first')
+                    save_data(st.session_state.data); st.rerun()
 
     st.subheader("🗓️ Planning Hebdomadaire")
     cols = st.columns(7)
@@ -147,7 +145,10 @@ elif page == "Planning & Saisie":
                 st.session_state.data.loc[mask, 'Note'] = row['Note']
                 st.session_state.data.loc[mask, 'Statut'] = row['Statut']
             save_data(st.session_state.data)
-            st.success("Enregistré !"); st.rerun()
+            st.success("Notes enregistrées avec succès !")
+            st.rerun()
+    else:
+        st.info("Aucun chapitre prévu aujourd'hui.")
 
 # --- GRAPHIQUES ---
 elif page == "Graphiques":
