@@ -4,6 +4,7 @@ import datetime as dt
 import os
 import json
 import uuid
+import time
 
 st.set_page_config(layout="wide")
 
@@ -122,11 +123,13 @@ if page == "Dashboard":
                         st.rerun()
                     else:
                         st.error("Rattrapage impossible avant le J suivant.")
+                        time.sleep(2)
                         st.session_state.data = st.session_state.data[st.session_state.data['ID'] != row['ID']]
                         save_data(st.session_state.data)
                         st.rerun()
                 else:
                     st.error("Aucune échéance future trouvée, réintégration impossible.")
+                    time.sleep(2)
                     st.session_state.data = st.session_state.data[st.session_state.data['ID'] != row['ID']]
                     save_data(st.session_state.data)
                     st.rerun()
@@ -160,7 +163,6 @@ elif page == "Planning & Saisie":
             st.markdown(f"**{day.strftime('%d/%m')}**")
             temp = st.session_state.data[(pd.to_datetime(st.session_state.data['Date']).dt.date == day) & (st.session_state.data['Dossier'] == choix_dos)]
             for _, r in temp.iterrows():
-                # --- Modification chirurgicale épurée ---
                 c1, c2 = st.columns([0.1, 1])
                 with c1:
                     with st.popover("🎯"):
@@ -183,7 +185,6 @@ elif page == "Planning & Saisie":
                             st.session_state.data.loc[mask, 'Statut'] = 'À faire'
                             save_data(st.session_state.data)
                             st.rerun()
-                # -------------------------------------------
 
     st.divider()
     st.subheader("Saisie Notes - Aujourd'hui")
