@@ -30,7 +30,7 @@ def load_config():
 if 'data' not in st.session_state: st.session_state.data = load_data()
 if 'config' not in st.session_state: st.session_state.config = load_config()
 
-# --- FONCTIONS DE RÉINITIALISATION (CORRECTION BUG) ---
+# --- FONCTIONS DE RÉINITIALISATION ---
 def reset_dossier():
     nom = st.session_state.d_in
     if nom and nom not in st.session_state.config['dossiers']:
@@ -48,7 +48,6 @@ def reset_matiere():
 # --- SIDEBAR ---
 st.sidebar.title("⚙️ Pilot Expert")
 
-# Réglages
 with st.sidebar.expander("🛠️ Réglages", expanded=False):
     st.session_state.config['cours_max'] = st.number_input("Max cours/jour", 1, 20, st.session_state.config.get('cours_max', 5))
     cad_str = st.text_input("Cadencier (jours)", ",".join(map(str, st.session_state.config['cadencier'])))
@@ -59,16 +58,11 @@ with st.sidebar.expander("🛠️ Réglages", expanded=False):
         with open(CONFIG_FILE, "w") as f: json.dump(st.session_state.config, f)
         st.rerun()
 
-# Gestion Dossiers
 st.sidebar.text_input("Nouveau Dossier", key="d_in")
 st.sidebar.button("➕ Créer Dossier", on_click=reset_dossier)
-
 choix_dos = st.sidebar.selectbox("Dossier", list(st.session_state.config['dossiers'].keys()))
-
-# Gestion Matières
 st.sidebar.text_input("Nom Matière", key="m_in")
 st.sidebar.button("➕ Ajouter Matière", on_click=reset_matiere)
-
 page = st.sidebar.radio("Navigation", ["Dashboard", "Planning & Saisie", "Graphiques"])
 
 # --- DASHBOARD ---
@@ -87,10 +81,7 @@ if page == "Dashboard":
         if c2.button("🗑️", key=f"del_{m}"):
             st.session_state.config['dossiers'][choix_dos].remove(m)
             with open(CONFIG_FILE, "w") as f: json.dump(st.session_state.config, f)
-            st.session_state.data = st.session_state.data[
-                (st.session_state.data['Dossier'] != choix_dos) | 
-                (st.session_state.data['Matiere'] != m)
-            ]
+            st.session_state.data = st.session_state.data[(st.session_state.data['Dossier'] != choix_dos) | (st.session_state.data['Matiere'] != m)]
             save_data(st.session_state.data)
             st.rerun()
 
@@ -106,31 +97,25 @@ if page == "Dashboard":
         st.table(rattrapages[['Matiere', 'Chapitre', 'J_Type', 'Date', 'Note']])
         for _, row in rattrapages.iterrows():
             if st.button(f"Réintégrer {row['Chapitre']}", key=f"btn_{row['ID']}"):
-                # LOGIQUE MODIFIÉE : Recherche de date disponible
+                # Identification de la date limite : le prochain J du même chapitre
+                dates_suivantes = st.session_state.data[
+                    (st.session_state.data['Chapitre'] == row['Chapitre']) & 
+                    (st.session_state.data['Date'] > row['Date'])
+                ].sort_values('Date')
+                
+                date_limite = dates_suivantes['Date'].iloc[0] if not dates_suivantes.empty else dt.date.today() + dt.timedelta(days=30)
+                
+                # Recherche date dispo
                 date_candidat = dt.date.today() + dt.timedelta(days=1)
                 trouve = False
-                # Limite arbitraire de 60 jours pour éviter les boucles infinies
-                while not trouve and (date_candidat - dt.date.today()).days < 60:
-                    count = len(st.session_state.data[
-                        (pd.to_datetime(st.session_state.data['Date']).dt.date == date_candidat) & 
-                        (st.session_state.data['Dossier'] == choix_dos)
-                    ])
-                    # Vérifier dimanche (weekday 6) et quota
+                while date_candidat < date_limite and not trouve:
+                    count = len(st.session_state.data[(pd.to_datetime(st.session_state.data['Date']).dt.date == date_candidat) & (st.session_state.data['Dossier'] == choix_dos)])
                     if date_candidat.weekday() != 6 and count < st.session_state.config.get('cours_max', 5):
                         trouve = True
                     else:
                         date_candidat += dt.timedelta(days=1)
                 
-                n_r = {
-                    'ID': str(uuid.uuid4()), 
-                    'Dossier': choix_dos, 
-                    'Matiere': row['Matiere'], 
-                    'Chapitre': row['Chapitre'], 
-                    'J_Type': 'RAP', 
-                    'Date': date_candidat, 
-                    'Note': 0, 
-                    'Statut': 'À faire'
-                }
+                n_r = {'ID': str(uuid.uuid4()), 'Dossier': choix_dos, 'Matiere': row['Matiere'], 'Chapitre': row['Chapitre'], 'J_Type': 'RAP', 'Date': date_candidat, 'Note': 0, 'Statut': 'À faire'}
                 st.session_state.data = pd.concat([st.session_state.data, pd.DataFrame([n_r])])
                 st.session_state.data = st.session_state.data[st.session_state.data['ID'] != row['ID']]
                 save_data(st.session_state.data)
