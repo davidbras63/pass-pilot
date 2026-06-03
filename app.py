@@ -10,6 +10,7 @@ st.set_page_config(layout="wide")
 DATA_FILE = "data.csv"
 CONFIG_FILE = "config.json"
 
+# --- GESTION DONNÉES & CONFIG ---
 def load_data():
     if os.path.exists(DATA_FILE):
         df = pd.read_csv(DATA_FILE)
@@ -24,12 +25,7 @@ def save_data(df):
 def load_config():
     if os.path.exists(CONFIG_FILE):
         with open(CONFIG_FILE, "r") as f: return json.load(f)
-    return {
-        'cours_max': 5, 
-        'cadencier': [1, 3, 7, 14, 30], 
-        'seuils': {'1': 12, '3': 12, '7': 14, '14': 14, '30': 16}, 
-        'dossiers': {"PASS": []}
-    }
+    return {'cours_max': 5, 'cadencier': [1, 3, 7, 14, 30], 'seuils': {'1': 12, '3': 12, '7': 14, '14': 14, '30': 16}, 'dossiers': {"PASS": []}}
 
 if 'data' not in st.session_state: st.session_state.data = load_data()
 if 'config' not in st.session_state: st.session_state.config = load_config()
@@ -48,49 +44,60 @@ with st.sidebar.expander("🛠️ Réglages", expanded=False):
         with open(CONFIG_FILE, "w") as f: json.dump(st.session_state.config, f)
         st.rerun()
 
-# Gestion Dossiers
+# Dossiers et Matières
 new_dossier = st.sidebar.text_input("Nouveau Dossier", key="dossier_in")
-if st.sidebar.button("➕ Créer Dossier") and new_dossier:
-    st.session_state.config['dossiers'][new_dossier] = []
-    with open(CONFIG_FILE, "w") as f: json.dump(st.session_state.config, f)
-    st.session_state.dossier_in = ""
-    st.rerun()
+if st.sidebar.button("➕ Créer Dossier"):
+    if new_dossier:
+        st.session_state.config['dossiers'][new_dossier] = []
+        with open(CONFIG_FILE, "w") as f: json.dump(st.session_state.config, f)
+        st.session_state["dossier_in"] = ""
+        st.rerun()
 
 choix_dos = st.sidebar.selectbox("Dossier", list(st.session_state.config['dossiers'].keys()))
 
-# Gestion Matières
 new_matiere = st.sidebar.text_input("Nom Matière", key="matiere_in")
-if st.sidebar.button("➕ Ajouter Matière") and new_matiere:
-    st.session_state.config['dossiers'][choix_dos].append(new_matiere)
-    with open(CONFIG_FILE, "w") as f: json.dump(st.session_state.config, f)
-    st.session_state.matiere_in = ""
-    st.rerun()
+if st.sidebar.button("➕ Ajouter Matière"):
+    if new_matiere:
+        st.session_state.config['dossiers'][choix_dos].append(new_matiere)
+        with open(CONFIG_FILE, "w") as f: json.dump(st.session_state.config, f)
+        st.session_state["matiere_in"] = ""
+        st.rerun()
 
 page = st.sidebar.radio("Navigation", ["Dashboard", "Planning & Saisie", "Graphiques"])
 
 # --- DASHBOARD ---
 if page == "Dashboard":
     st.title(f"🎯 Dashboard : {choix_dos}")
-    
     if st.button("❌ Supprimer ce Dossier"):
         del st.session_state.config['dossiers'][choix_dos]
         with open(CONFIG_FILE, "w") as f: json.dump(st.session_state.config, f)
         st.session_state.data = st.session_state.data[st.session_state.data['Dossier'] != choix_dos]
         save_data(st.session_state.data)
         st.rerun()
-    
     for m in st.session_state.config['dossiers'].get(choix_dos, []):
         c1, c2 = st.columns([4, 1])
         c1.info(f"📚 {m}")
         if c2.button("🗑️", key=f"del_{m}"):
             st.session_state.config['dossiers'][choix_dos].remove(m)
             with open(CONFIG_FILE, "w") as f: json.dump(st.session_state.config, f)
-            st.session_state.data = st.session_state.data[
-                (st.session_state.data['Dossier'] != choix_dos) | 
-                (st.session_state.data['Matiere'] != m)
-            ]
+            st.session_state.data = st.session_state.data[(st.session_state.data['Dossier'] != choix_dos) | (st.session_state.data['Matiere'] != m)]
             save_data(st.session_state.data)
             st.rerun()
+
+    st.subheader("⚠️ Rattrapages à traiter")
+    df_dos = st.session_state.data[st.session_state.data['Dossier'] == choix_dos]
+    def est_en_rattrapage(row):
+        j_str = str(row['J_Type']).replace('J', '')
+        seuil = int(st.session_state.config['seuils'].get(j_str, 12))
+        return row['Note'] > 0 and row['Note'] < seuil
+    rattrapages = df_dos[df_dos.apply(est_en_rattrapage, axis=1)]
+    if not rattrapages.empty:
+        st.table(rattrapages[['Matiere', 'Chapitre', 'J_Type', 'Date', 'Note']])
+        for _, row in rattrapages.iterrows():
+            if st.button(f"Réintégrer {row['Chapitre']}", key=f"btn_{row['ID']}"):
+                d_tr = dt.date.today() + dt.timedelta(days=1)
+                n_r = {'ID':str(uuid.uuid4()),'Dossier':choix_dos,'Matiere':row['Matiere'],'Chapitre':row['Chapitre'],'J_Type':'RAP','Date':d_tr,'Note':0,'Statut':'À faire'}
+                st.session_state.data = pd.concat([st.session_state.data, pd.DataFrame([n_r])]); st.session_state.data = st.session_state.data[st.session_state.data['ID'] != row['ID']]; save_data(st.session_state.data); st.rerun()
 
 # --- PLANNING & SAISIE ---
 elif page == "Planning & Saisie":
@@ -108,8 +115,7 @@ elif page == "Planning & Saisie":
                         if d_j <= dex:
                             new_rows.append({'ID': str(uuid.uuid4()), 'Dossier': choix_dos, 'Matiere': mat, 'Chapitre': chap, 'J_Type': f'J{j}', 'Date': d_j, 'Note': 0, 'Statut': 'À faire'})
                     st.session_state.data = pd.concat([st.session_state.data, pd.DataFrame(new_rows)]).drop_duplicates(subset=['Dossier', 'Chapitre', 'J_Type', 'Date'])
-                    save_data(st.session_state.data)
-                    st.rerun()
+                    save_data(st.session_state.data); st.rerun()
 
     st.subheader("🗓️ Planning Hebdomadaire")
     cols = st.columns(7)
@@ -130,10 +136,8 @@ elif page == "Planning & Saisie":
         if st.button("💾 Enregistrer"):
             for _, row in edited.iterrows():
                 mask = st.session_state.data['ID'] == row['ID']
-                st.session_state.data.loc[mask, 'Note'] = row['Note']
-                st.session_state.data.loc[mask, 'Statut'] = row['Statut']
-            save_data(st.session_state.data)
-            st.rerun()
+                st.session_state.data.loc[mask, ['Note', 'Statut']] = [row['Note'], row['Statut']]
+            save_data(st.session_state.data); st.rerun()
 
 elif page == "Graphiques":
     st.title("📊 Progression")
