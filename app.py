@@ -42,24 +42,24 @@ with st.sidebar.expander("🛠️ Réglages", expanded=False):
         with open(CONFIG_FILE, "w") as f: json.dump(st.session_state.config, f)
         st.rerun()
 
-# --- FORMULAIRES SIDEBAR ---
-st.session_state.input_dossier = st.sidebar.text_input("Nouveau Dossier", key="input_dossier")
-if st.sidebar.button("➕ Créer Dossier"):
-    if st.session_state.input_dossier:
-        st.session_state.config['dossiers'][st.session_state.input_dossier] = []
-        with open(CONFIG_FILE, "w") as f: json.dump(st.session_state.config, f)
-        st.session_state.input_dossier = ""
-        st.rerun()
+# Correction bug saisie Sidebar : utilisation de variables de session pour vider les champs proprement
+if 'input_dossier' not in st.session_state: st.session_state.input_dossier = ""
+st.sidebar.text_input("Nouveau Dossier", key="input_dossier")
+if st.sidebar.button("➕ Créer Dossier") and st.session_state.input_dossier:
+    st.session_state.config['dossiers'][st.session_state.input_dossier] = []
+    with open(CONFIG_FILE, "w") as f: json.dump(st.session_state.config, f)
+    st.session_state.input_dossier = ""
+    st.rerun()
 
 choix_dos = st.sidebar.selectbox("Dossier", list(st.session_state.config['dossiers'].keys()))
 
-st.session_state.input_matiere = st.sidebar.text_input("Nom Matière", key="input_matiere")
-if st.sidebar.button("➕ Ajouter Matière"):
-    if st.session_state.input_matiere:
-        st.session_state.config['dossiers'][choix_dos].append(st.session_state.input_matiere)
-        with open(CONFIG_FILE, "w") as f: json.dump(st.session_state.config, f)
-        st.session_state.input_matiere = ""
-        st.rerun()
+if 'input_matiere' not in st.session_state: st.session_state.input_matiere = ""
+st.sidebar.text_input("Nom Matière", key="input_matiere")
+if st.sidebar.button("➕ Ajouter Matière") and st.session_state.input_matiere:
+    st.session_state.config['dossiers'][choix_dos].append(st.session_state.input_matiere)
+    with open(CONFIG_FILE, "w") as f: json.dump(st.session_state.config, f)
+    st.session_state.input_matiere = ""
+    st.rerun()
 
 page = st.sidebar.radio("Navigation", ["Dashboard", "Planning & Saisie", "Graphiques"])
 
@@ -73,7 +73,11 @@ if page == "Dashboard":
     for m in st.session_state.config['dossiers'].get(choix_dos, []):
         c1, c2 = st.columns([4, 1])
         c1.info(f"📚 {m}")
-        if c2.button("🗑️", key=f"del_{m}"): st.session_state.config['dossiers'][choix_dos].remove(m); with open(CONFIG_FILE, "w") as f: json.dump(st.session_state.config, f); st.rerun()
+        # Correction syntaxe : suppression du point-virgule et remplacement par retour à la ligne
+        if c2.button("🗑️", key=f"del_{m}"): 
+            st.session_state.config['dossiers'][choix_dos].remove(m)
+            with open(CONFIG_FILE, "w") as f: json.dump(st.session_state.config, f)
+            st.rerun()
 
     st.subheader("⚠️ Rattrapages à traiter")
     df_dos = st.session_state.data[st.session_state.data['Dossier'] == choix_dos]
@@ -107,6 +111,7 @@ elif page == "Planning & Saisie":
                         if date_j <= dex:
                             new_rows.append({'ID': str(uuid.uuid4()), 'Dossier': choix_dos, 'Matiere': mat, 'Chapitre': chap, 'J_Type': f'J{j}', 'Date': str(date_j), 'Note': 0, 'Statut': 'À faire'})
                     st.session_state.data = pd.concat([st.session_state.data, pd.DataFrame(new_rows)])
+                    # Correction doublon J0 conservée
                     st.session_state.data = st.session_state.data.drop_duplicates(subset=['Dossier', 'Chapitre', 'J_Type', 'Date'], keep='first')
                     save_data(st.session_state.data); st.rerun()
 
