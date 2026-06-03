@@ -163,7 +163,7 @@ elif page == "Planning & Saisie":
                 # --- Modification chirurgicale épurée ---
                 c1, c2 = st.columns([0.1, 1])
                 with c1:
-                    with st.popover("▶"):
+                    with st.popover("🎯"):
                         nouvelle_date = st.date_input("Changer date :", r['Date'], key=f"d_{r['ID']}")
                         if st.button("Valider", key=f"btn_{r['ID']}"):
                             st.session_state.data.loc[st.session_state.data['ID'] == r['ID'], 'Date'] = nouvelle_date
