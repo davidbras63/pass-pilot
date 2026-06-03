@@ -99,6 +99,7 @@ if page == "Dashboard":
         st.table(rattrapages[['Matiere', 'Chapitre', 'J_Type', 'Date', 'Note']])
         for _, row in rattrapages.iterrows():
             if st.button(f"Réintégrer {row['Chapitre']}", key=f"btn_{row['ID']}"):
+                # Correction : On ne supprime plus la ligne, on ajoute juste une ligne de rattrapage
                 future_dates = st.session_state.data[
                     (st.session_state.data['Chapitre'] == row['Chapitre']) &
                     (st.session_state.data['Date'] > row['Date'])
@@ -119,21 +120,16 @@ if page == "Dashboard":
                     if trouve:
                         n_r = {'ID': str(uuid.uuid4()), 'Dossier': choix_dos, 'Matiere': row['Matiere'], 'Chapitre': row['Chapitre'], 'J_Type': 'RAP', 'Date': date_candidat, 'Note': 0, 'Statut': 'À faire'}
                         st.session_state.data = pd.concat([st.session_state.data, pd.DataFrame([n_r])])
-                        st.session_state.data = st.session_state.data[st.session_state.data['ID'] != row['ID']]
+                        # On change juste le statut de l'ancienne note pour ne plus la traiter en boucle
+                        st.session_state.data.loc[st.session_state.data['ID'] == row['ID'], 'Statut'] = 'Traité'
                         save_data(st.session_state.data)
                         st.rerun()
                     else:
                         st.error("Rattrapage impossible avant le J suivant.")
                         time.sleep(2)
-                        st.session_state.data = st.session_state.data[st.session_state.data['ID'] != row['ID']]
-                        save_data(st.session_state.data)
-                        st.rerun()
                 else:
                     st.error("Aucune échéance future trouvée, réintégration impossible.")
                     time.sleep(2)
-                    st.session_state.data = st.session_state.data[st.session_state.data['ID'] != row['ID']]
-                    save_data(st.session_state.data)
-                    st.rerun()
 
 # --- PLANNING & SAISIE ---
 elif page == "Planning & Saisie":
@@ -211,15 +207,14 @@ elif page == "Graphiques":
     if len(chapitres) > 0:
         sel_chap = st.selectbox("Choisir un chapitre", chapitres)
         
-        # On extrait les données et on force la conversion numérique des notes
+        # On récupère toutes les notes pour ce chapitre
         df_notes = st.session_state.data[
             (st.session_state.data['Dossier'] == choix_dos) & 
             (st.session_state.data['Chapitre'] == sel_chap)
         ].copy()
         
-        # Conversion forcée pour être sûr que les chiffres sont lus
         df_notes['Note_Num'] = pd.to_numeric(df_notes['Note'], errors='coerce')
-        df_notes = df_notes[df_notes['Note_Num'] > 0]
+        # On garde tout, même si c'est 0 (pour voir la courbe globale)
         
         if not df_notes.empty:
             df_notes['Order'] = df_notes['J_Type'].astype(str).str.extract('(\d+)').fillna(0).astype(int)
@@ -232,6 +227,6 @@ elif page == "Graphiques":
             ).properties(width=400, height=250)
             st.altair_chart(chart, use_container_width=False)
         else:
-            st.warning(f"Aucune note > 0 trouvée pour '{sel_chap}'.")
+            st.warning("Aucune donnée trouvée.")
     else:
-        st.info("Aucun chapitre trouvé pour cette matière.")
+        st.info("Aucun chapitre trouvé.")
