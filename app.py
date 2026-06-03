@@ -160,27 +160,30 @@ elif page == "Planning & Saisie":
             st.markdown(f"**{day.strftime('%d/%m')}**")
             temp = st.session_state.data[(pd.to_datetime(st.session_state.data['Date']).dt.date == day) & (st.session_state.data['Dossier'] == choix_dos)]
             for _, r in temp.iterrows():
-                # --- Modification esthétique ici : popover discret ---
-                with st.popover("📅"):
-                    nouvelle_date = st.date_input("Date:", r['Date'], key=f"d_{r['ID']}")
-                    if st.button("Valider", key=f"btn_{r['ID']}"):
-                        st.session_state.data.loc[st.session_state.data['ID'] == r['ID'], 'Date'] = nouvelle_date
-                        save_data(st.session_state.data)
-                        st.rerun()
-                # ----------------------------------------------------
-                est_fait = r['Statut'] == 'Fait'
-                if st.checkbox(f"{r['Chapitre']} ({r['J_Type']})", value=est_fait, key=f"chk_{r['ID']}"):
-                    if not est_fait:
-                        mask = st.session_state.data['ID'] == r['ID']
-                        st.session_state.data.loc[mask, 'Statut'] = 'Fait'
-                        save_data(st.session_state.data)
-                        st.rerun()
-                else:
-                    if est_fait:
-                        mask = st.session_state.data['ID'] == r['ID']
-                        st.session_state.data.loc[mask, 'Statut'] = 'À faire'
-                        save_data(st.session_state.data)
-                        st.rerun()
+                # --- Modification chirurgicale ---
+                c_icon, c_check = st.columns([0.2, 1])
+                with c_icon:
+                    with st.popover("📅"):
+                        nouvelle_date = st.date_input("Date:", r['Date'], key=f"d_{r['ID']}")
+                        if st.button("OK", key=f"btn_{r['ID']}"):
+                            st.session_state.data.loc[st.session_state.data['ID'] == r['ID'], 'Date'] = nouvelle_date
+                            save_data(st.session_state.data)
+                            st.rerun()
+                with c_check:
+                    est_fait = r['Statut'] == 'Fait'
+                    if st.checkbox(f"{r['Chapitre']} ({r['J_Type']})", value=est_fait, key=f"chk_{r['ID']}"):
+                        if not est_fait:
+                            mask = st.session_state.data['ID'] == r['ID']
+                            st.session_state.data.loc[mask, 'Statut'] = 'Fait'
+                            save_data(st.session_state.data)
+                            st.rerun()
+                    else:
+                        if est_fait:
+                            mask = st.session_state.data['ID'] == r['ID']
+                            st.session_state.data.loc[mask, 'Statut'] = 'À faire'
+                            save_data(st.session_state.data)
+                            st.rerun()
+                # -----------------------------------
 
     st.divider()
     st.subheader("Saisie Notes - Aujourd'hui")
