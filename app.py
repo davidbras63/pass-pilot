@@ -42,27 +42,27 @@ with st.sidebar.expander("🛠️ Réglages", expanded=False):
         with open(CONFIG_FILE, "w") as f: json.dump(st.session_state.config, f)
         st.rerun()
 
-nom_dossier = st.sidebar.text_input("Nouveau Dossier")
-if st.sidebar.button("➕ Créer Dossier") and nom_dossier:
-    st.session_state.config['dossiers'][nom_dossier] = []; st.rerun()
+nom_dossier = st.sidebar.text_input("Nouveau Dossier", key="input_dossier")
+if st.sidebar.button("➕ Créer Dossier") and st.session_state.input_dossier:
+    st.session_state.config['dossiers'][st.session_state.input_dossier] = []; st.session_state.input_dossier = ""; st.rerun()
 
 choix_dos = st.sidebar.selectbox("Dossier", list(st.session_state.config['dossiers'].keys()))
-nom_matiere = st.sidebar.text_input("Nom Matière")
-if st.sidebar.button("➕ Ajouter Matière") and nom_matiere:
-    st.session_state.config['dossiers'][choix_dos].append(nom_matiere); st.rerun()
+nom_matiere = st.sidebar.text_input("Nom Matière", key="input_matiere")
+if st.sidebar.button("➕ Ajouter Matière") and st.session_state.input_matiere:
+    st.session_state.config['dossiers'][choix_dos].append(st.session_state.input_matiere); st.session_state.input_matiere = ""; st.rerun()
 
 page = st.sidebar.radio("Navigation", ["Dashboard", "Planning & Saisie", "Graphiques"])
 
 # --- DASHBOARD ---
 if page == "Dashboard":
     st.title(f"🎯 Dashboard : {choix_dos}")
-    
+   
     # Suppression Dossier
     if st.button("❌ Supprimer ce Dossier"):
         del st.session_state.config['dossiers'][choix_dos]
         with open(CONFIG_FILE, "w") as f: json.dump(st.session_state.config, f)
         st.rerun()
-        
+       
     for m in st.session_state.config['dossiers'].get(choix_dos, []):
         c1, c2 = st.columns([4, 1])
         c1.info(f"📚 {m}")
@@ -70,7 +70,7 @@ if page == "Dashboard":
    
     st.subheader("⚠️ Rattrapages à traiter")
     df_dos = st.session_state.data[st.session_state.data['Dossier'] == choix_dos]
-    
+   
     # Filtrage dynamique par palier
     def est_en_rattrapage(row):
         j_str = row['J_Type'].replace('J', '')
@@ -152,3 +152,4 @@ elif page == "Graphiques":
     for mat in st.session_state.config['dossiers'].get(choix_dos, []):
         st.subheader(f"📚 {mat}")
         st.table(st.session_state.data[(st.session_state.data['Matiere'] == mat) & (st.session_state.data['Note'] > 0)][['Date', 'Note']].tail(3))
+
