@@ -44,23 +44,23 @@ with st.sidebar.expander("🛠️ Réglages", expanded=False):
         with open(CONFIG_FILE, "w") as f: json.dump(st.session_state.config, f)
         st.rerun()
 
-# Dossiers et Matières
+# Dossiers et Matières - CORRIGÉS POUR VIDER ET ÉVITER ERREURS
 new_dossier = st.sidebar.text_input("Nouveau Dossier", key="dossier_in")
 if st.sidebar.button("➕ Créer Dossier"):
-    if new_dossier:
-        st.session_state.config['dossiers'][new_dossier] = []
+    if st.session_state.dossier_in:
+        st.session_state.config['dossiers'][st.session_state.dossier_in] = []
         with open(CONFIG_FILE, "w") as f: json.dump(st.session_state.config, f)
-        st.session_state["dossier_in"] = ""
+        st.session_state.dossier_in = "" # Vider
         st.rerun()
 
 choix_dos = st.sidebar.selectbox("Dossier", list(st.session_state.config['dossiers'].keys()))
 
 new_matiere = st.sidebar.text_input("Nom Matière", key="matiere_in")
 if st.sidebar.button("➕ Ajouter Matière"):
-    if new_matiere:
-        st.session_state.config['dossiers'][choix_dos].append(new_matiere)
+    if st.session_state.matiere_in:
+        st.session_state.config['dossiers'][choix_dos].append(st.session_state.matiere_in)
         with open(CONFIG_FILE, "w") as f: json.dump(st.session_state.config, f)
-        st.session_state["matiere_in"] = ""
+        st.session_state.matiere_in = "" # Vider
         st.rerun()
 
 page = st.sidebar.radio("Navigation", ["Dashboard", "Planning & Saisie", "Graphiques"])
