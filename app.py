@@ -8,29 +8,39 @@ import altair as alt
 
 st.set_page_config(layout="wide")
 
-# URL mise à jour avec ton nouveau déploiement
 WEB_APP_URL = "https://script.google.com/macros/s/AKfycbwA7ZGCqHcDgw_la2PDjuvLqGDx1smoqR75VOo5lytV-QgMlw2_6xnZtXI1sFensDDwfw/exec"
 
 def load_data_from_sheet():
     try:
-        response = requests.get(WEB_APP_URL, timeout=20)
-        data = response.json()
-        df = pd.DataFrame(data.get('data', []), columns=['Dossier', 'Matiere', 'Chapitre', 'J_Type', 'Date', 'Note', 'Statut', 'ID'])
-        df['Date'] = pd.to_datetime(df['Date']).dt.date
-        config = data.get('config', {'cours_max': 5, 'cadencier': [1, 3, 7, 14, 30], 'seuils': {'1': 12, '3': 12, '7': 14, '14': 14, '30': 16}, 'dossiers': {"PASS": []}})
-        return df, config
-    except:
-        return pd.DataFrame(columns=['Dossier', 'Matiere', 'Chapitre', 'J_Type', 'Date', 'Note', 'Statut', 'ID']), {'cours_max': 5, 'cadencier': [1, 3, 7, 14, 30], 'seuils': {'1': 12, '3': 12, '7': 14, '14': 14, '30': 16}, 'dossiers': {"PASS": []}}
+        response = requests.get(WEB_APP_URL, timeout=15)
+        if response.status_code == 200:
+            data = response.json()
+            df = pd.DataFrame(data.get('data', []), columns=['Dossier', 'Matiere', 'Chapitre', 'J_Type', 'Date', 'Note', 'Statut', 'ID'])
+            df['Date'] = pd.to_datetime(df['Date']).dt.date
+            config = data.get('config', {'cours_max': 5, 'cadencier': [1, 3, 7, 14, 30], 'seuils': {'1': 12, '3': 12, '7': 14, '14': 14, '30': 16}, 'dossiers': {"PASS": []}})
+            return df, config
+        else:
+            st.error("Erreur de connexion serveur : Google Sheets ne répond pas.")
+            return pd.DataFrame(columns=['Dossier', 'Matiere', 'Chapitre', 'J_Type', 'Date', 'Note', 'Statut', 'ID']), {'dossiers': {}}
+    except Exception as e:
+        st.error(f"Erreur de chargement : {e}")
+        return pd.DataFrame(columns=['Dossier', 'Matiere', 'Chapitre', 'J_Type', 'Date', 'Note', 'Statut', 'ID']), {'dossiers': {}}
 
 def save_all_to_sheet(df, config):
     df_to_send = df.copy()
     df_to_send['Date'] = df_to_send['Date'].astype(str)
     payload = {"data": df_to_send.values.tolist(), "config": config}
     try:
-        requests.post(WEB_APP_URL, json=payload, timeout=20)
-    except:
-        st.error("Erreur de sauvegarde")
+        response = requests.post(WEB_APP_URL, json=payload, timeout=15)
+        if response.status_code != 200:
+            st.error("⚠️ Échec de la sauvegarde sur Google Sheets !")
+            return False
+        return True
+    except Exception as e:
+        st.error(f"⚠️ Erreur réseau : {e}")
+        return False
 
+# Chargement initial
 if 'data' not in st.session_state:
     st.session_state.data, st.session_state.config = load_data_from_sheet()
 
@@ -38,20 +48,22 @@ def reset_dossier():
     nom = st.session_state.d_in
     if nom and nom not in st.session_state.config['dossiers']:
         st.session_state.config['dossiers'][nom] = []
-        save_all_to_sheet(st.session_state.data, st.session_state.config)
+        if save_all_to_sheet(st.session_state.data, st.session_state.config):
+            st.session_state.data, st.session_state.config = load_data_from_sheet()
     st.session_state.d_in = ""
 
 def reset_matiere():
     nom = st.session_state.m_in
     if nom and nom not in st.session_state.config['dossiers'][choix_dos]:
         st.session_state.config['dossiers'][choix_dos].append(nom)
-        save_all_to_sheet(st.session_state.data, st.session_state.config)
+        if save_all_to_sheet(st.session_state.data, st.session_state.config):
+            st.session_state.data, st.session_state.config = load_data_from_sheet()
     st.session_state.m_in = ""
 
 st.sidebar.title("⚙️ Pilot Expert")
 with st.sidebar.expander("🛠️ Réglages", expanded=False):
     st.session_state.config['cours_max'] = st.number_input("Max cours/jour", 1, 20, st.session_state.config.get('cours_max', 5))
-    cad_str = st.text_input("Cadencier (jours)", ",".join(map(str, st.session_state.config['cadencier'])))
+    cad_str = st.text_input("Cadencier (jours)", ",".join(map(str, st.session_state.config.get('cadencier', [1,3,7,14,30]))))
     st.session_state.config['cadencier'] = [int(x.strip()) for x in cad_str.split(",")]
     for j in st.session_state.config['cadencier']:
         st.session_state.config['seuils'][str(j)] = st.slider(f"Seuil Note J{j}", 10, 20, int(st.session_state.config['seuils'].get(str(j), 12)))
@@ -61,7 +73,7 @@ with st.sidebar.expander("🛠️ Réglages", expanded=False):
 
 st.sidebar.text_input("Nouveau Dossier", key="d_in")
 st.sidebar.button("➕ Créer Dossier", on_click=reset_dossier)
-choix_dos = st.sidebar.selectbox("Dossier", list(st.session_state.config['dossiers'].keys()))
+choix_dos = st.sidebar.selectbox("Dossier", list(st.session_state.config.get('dossiers', {}).keys()))
 st.sidebar.text_input("Nom Matière", key="m_in")
 st.sidebar.button("➕ Ajouter Matière", on_click=reset_matiere)
 page = st.sidebar.radio("Navigation", ["Dashboard", "Planning & Saisie", "Graphiques"])
@@ -81,8 +93,6 @@ if page == "Dashboard":
                 st.session_state.data = st.session_state.data[(st.session_state.data['Dossier'] != choix_dos) | (st.session_state.data['Matiere'] != m)]
                 save_all_to_sheet(st.session_state.data, st.session_state.config)
                 st.rerun()
-            chapitres_matiere = st.session_state.data[(st.session_state.data['Dossier'] == choix_dos) & (st.session_state.data['Matiere'] == m)]['Chapitre'].unique()
-            if len(chapitres_matiere) > 0: st.write("**Chapitres :**", ", ".join(chapitres_matiere))
 
     st.subheader("⚠️ Rattrapages à traiter")
     df_dos = st.session_state.data[st.session_state.data['Dossier'] == choix_dos].copy()
@@ -99,13 +109,16 @@ if page == "Dashboard":
         for _, row in rattrapages.iterrows():
             if st.button(f"Réintégrer {row['Chapitre']}", key=f"btn_{row['ID']}"):
                 st.session_state.data.loc[st.session_state.data['ID'] == row['ID'], 'Statut'] = 'Traité'
-                save_all_to_sheet(st.session_state.data, st.session_state.config)
-                st.rerun()
+                if save_all_to_sheet(st.session_state.data, st.session_state.config):
+                    st.session_state.data, st.session_state.config = load_data_from_sheet()
+                    st.rerun()
+                else:
+                    st.error("Échec de la réintégration : la donnée n'a pas pu être sauvegardée.")
 
 elif page == "Planning & Saisie":
     with st.expander("✍️ Ajouter Chapitre", expanded=True):
         with st.form("Add_Form", clear_on_submit=True):
-            mat = st.selectbox("Matière", st.session_state.config['dossiers'].get(choix_dos, []))
+            mat = st.selectbox("Matière", st.session_state.config.get('dossiers', {}).get(choix_dos, []))
             chap = st.text_input("Titre")
             d0 = st.date_input("Date J0")
             dex = st.date_input("Date Examen", value=None)
@@ -129,16 +142,10 @@ elif page == "Planning & Saisie":
             st.markdown(f"**{day.strftime('%d/%m')}**")
             temp = st.session_state.data[(pd.to_datetime(st.session_state.data['Date']).dt.date == day) & (st.session_state.data['Dossier'] == choix_dos)]
             for _, r in temp.iterrows():
-                c1, c2 = st.columns([0.8, 0.2])
-                with c1:
-                    if st.checkbox(f"{r['Chapitre']} ({r['J_Type']})", value=(r['Statut'] == 'Fait'), key=f"chk_{r['ID']}"):
-                        st.session_state.data.loc[st.session_state.data['ID'] == r['ID'], 'Statut'] = 'Fait'
-                    else:
-                        st.session_state.data.loc[st.session_state.data['ID'] == r['ID'], 'Statut'] = 'À faire'
-                with c2:
-                    new_d = st.date_input("📅", value=r['Date'], key=f"d_{r['ID']}", label_visibility="collapsed")
-                    if new_d != r['Date']:
-                        st.session_state.data.loc[st.session_state.data['ID'] == r['ID'], 'Date'] = new_d
+                if st.checkbox(f"{r['Chapitre']} ({r['J_Type']})", value=(r['Statut'] == 'Fait'), key=f"chk_{r['ID']}"):
+                    st.session_state.data.loc[st.session_state.data['ID'] == r['ID'], 'Statut'] = 'Fait'
+                else:
+                    st.session_state.data.loc[st.session_state.data['ID'] == r['ID'], 'Statut'] = 'À faire'
                 save_all_to_sheet(st.session_state.data, st.session_state.config)
 
     st.subheader("Saisie Notes")
@@ -164,7 +171,7 @@ elif page == "Planning & Saisie":
 
 elif page == "Graphiques":
     st.title("📊 Progression")
-    matieres = st.session_state.config['dossiers'].get(choix_dos, [])
+    matieres = st.session_state.config.get('dossiers', {}).get(choix_dos, [])
     sel_mat = st.selectbox("Choisir une matière", matieres)
     df_mat = st.session_state.data[(st.session_state.data['Dossier'] == choix_dos) & (st.session_state.data['Matiere'] == sel_mat)]
     chapitres = df_mat['Chapitre'].unique()
