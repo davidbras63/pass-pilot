@@ -13,24 +13,25 @@ WEB_APP_URL = "https://script.google.com/macros/s/AKfycbwA7ZGCqHcDgw_Ia2PDjuvLqG
 
 def load_data_from_sheet():
     try:
-        response = requests.get(WEB_APP_URL, timeout=15)
+        response = requests.get(WEB_APP_URL, timeout=20)
         if response.status_code == 200:
             data = response.json()
             df = pd.DataFrame(data.get('data', []), columns=['Dossier', 'Matiere', 'Chapitre', 'J_Type', 'Date', 'Note', 'Statut', 'ID'])
             df['Date'] = pd.to_datetime(df['Date']).dt.date
             config = data.get('config', {'cours_max': 5, 'cadencier': [1, 3, 7, 14, 30], 'seuils': {'1': 12, '3': 12, '7': 14, '14': 14, '30': 16}, 'dossiers': {"PASS": []}})
             return df, config
-        else:
-            return pd.DataFrame(columns=['Dossier', 'Matiere', 'Chapitre', 'J_Type', 'Date', 'Note', 'Statut', 'ID']), {'cours_max': 5, 'cadencier': [1, 3, 7, 14, 30], 'seuils': {'1': 12, '3': 12, '7': 14, '14': 14, '30': 16}, 'dossiers': {"PASS": []}}
     except:
-        return pd.DataFrame(columns=['Dossier', 'Matiere', 'Chapitre', 'J_Type', 'Date', 'Note', 'Statut', 'ID']), {'cours_max': 5, 'cadencier': [1, 3, 7, 14, 30], 'seuils': {'1': 12, '3': 12, '7': 14, '14': 14, '30': 16}, 'dossiers': {"PASS": []}}
+        st.error("Erreur de chargement des données.")
+    return pd.DataFrame(columns=['Dossier', 'Matiere', 'Chapitre', 'J_Type', 'Date', 'Note', 'Statut', 'ID']), {'cours_max': 5, 'cadencier': [1, 3, 7, 14, 30], 'seuils': {'1': 12, '3': 12, '7': 14, '14': 14, '30': 16}, 'dossiers': {"PASS": []}}
 
 def save_all_to_sheet(df, config):
     df_to_send = df.copy()
     df_to_send['Date'] = df_to_send['Date'].astype(str)
     payload = {"data": df_to_send.values.tolist(), "config": config}
-    requests.post(WEB_APP_URL, json=payload)
-    time.sleep(1)
+    try:
+        requests.post(WEB_APP_URL, json=payload, timeout=20)
+    except Exception as e:
+        st.error(f"Erreur lors de la sauvegarde : {e}")
 
 if 'data' not in st.session_state:
     st.session_state.data, st.session_state.config = load_data_from_sheet()
@@ -58,7 +59,7 @@ with st.sidebar.expander("🛠️ Réglages", expanded=False):
     st.session_state.config['cadencier'] = [int(x.strip()) for x in cad_str.split(",")]
     for j in st.session_state.config['cadencier']:
         st.session_state.config['seuils'][str(j)] = st.slider(f"Seuil Note J{j}", 10, 20, int(st.session_state.config['seuils'].get(str(j), 12)))
-    if st.button("💾 Enregistrer"):
+    if st.button("💾 Enregistrer Réglages"):
         save_all_to_sheet(st.session_state.data, st.session_state.config)
         st.rerun()
 
@@ -75,7 +76,6 @@ if page == "Dashboard":
         del st.session_state.config['dossiers'][choix_dos]
         st.session_state.data = st.session_state.data[st.session_state.data['Dossier'] != choix_dos]
         save_all_to_sheet(st.session_state.data, st.session_state.config)
-        st.session_state.data, st.session_state.config = load_data_from_sheet()
         st.rerun()
     for m in st.session_state.config['dossiers'].get(choix_dos, []):
         with st.expander(f"📚 {m}"):
@@ -84,7 +84,6 @@ if page == "Dashboard":
                 st.session_state.config['dossiers'][choix_dos].remove(m)
                 st.session_state.data = st.session_state.data[(st.session_state.data['Dossier'] != choix_dos) | (st.session_state.data['Matiere'] != m)]
                 save_all_to_sheet(st.session_state.data, st.session_state.config)
-                st.session_state.data, st.session_state.config = load_data_from_sheet()
                 st.rerun()
             chapitres_matiere = st.session_state.data[(st.session_state.data['Dossier'] == choix_dos) & (st.session_state.data['Matiere'] == m)]['Chapitre'].unique()
             if len(chapitres_matiere) > 0: st.write("**Chapitres :**", ", ".join(chapitres_matiere))
@@ -105,7 +104,6 @@ if page == "Dashboard":
             if st.button(f"Réintégrer {row['Chapitre']}", key=f"btn_{row['ID']}"):
                 st.session_state.data.loc[st.session_state.data['ID'] == row['ID'], 'Statut'] = 'Traité'
                 save_all_to_sheet(st.session_state.data, st.session_state.config)
-                st.session_state.data, st.session_state.config = load_data_from_sheet()
                 st.rerun()
 
 elif page == "Planning & Saisie":
@@ -123,7 +121,6 @@ elif page == "Planning & Saisie":
                         if d_j <= dex: new_rows.append({'ID': str(uuid.uuid4()), 'Dossier': choix_dos, 'Matiere': mat, 'Chapitre': chap, 'J_Type': f'J{j}', 'Date': d_j, 'Note': 0, 'Statut': 'À faire'})
                     st.session_state.data = pd.concat([st.session_state.data, pd.DataFrame(new_rows)]).drop_duplicates(subset=['Dossier', 'Chapitre', 'J_Type', 'Date'])
                     save_all_to_sheet(st.session_state.data, st.session_state.config)
-                    st.session_state.data, st.session_state.config = load_data_from_sheet()
                     st.rerun()
 
     st.subheader("🗓️ Planning Hebdomadaire")
@@ -146,16 +143,16 @@ elif page == "Planning & Saisie":
                     new_d = st.date_input("📅", value=r['Date'], key=f"d_{r['ID']}", label_visibility="collapsed")
                     if new_d != r['Date']:
                         st.session_state.data.loc[st.session_state.data['ID'] == r['ID'], 'Date'] = new_d
-                save_all_to_sheet(st.session_state.data, st.session_state.config)
-                st.session_state.data, st.session_state.config = load_data_from_sheet()
-                st.rerun()
+                if st.button("💾", key=f"sv_{r['ID']}"):
+                    save_all_to_sheet(st.session_state.data, st.session_state.config)
+                    st.rerun()
 
     st.subheader("Saisie Notes")
     df_t = st.session_state.data[(pd.to_datetime(st.session_state.data['Date']).dt.date == dt.date.today()) & (st.session_state.data['Dossier'] == choix_dos)].copy()
     if not df_t.empty:
         df_t['Note'] = df_t['Note'].astype(str)
         edited = st.data_editor(df_t[['ID', 'Chapitre', 'J_Type', 'Note', 'Statut']], column_config={"ID": None, "Note": st.column_config.TextColumn("Note")}, use_container_width=True)
-        if st.button("💾 Enregistrer"):
+        if st.button("💾 Enregistrer Notes"):
             temp_df = st.session_state.data.copy()
             for _, row in edited.iterrows():
                 val_note = str(row['Note'])
@@ -169,7 +166,6 @@ elif page == "Planning & Saisie":
                 else: temp_df.loc[mask, ['Note', 'Statut']] = [val_note, row['Statut']]
             st.session_state.data = temp_df
             save_all_to_sheet(st.session_state.data, st.session_state.config)
-            st.session_state.data, st.session_state.config = load_data_from_sheet()
             st.rerun()
 
 elif page == "Graphiques":
