@@ -33,7 +33,6 @@ def save_all_to_sheet(df, config):
 if 'data' not in st.session_state:
     st.session_state.data, st.session_state.config = load_data_from_sheet()
 
-# --- Fonctions inchangées ---
 def reset_dossier():
     nom = st.session_state.d_in
     if nom and nom not in st.session_state.config['dossiers']:
@@ -70,7 +69,6 @@ page = st.sidebar.radio("Navigation", ["Dashboard", "Planning & Saisie", "Graphi
 
 if page == "Dashboard":
     st.title(f"🎯 Dashboard : {choix_dos}")
-    # (Dashboard inchangé...)
     if st.button("❌ Supprimer ce Dossier"):
         del st.session_state.config['dossiers'][choix_dos]
         st.session_state.data = st.session_state.data[st.session_state.data['Dossier'] != choix_dos]
@@ -110,7 +108,7 @@ elif page == "Planning & Saisie":
         with st.form("Add_Form", clear_on_submit=True):
             mat = st.selectbox("Matière", st.session_state.config['dossiers'].get(choix_dos, []))
             chap = st.text_input("Titre")
-            d0 = st.date_input("Date J0", value=dt.date.today()) # Date automatique
+            d0 = st.date_input("Date J0", value=dt.date.today())
             dex = st.date_input("Date Examen", value=None)
             if st.form_submit_button("Générer Planning"):
                 if chap and dex:
@@ -123,35 +121,28 @@ elif page == "Planning & Saisie":
                     st.rerun()
 
     st.subheader("🗓️ Planning Hebdomadaire")
-    cols = st.columns(7)
-    today = dt.date.today()
-    start = today - dt.timedelta(days=today.weekday())
-    for i, col in enumerate(cols):
-        day = start + dt.timedelta(days=i)
-        with col:
-            st.markdown(f"**{day.strftime('%d/%m')}**")
-            temp = st.session_state.data[(pd.to_datetime(st.session_state.data['Date']).dt.date == day) & (st.session_state.data['Dossier'] == choix_dos)]
-            for _, r in temp.iterrows():
-                # Checkbox simple
-                if st.checkbox(f"{r['Chapitre']} ({r['J_Type']})", value=(r['Statut'] == 'Fait'), key=f"chk_{r['ID']}"):
-                    st.session_state.data.loc[st.session_state.data['ID'] == r['ID'], 'Statut'] = 'Fait'
-                else:
-                    st.session_state.data.loc[st.session_state.data['ID'] == r['ID'], 'Statut'] = 'À faire'
-                st.date_input("📅", value=r['Date'], key=f"d_{r['ID']}", label_visibility="collapsed")
-                # Sauvegarde auto après chaque modification de ligne pour éviter de perdre les données
-                if st.button("Enregistrer", key=f"save_{r['ID']}"):
-                    save_all_to_sheet(st.session_state.data, st.session_state.config)
-                    st.rerun()
+    # Affichage ligne par ligne : Checkbox, Nom (J), Date
+    df_week = st.session_state.data[st.session_state.data['Dossier'] == choix_dos].copy()
+    for _, r in df_week.iterrows():
+        c1, c2, c3 = st.columns([0.6, 0.2, 0.2])
+        with c1:
+            if st.checkbox(f"{r['Chapitre']} ({r['J_Type']})", value=(r['Statut'] == 'Fait'), key=f"chk_{r['ID']}"):
+                st.session_state.data.loc[st.session_state.data['ID'] == r['ID'], 'Statut'] = 'Fait'
+            else:
+                st.session_state.data.loc[st.session_state.data['ID'] == r['ID'], 'Statut'] = 'À faire'
+        with c2:
+            st.date_input("", value=r['Date'], key=f"d_{r['ID']}", label_visibility="collapsed")
+        with c3:
+            if st.button("Enregistrer", key=f"save_{r['ID']}"):
+                save_all_to_sheet(st.session_state.data, st.session_state.config)
+                st.rerun()
 
     st.subheader("Saisie Notes")
-    df_t = st.session_state.data[(pd.to_datetime(st.session_state.data['Date']).dt.date == dt.date.today()) & (st.session_state.data['Dossier'] == choix_dos)].copy()
+    df_t = st.session_state.data[st.session_state.data['Dossier'] == choix_dos].copy()
     if not df_t.empty:
-        # CONVERSION FORCEE POUR EVITER LE PLANTAGE
         df_display = df_t[['ID', 'Chapitre', 'J_Type', 'Note', 'Statut']].copy()
         df_display['Note'] = df_display['Note'].astype(str) 
-        
         edited = st.data_editor(df_display, column_config={"ID": None, "Note": st.column_config.TextColumn("Note")}, use_container_width=True)
-        
         if st.button("💾 Enregistrer Notes"):
             temp_df = st.session_state.data.copy()
             for _, row in edited.iterrows():
@@ -168,7 +159,6 @@ elif page == "Planning & Saisie":
             st.rerun()
 
 elif page == "Graphiques":
-    # (Graphiques inchangés...)
     st.title("📊 Progression")
     matieres = st.session_state.config['dossiers'].get(choix_dos, [])
     sel_mat = st.selectbox("Choisir une matière", matieres)
