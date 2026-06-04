@@ -5,43 +5,34 @@ import uuid
 import requests
 import json
 import altair as alt
-import time
 
 st.set_page_config(layout="wide")
 
-# --- CONNEXION GOOGLE SHEETS ---
 WEB_APP_URL = "https://script.google.com/macros/s/AKfycbyLNNVhU2B775oH7VW84dU2Ud4g88c2H1XA-M-PXyq2lpXYKZS7pwJW6Q2FiVjMjMZSbw/exec"
 
-@st.cache_data(ttl=5) # Cache très court pour éviter les lenteurs tout en récupérant les modifs vite
 def load_data_from_sheet():
-    try:
-        response = requests.get(WEB_APP_URL, timeout=15)
-        data = response.json()
-        df = pd.DataFrame(data.get('data', []), columns=['Dossier', 'Matiere', 'Chapitre', 'J_Type', 'Date', 'Note', 'Statut', 'ID'])
-        df['Date'] = pd.to_datetime(df['Date']).dt.date
-        config = data.get('config', {'cours_max': 5, 'cadencier': [1, 3, 7, 14, 30], 'seuils': {'1': 12, '3': 12, '7': 14, '14': 14, '30': 16}, 'dossiers': {"PASS": []}})
-        return df, config
-    except:
-        return pd.DataFrame(columns=['Dossier', 'Matiere', 'Chapitre', 'J_Type', 'Date', 'Note', 'Statut', 'ID']), {'cours_max': 5, 'cadencier': [1, 3, 7, 14, 30], 'seuils': {'1': 12, '3': 12, '7': 14, '14': 14, '30': 16}, 'dossiers': {"PASS": []}}
+    response = requests.get(WEB_APP_URL)
+    data = response.json()
+    df = pd.DataFrame(data.get('data', []), columns=['Dossier', 'Matiere', 'Chapitre', 'J_Type', 'Date', 'Note', 'Statut', 'ID'])
+    df['Date'] = pd.to_datetime(df['Date']).dt.date
+    config = data.get('config', {'cours_max': 5, 'cadencier': [1, 3, 7, 14, 30], 'seuils': {'1': 12, '3': 12, '7': 14, '14': 14, '30': 16}, 'dossiers': {"PASS": []}})
+    return df, config
 
 def save_all_to_sheet(df, config):
     df_to_send = df.copy()
     df_to_send['Date'] = df_to_send['Date'].astype(str)
     payload = {"data": df_to_send.values.tolist(), "config": config}
-    try:
-        requests.post(WEB_APP_URL, json=payload, timeout=15)
-        st.cache_data.clear() # VIDER LE CACHE IMMÉDIATEMENT APRES SAUVEGARDE
-    except:
-        st.error("Erreur de sauvegarde")
+    requests.post(WEB_APP_URL, json=payload)
 
-# --- INITIALISATION ---
-st.session_state.data, st.session_state.config = load_data_from_sheet()
+if 'data' not in st.session_state:
+    st.session_state.data, st.session_state.config = load_data_from_sheet()
 
 def reset_dossier():
     nom = st.session_state.d_in
     if nom and nom not in st.session_state.config['dossiers']:
         st.session_state.config['dossiers'][nom] = []
         save_all_to_sheet(st.session_state.data, st.session_state.config)
+        st.session_state.data, st.session_state.config = load_data_from_sheet()
     st.session_state.d_in = ""
 
 def reset_matiere():
@@ -49,9 +40,9 @@ def reset_matiere():
     if nom and nom not in st.session_state.config['dossiers'][choix_dos]:
         st.session_state.config['dossiers'][choix_dos].append(nom)
         save_all_to_sheet(st.session_state.data, st.session_state.config)
+        st.session_state.data, st.session_state.config = load_data_from_sheet()
     st.session_state.m_in = ""
 
-# --- SIDEBAR ---
 st.sidebar.title("⚙️ Pilot Expert")
 with st.sidebar.expander("🛠️ Réglages", expanded=False):
     st.session_state.config['cours_max'] = st.number_input("Max cours/jour", 1, 20, st.session_state.config.get('cours_max', 5))
@@ -70,7 +61,6 @@ st.sidebar.text_input("Nom Matière", key="m_in")
 st.sidebar.button("➕ Ajouter Matière", on_click=reset_matiere)
 page = st.sidebar.radio("Navigation", ["Dashboard", "Planning & Saisie", "Graphiques"])
 
-# --- DASHBOARD ---
 if page == "Dashboard":
     st.title(f"🎯 Dashboard : {choix_dos}")
     if st.button("❌ Supprimer ce Dossier"):
@@ -104,22 +94,10 @@ if page == "Dashboard":
         for _, row in rattrapages.iterrows():
             if st.button(f"Réintégrer {row['Chapitre']}", key=f"btn_{row['ID']}"):
                 st.session_state.data.loc[st.session_state.data['ID'] == row['ID'], 'Statut'] = 'Traité'
-                futurs_j = st.session_state.data[(st.session_state.data['Chapitre'] == row['Chapitre']) & (st.session_state.data['Matiere'] == row['Matiere']) & (st.session_state.data['Date'] > dt.date.today())].sort_values(by='Date')
-                date_limite = futurs_j['Date'].min() if not futurs_j.empty else dt.date.today() + dt.timedelta(days=30)
-                date_test = dt.date.today() + dt.timedelta(days=1)
-                placé = False
-                while date_test < date_limite:
-                    taches = st.session_state.data[(pd.to_datetime(st.session_state.data['Date']).dt.date == date_test) & (st.session_state.data['Dossier'] == choix_dos)]
-                    if len(taches) < st.session_state.config['cours_max']:
-                        n_r = {'ID': str(uuid.uuid4()), 'Dossier': choix_dos, 'Matiere': row['Matiere'], 'Chapitre': row['Chapitre'], 'J_Type': 'RAP', 'Date': date_test, 'Note': 0, 'Statut': 'À faire'}
-                        st.session_state.data = pd.concat([st.session_state.data, pd.DataFrame([n_r])])
-                        placé = True
-                        break
-                    date_test += dt.timedelta(days=1)
+                # Modification chirurgicale : Sauvegarde directe ici pour forcer le "Traité"
                 save_all_to_sheet(st.session_state.data, st.session_state.config)
                 st.rerun()
 
-# --- PLANNING & SAISIE ---
 elif page == "Planning & Saisie":
     with st.expander("✍️ Ajouter Chapitre", expanded=True):
         with st.form("Add_Form", clear_on_submit=True):
@@ -157,7 +135,6 @@ elif page == "Planning & Saisie":
                     new_d = st.date_input("📅", value=r['Date'], key=f"d_{r['ID']}", label_visibility="collapsed")
                     if new_d != r['Date']:
                         st.session_state.data.loc[st.session_state.data['ID'] == r['ID'], 'Date'] = new_d
-                # Sauvegarde à chaque interaction
                 save_all_to_sheet(st.session_state.data, st.session_state.config)
 
     st.subheader("Saisie Notes")
@@ -181,7 +158,6 @@ elif page == "Planning & Saisie":
             save_all_to_sheet(st.session_state.data, st.session_state.config)
             st.rerun()
 
-# --- GRAPHIQUES ---
 elif page == "Graphiques":
     st.title("📊 Progression")
     matieres = st.session_state.config['dossiers'].get(choix_dos, [])
