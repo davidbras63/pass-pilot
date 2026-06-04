@@ -102,7 +102,7 @@ if page == "Dashboard":
                 st.session_state.data = st.session_state.data[(st.session_state.data['Dossier'] != choix_dos) | (st.session_state.data['Matiere'] != m)]
                 save_data(st.session_state.data)
                 st.rerun()
-            
+           
             # Affichage des chapitres de la matière
             chapitres_matiere = st.session_state.data[(st.session_state.data['Dossier'] == choix_dos) & (st.session_state.data['Matiere'] == m)]['Chapitre'].unique()
             if len(chapitres_matiere) > 0:
@@ -214,8 +214,17 @@ elif page == "Planning & Saisie":
         edited = st.data_editor(df_t[['ID', 'Chapitre', 'J_Type', 'Note', 'Statut']], column_config={"ID": None}, use_container_width=True)
         if st.button("💾 Enregistrer"):
             for _, row in edited.iterrows():
+                val_note = str(row['Note'])
                 mask = st.session_state.data['ID'] == row['ID']
-                st.session_state.data.loc[mask, ['Note', 'Statut']] = [row['Note'], row['Statut']]
+                if ',' in val_note:
+                    try:
+                        notes_list = [float(n.strip()) for n in val_note.split(',') if n.strip()]
+                        moyenne = sum(notes_list) / len(notes_list)
+                        st.session_state.data.loc[mask, ['Note', 'Statut']] = [round(moyenne, 1), row['Statut']]
+                    except:
+                        st.session_state.data.loc[mask, ['Note', 'Statut']] = [row['Note'], row['Statut']]
+                else:
+                    st.session_state.data.loc[mask, ['Note', 'Statut']] = [row['Note'], row['Statut']]
             save_data(st.session_state.data)
             st.rerun()
 
