@@ -18,7 +18,6 @@ def load_data_from_sheet():
     try:
         response = requests.get(WEB_APP_URL)
         data = response.json()
-        # On convertit la liste de listes en DataFrame (si nécessaire)
         return pd.DataFrame(data[1:], columns=data[0])
     except:
         return None
@@ -93,15 +92,24 @@ if page == "Dashboard":
         save_data(st.session_state.data)
         st.rerun()
    
+    # MODIFICATION DASHBOARD : Utilisation de expander pour les matières
     for m in st.session_state.config['dossiers'].get(choix_dos, []):
-        c1, c2 = st.columns([4, 1])
-        c1.info(f"📚 {m}")
-        if c2.button("🗑️", key=f"del_{m}"):
-            st.session_state.config['dossiers'][choix_dos].remove(m)
-            with open(CONFIG_FILE, "w") as f: json.dump(st.session_state.config, f)
-            st.session_state.data = st.session_state.data[(st.session_state.data['Dossier'] != choix_dos) | (st.session_state.data['Matiere'] != m)]
-            save_data(st.session_state.data)
-            st.rerun()
+        with st.expander(f"📚 {m}"):
+            c1, c2 = st.columns([4, 1])
+            if c2.button("🗑️ Supprimer cette matière", key=f"del_{m}"):
+                st.session_state.config['dossiers'][choix_dos].remove(m)
+                with open(CONFIG_FILE, "w") as f: json.dump(st.session_state.config, f)
+                st.session_state.data = st.session_state.data[(st.session_state.data['Dossier'] != choix_dos) | (st.session_state.data['Matiere'] != m)]
+                save_data(st.session_state.data)
+                st.rerun()
+            
+            # Affichage des chapitres de la matière
+            chapitres_matiere = st.session_state.data[(st.session_state.data['Dossier'] == choix_dos) & (st.session_state.data['Matiere'] == m)]['Chapitre'].unique()
+            if len(chapitres_matiere) > 0:
+                st.write("**Chapitres enregistrés :**")
+                st.write(", ".join(chapitres_matiere))
+            else:
+                st.info("Aucun chapitre dans cette matière.")
 
     st.subheader("⚠️ Rattrapages à traiter")
     df_dos = st.session_state.data[st.session_state.data['Dossier'] == choix_dos]
