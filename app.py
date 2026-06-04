@@ -211,14 +211,17 @@ elif page == "Planning & Saisie":
     st.subheader("Saisie Notes - Aujourd'hui")
     df_t = st.session_state.data[(pd.to_datetime(st.session_state.data['Date']).dt.date == today) & (st.session_state.data['Dossier'] == choix_dos)].copy()
     if not df_t.empty:
-        edited = st.data_editor(df_t[['ID', 'Chapitre', 'J_Type', 'Note', 'Statut']], column_config={"ID": None}, use_container_width=True)
+        # Affichage du tableau avec colonne Notes en texte pour autoriser les virgules
+        edited = st.data_editor(df_t[['ID', 'Chapitre', 'J_Type', 'Note', 'Statut']], 
+                                column_config={"ID": None, "Note": st.column_config.TextColumn("Note (ex: 12, 14)")}, 
+                                use_container_width=True)
         if st.button("💾 Enregistrer"):
             for _, row in edited.iterrows():
                 val_note = str(row['Note'])
                 mask = st.session_state.data['ID'] == row['ID']
                 if ',' in val_note:
                     try:
-                        notes_list = [float(n.strip()) for n in val_note.split(',') if n.strip()]
+                        notes_list = [float(n.strip().replace(',', '.')) for n in val_note.split(',') if n.strip()]
                         moyenne = sum(notes_list) / len(notes_list)
                         st.session_state.data.loc[mask, ['Note', 'Statut']] = [round(moyenne, 1), row['Statut']]
                     except:
