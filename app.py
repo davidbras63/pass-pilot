@@ -32,7 +32,6 @@ def reset_dossier():
     if nom and nom not in st.session_state.config['dossiers']:
         st.session_state.config['dossiers'][nom] = []
         save_all_to_sheet(st.session_state.data, st.session_state.config)
-        st.session_state.data, st.session_state.config = load_data_from_sheet()
     st.session_state.d_in = ""
 
 def reset_matiere():
@@ -40,7 +39,6 @@ def reset_matiere():
     if nom and nom not in st.session_state.config['dossiers'][choix_dos]:
         st.session_state.config['dossiers'][choix_dos].append(nom)
         save_all_to_sheet(st.session_state.data, st.session_state.config)
-        st.session_state.data, st.session_state.config = load_data_from_sheet()
     st.session_state.m_in = ""
 
 st.sidebar.title("⚙️ Pilot Expert")
@@ -94,7 +92,6 @@ if page == "Dashboard":
         for _, row in rattrapages.iterrows():
             if st.button(f"Réintégrer {row['Chapitre']}", key=f"btn_{row['ID']}"):
                 st.session_state.data.loc[st.session_state.data['ID'] == row['ID'], 'Statut'] = 'Traité'
-                # Modification chirurgicale : Sauvegarde directe ici pour forcer le "Traité"
                 save_all_to_sheet(st.session_state.data, st.session_state.config)
                 st.rerun()
 
