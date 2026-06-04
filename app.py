@@ -110,11 +110,18 @@ if page == "Dashboard":
                 st.info("Aucun chapitre dans cette matière.")
 
     st.subheader("⚠️ Rattrapages à traiter")
-    df_dos = st.session_state.data[st.session_state.data['Dossier'] == choix_dos]
+    df_dos = st.session_state.data[st.session_state.data['Dossier'] == choix_dos].copy()
+    
     def est_en_rattrapage(row):
+        # Correction : on force la conversion en float pour éviter le bug
+        try:
+            valeur_note = float(str(row['Note']).replace(',', '.'))
+        except:
+            valeur_note = 0
+            
         j_str = str(row['J_Type']).replace('J', '')
         seuil = int(st.session_state.config['seuils'].get(j_str, 12))
-        return row['Note'] > 0 and row['Note'] < seuil and row['Statut'] != 'Traité'
+        return valeur_note > 0 and valeur_note < seuil and row['Statut'] != 'Traité'
    
     rattrapages = df_dos[df_dos.apply(est_en_rattrapage, axis=1)]
    
@@ -209,7 +216,6 @@ elif page == "Planning & Saisie":
     st.subheader("Saisie Notes - Aujourd'hui")
     df_t = st.session_state.data[(pd.to_datetime(st.session_state.data['Date']).dt.date == today) & (st.session_state.data['Dossier'] == choix_dos)].copy()
     if not df_t.empty:
-        # CONVERSION CRUCIALE : Force la colonne Note en format texte
         df_t['Note'] = df_t['Note'].astype(str)
         
         edited = st.data_editor(df_t[['ID', 'Chapitre', 'J_Type', 'Note', 'Statut']], 
