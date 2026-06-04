@@ -5,7 +5,7 @@ import uuid
 import requests
 import json
 import altair as alt
-import time # Ajout du module pour le temps de pause
+import time
 
 st.set_page_config(layout="wide")
 
@@ -32,11 +32,9 @@ def save_all_to_sheet(df, config):
     except:
         st.error("Erreur de sauvegarde vers Google Sheets")
 
-# --- INITIALISATION ---
 if 'data' not in st.session_state or 'config' not in st.session_state:
     st.session_state.data, st.session_state.config = load_data_from_sheet()
 
-# --- FONCTIONS RÉINITIALISATION ---
 def reset_dossier():
     nom = st.session_state.d_in
     if nom and nom not in st.session_state.config['dossiers']:
@@ -51,7 +49,6 @@ def reset_matiere():
         save_all_to_sheet(st.session_state.data, st.session_state.config)
     st.session_state.m_in = ""
 
-# --- SIDEBAR ---
 st.sidebar.title("⚙️ Pilot Expert")
 with st.sidebar.expander("🛠️ Réglages", expanded=False):
     st.session_state.config['cours_max'] = st.number_input("Max cours/jour", 1, 20, st.session_state.config.get('cours_max', 5))
@@ -70,7 +67,6 @@ st.sidebar.text_input("Nom Matière", key="m_in")
 st.sidebar.button("➕ Ajouter Matière", on_click=reset_matiere)
 page = st.sidebar.radio("Navigation", ["Dashboard", "Planning & Saisie", "Graphiques"])
 
-# --- DASHBOARD ---
 if page == "Dashboard":
     st.title(f"🎯 Dashboard : {choix_dos}")
     if st.button("❌ Supprimer ce Dossier"):
@@ -97,14 +93,17 @@ if page == "Dashboard":
         j_str = str(row['J_Type']).replace('J', '')
         seuil = int(st.session_state.config['seuils'].get(j_str, 12))
         return valeur_note > 0 and valeur_note < seuil and row['Statut'] != 'Traité'
+    
     rattrapages = df_dos[df_dos.apply(est_en_rattrapage, axis=1)]
     if not rattrapages.empty:
         st.table(rattrapages[['Matiere', 'Chapitre', 'J_Type', 'Date', 'Note']])
         for _, row in rattrapages.iterrows():
             if st.button(f"Réintégrer {row['Chapitre']}", key=f"btn_{row['ID']}"):
+                futurs_j = st.session_state.data[(st.session_state.data['Chapitre'] == row['Chapitre']) & (st.session_state.data['Matiere'] == row['Matiere']) & (st.session_state.data['Date'] > dt.date.today())].sort_values(by='Date')
+                date_limite = futurs_j['Date'].min() if not futurs_j.empty else dt.date.today() + dt.timedelta(days=30)
                 date_test = dt.date.today() + dt.timedelta(days=1)
                 placé = False
-                for i in range(30):
+                while date_test < date_limite:
                     taches = st.session_state.data[(pd.to_datetime(st.session_state.data['Date']).dt.date == date_test) & (st.session_state.data['Dossier'] == choix_dos)]
                     if len(taches) < st.session_state.config['cours_max']:
                         n_r = {'ID': str(uuid.uuid4()), 'Dossier': choix_dos, 'Matiere': row['Matiere'], 'Chapitre': row['Chapitre'], 'J_Type': 'RAP', 'Date': date_test, 'Note': 0, 'Statut': 'À faire'}
@@ -116,11 +115,10 @@ if page == "Dashboard":
                         break
                     date_test += dt.timedelta(days=1)
                 if not placé:
-                    st.error("❌ Planning complet : impossible de recaler le rattrapage avant la date limite.")
-                    time.sleep(3) # Tampon de lecture
+                    st.error(f"❌ Impossible : pas de place avant le prochain J prévu le {date_limite.strftime('%d/%m')}.")
+                    time.sleep(3)
                     st.rerun()
 
-# --- PLANNING & SAISIE ---
 elif page == "Planning & Saisie":
     with st.expander("✍️ Ajouter Chapitre", expanded=True):
         with st.form("Add_Form", clear_on_submit=True):
@@ -148,8 +146,16 @@ elif page == "Planning & Saisie":
             st.markdown(f"**{day.strftime('%d/%m')}**")
             temp = st.session_state.data[(pd.to_datetime(st.session_state.data['Date']).dt.date == day) & (st.session_state.data['Dossier'] == choix_dos)]
             for _, r in temp.iterrows():
+                # --- CALENDRIER DE DÉPLACEMENT MANUEL ---
+                with st.expander(f"{r['Chapitre']} ({r['J_Type']})"):
+                    new_d = st.date_input("Déplacer au :", value=r['Date'], key=f"move_{r['ID']}")
+                    if st.button("🔄 Confirmer", key=f"btn_move_{r['ID']}"):
+                        st.session_state.data.loc[st.session_state.data['ID'] == r['ID'], 'Date'] = new_d
+                        save_all_to_sheet(st.session_state.data, st.session_state.config)
+                        st.rerun()
+                
                 est_fait = r['Statut'] == 'Fait'
-                if st.checkbox(f"{r['Chapitre']} ({r['J_Type']})", value=est_fait, key=f"chk_{r['ID']}"):
+                if st.checkbox(f"Statut : {r['Statut']}", value=est_fait, key=f"chk_{r['ID']}"):
                     if not est_fait:
                         st.session_state.data.loc[st.session_state.data['ID'] == r['ID'], 'Statut'] = 'Fait'
                         save_all_to_sheet(st.session_state.data, st.session_state.config)
