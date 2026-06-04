@@ -92,7 +92,6 @@ if page == "Dashboard":
         save_data(st.session_state.data)
         st.rerun()
    
-    # MODIFICATION DASHBOARD : Utilisation de expander pour les matières
     for m in st.session_state.config['dossiers'].get(choix_dos, []):
         with st.expander(f"📚 {m}"):
             c1, c2 = st.columns([4, 1])
@@ -103,7 +102,6 @@ if page == "Dashboard":
                 save_data(st.session_state.data)
                 st.rerun()
            
-            # Affichage des chapitres de la matière
             chapitres_matiere = st.session_state.data[(st.session_state.data['Dossier'] == choix_dos) & (st.session_state.data['Matiere'] == m)]['Chapitre'].unique()
             if len(chapitres_matiere) > 0:
                 st.write("**Chapitres enregistrés :**")
@@ -211,7 +209,9 @@ elif page == "Planning & Saisie":
     st.subheader("Saisie Notes - Aujourd'hui")
     df_t = st.session_state.data[(pd.to_datetime(st.session_state.data['Date']).dt.date == today) & (st.session_state.data['Dossier'] == choix_dos)].copy()
     if not df_t.empty:
-        # Affichage du tableau avec colonne Notes en texte pour autoriser les virgules
+        # CONVERSION CRUCIALE : Force la colonne Note en format texte
+        df_t['Note'] = df_t['Note'].astype(str)
+        
         edited = st.data_editor(df_t[['ID', 'Chapitre', 'J_Type', 'Note', 'Statut']], 
                                 column_config={"ID": None, "Note": st.column_config.TextColumn("Note (ex: 12, 14)")}, 
                                 use_container_width=True)
