@@ -30,7 +30,7 @@ def save_all_to_sheet(df, config):
         payload = {"data": df_to_send.values.tolist(), "config": config}
         requests.post(WEB_APP_URL, json=payload)
     except:
-        st.error("Erreur de sauvegarde vers Google Sheets")
+        st.error("Erreur de sauvegarde")
 
 # --- INITIALISATION ---
 if 'data' not in st.session_state or 'config' not in st.session_state:
@@ -103,6 +103,7 @@ if page == "Dashboard":
         for _, row in rattrapages.iterrows():
             if st.button(f"Réintégrer {row['Chapitre']}", key=f"btn_{row['ID']}"):
                 st.session_state.data.loc[st.session_state.data['ID'] == row['ID'], 'Statut'] = 'Traité'
+                save_all_to_sheet(st.session_state.data, st.session_state.config)
                 futurs_j = st.session_state.data[(st.session_state.data['Chapitre'] == row['Chapitre']) & (st.session_state.data['Matiere'] == row['Matiere']) & (st.session_state.data['Date'] > dt.date.today())].sort_values(by='Date')
                 date_limite = futurs_j['Date'].min() if not futurs_j.empty else dt.date.today() + dt.timedelta(days=30)
                 date_test = dt.date.today() + dt.timedelta(days=1)
@@ -117,7 +118,7 @@ if page == "Dashboard":
                     date_test += dt.timedelta(days=1)
                 save_all_to_sheet(st.session_state.data, st.session_state.config)
                 if not placé:
-                    st.error(f"❌ Impossible de recaler avant le {date_limite.strftime('%d/%m')}.")
+                    st.error("❌ Pas de place avant la limite.")
                     time.sleep(3)
                 st.rerun()
 
@@ -149,20 +150,19 @@ elif page == "Planning & Saisie":
             st.markdown(f"**{day.strftime('%d/%m')}**")
             temp = st.session_state.data[(pd.to_datetime(st.session_state.data['Date']).dt.date == day) & (st.session_state.data['Dossier'] == choix_dos)]
             for _, r in temp.iterrows():
-                col1, col2 = st.columns([1, 1])
-                with col1:
-                    if st.checkbox(f"{r['Chapitre']}", value=(r['Statut'] == 'Fait'), key=f"chk_{r['ID']}"):
+                col_c, col_d = st.columns([0.8, 0.2])
+                with col_c:
+                    if st.checkbox(f"{r['Chapitre']} ({r['J_Type']})", value=(r['Statut'] == 'Fait'), key=f"chk_{r['ID']}"):
                         st.session_state.data.loc[st.session_state.data['ID'] == r['ID'], 'Statut'] = 'Fait'
-                        save_all_to_sheet(st.session_state.data, st.session_state.config)
-                        st.rerun()
                     else:
                         st.session_state.data.loc[st.session_state.data['ID'] == r['ID'], 'Statut'] = 'À faire'
-                with col2:
-                    new_d = st.date_input("", value=r['Date'], key=f"d_{r['ID']}", label_visibility="collapsed")
+                with col_d:
+                    new_d = st.date_input("📅", value=r['Date'], key=f"d_{r['ID']}", label_visibility="collapsed")
                     if new_d != r['Date']:
                         st.session_state.data.loc[st.session_state.data['ID'] == r['ID'], 'Date'] = new_d
                         save_all_to_sheet(st.session_state.data, st.session_state.config)
                         st.rerun()
+                save_all_to_sheet(st.session_state.data, st.session_state.config)
 
     st.subheader("Saisie Notes")
     df_t = st.session_state.data[(pd.to_datetime(st.session_state.data['Date']).dt.date == dt.date.today()) & (st.session_state.data['Dossier'] == choix_dos)].copy()
@@ -185,6 +185,7 @@ elif page == "Planning & Saisie":
             save_all_to_sheet(st.session_state.data, st.session_state.config)
             st.rerun()
 
+# --- GRAPHIQUES ---
 elif page == "Graphiques":
     st.title("📊 Progression")
     matieres = st.session_state.config['dossiers'].get(choix_dos, [])
