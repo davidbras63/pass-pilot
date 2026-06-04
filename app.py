@@ -9,19 +9,19 @@ import time
 
 st.set_page_config(layout="wide")
 
+# TON URL OFFICIELLE
 WEB_APP_URL = "https://script.google.com/macros/s/AKfycbwA7ZGCqHcDgw_Ia2PDjuvLqGDx1smoqR75VOo5IytV-QgMIw2_6xnZtXI1sFensDDwfw/exec"
 
 def load_data_from_sheet():
     try:
-        response = requests.get(WEB_APP_URL, timeout=20)
+        response = requests.get(WEB_APP_URL, timeout=15)
         if response.status_code == 200:
             data = response.json()
             df = pd.DataFrame(data.get('data', []), columns=['Dossier', 'Matiere', 'Chapitre', 'J_Type', 'Date', 'Note', 'Statut', 'ID'])
             df['Date'] = pd.to_datetime(df['Date']).dt.date
             config = data.get('config', {'cours_max': 5, 'cadencier': [1, 3, 7, 14, 30], 'seuils': {'1': 12, '3': 12, '7': 14, '14': 14, '30': 16}, 'dossiers': {"PASS": []}})
             return df, config
-    except:
-        st.error("Erreur de chargement des données.")
+    except: pass
     return pd.DataFrame(columns=['Dossier', 'Matiere', 'Chapitre', 'J_Type', 'Date', 'Note', 'Statut', 'ID']), {'cours_max': 5, 'cadencier': [1, 3, 7, 14, 30], 'seuils': {'1': 12, '3': 12, '7': 14, '14': 14, '30': 16}, 'dossiers': {"PASS": []}}
 
 def save_all_to_sheet(df, config):
@@ -29,9 +29,8 @@ def save_all_to_sheet(df, config):
     df_to_send['Date'] = df_to_send['Date'].astype(str)
     payload = {"data": df_to_send.values.tolist(), "config": config}
     try:
-        requests.post(WEB_APP_URL, json=payload, timeout=20)
-    except Exception as e:
-        st.error(f"Erreur lors de la sauvegarde : {e}")
+        requests.post(WEB_APP_URL, json=payload, timeout=15)
+    except: st.error("Erreur de sauvegarde")
 
 if 'data' not in st.session_state:
     st.session_state.data, st.session_state.config = load_data_from_sheet()
@@ -59,7 +58,7 @@ with st.sidebar.expander("🛠️ Réglages", expanded=False):
     st.session_state.config['cadencier'] = [int(x.strip()) for x in cad_str.split(",")]
     for j in st.session_state.config['cadencier']:
         st.session_state.config['seuils'][str(j)] = st.slider(f"Seuil Note J{j}", 10, 20, int(st.session_state.config['seuils'].get(str(j), 12)))
-    if st.button("💾 Enregistrer Réglages"):
+    if st.button("💾 Enregistrer"):
         save_all_to_sheet(st.session_state.data, st.session_state.config)
         st.rerun()
 
@@ -133,24 +132,17 @@ elif page == "Planning & Saisie":
             st.markdown(f"**{day.strftime('%d/%m')}**")
             temp = st.session_state.data[(pd.to_datetime(st.session_state.data['Date']).dt.date == day) & (st.session_state.data['Dossier'] == choix_dos)]
             for _, r in temp.iterrows():
-                c1, c2 = st.columns([0.8, 0.2])
-                with c1:
-                    if st.checkbox(f"{r['Chapitre']} ({r['J_Type']})", value=(r['Statut'] == 'Fait'), key=f"chk_{r['ID']}"):
-                        st.session_state.data.loc[st.session_state.data['ID'] == r['ID'], 'Statut'] = 'Fait'
-                    else:
-                        st.session_state.data.loc[st.session_state.data['ID'] == r['ID'], 'Statut'] = 'À faire'
-                with c2:
-                    new_d = st.date_input("📅", value=r['Date'], key=f"d_{r['ID']}", label_visibility="collapsed")
-                    if new_d != r['Date']:
-                        st.session_state.data.loc[st.session_state.data['ID'] == r['ID'], 'Date'] = new_d
-                if st.button("💾", key=f"sv_{r['ID']}"):
+                if st.checkbox(f"{r['Chapitre']} ({r['J_Type']})", value=(r['Statut'] == 'Fait'), key=f"chk_{r['ID']}"):
+                    st.session_state.data.loc[st.session_state.data['ID'] == r['ID'], 'Statut'] = 'Fait'
+                else:
+                    st.session_state.data.loc[st.session_state.data['ID'] == r['ID'], 'Statut'] = 'À faire'
+                if st.button("MàJ", key=f"up_{r['ID']}"):
                     save_all_to_sheet(st.session_state.data, st.session_state.config)
                     st.rerun()
 
     st.subheader("Saisie Notes")
     df_t = st.session_state.data[(pd.to_datetime(st.session_state.data['Date']).dt.date == dt.date.today()) & (st.session_state.data['Dossier'] == choix_dos)].copy()
     if not df_t.empty:
-        df_t['Note'] = df_t['Note'].astype(str)
         edited = st.data_editor(df_t[['ID', 'Chapitre', 'J_Type', 'Note', 'Statut']], column_config={"ID": None, "Note": st.column_config.TextColumn("Note")}, use_container_width=True)
         if st.button("💾 Enregistrer Notes"):
             temp_df = st.session_state.data.copy()
@@ -160,10 +152,9 @@ elif page == "Planning & Saisie":
                 if ',' in val_note:
                     try:
                         notes_list = [float(n.strip().replace(',', '.')) for n in val_note.split(',') if n.strip()]
-                        moyenne = sum(notes_list) / len(notes_list)
-                        temp_df.loc[mask, ['Note', 'Statut']] = [round(moyenne, 1), row['Statut']]
-                    except: temp_df.loc[mask, ['Note', 'Statut']] = [val_note, row['Statut']]
-                else: temp_df.loc[mask, ['Note', 'Statut']] = [val_note, row['Statut']]
+                        temp_df.loc[mask, 'Note'] = round(sum(notes_list) / len(notes_list), 1)
+                    except: temp_df.loc[mask, 'Note'] = val_note
+                else: temp_df.loc[mask, 'Note'] = val_note
             st.session_state.data = temp_df
             save_all_to_sheet(st.session_state.data, st.session_state.config)
             st.rerun()
