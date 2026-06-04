@@ -132,13 +132,16 @@ elif page == "Planning & Saisie":
             st.markdown(f"**{day.strftime('%d/%m')}**")
             temp = st.session_state.data[(pd.to_datetime(st.session_state.data['Date']).dt.date == day) & (st.session_state.data['Dossier'] == choix_dos)]
             for _, r in temp.iterrows():
-                if st.checkbox(f"{r['Chapitre']} ({r['J_Type']})", value=(r['Statut'] == 'Fait'), key=f"chk_{r['ID']}"):
-                    st.session_state.data.loc[st.session_state.data['ID'] == r['ID'], 'Statut'] = 'Fait'
-                else:
-                    st.session_state.data.loc[st.session_state.data['ID'] == r['ID'], 'Statut'] = 'À faire'
-                if st.button("MàJ", key=f"up_{r['ID']}"):
-                    save_all_to_sheet(st.session_state.data, st.session_state.config)
-                    st.rerun()
+                # On remet le petit bloc checkbox + calendrier côte à côte
+                col1, col2 = st.columns([0.8, 0.2])
+                with col1:
+                    if st.checkbox(f"{r['Chapitre']} ({r['J_Type']})", value=(r['Statut'] == 'Fait'), key=f"chk_{r['ID']}"):
+                        st.session_state.data.loc[st.session_state.data['ID'] == r['ID'], 'Statut'] = 'Fait'
+                    else:
+                        st.session_state.data.loc[st.session_state.data['ID'] == r['ID'], 'Statut'] = 'À faire'
+                with col2:
+                    st.date_input("📅", value=r['Date'], key=f"d_{r['ID']}", label_visibility="collapsed")
+                save_all_to_sheet(st.session_state.data, st.session_state.config)
 
     st.subheader("Saisie Notes")
     df_t = st.session_state.data[(pd.to_datetime(st.session_state.data['Date']).dt.date == dt.date.today()) & (st.session_state.data['Dossier'] == choix_dos)].copy()
