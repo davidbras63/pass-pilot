@@ -8,21 +8,28 @@ import altair as alt
 
 st.set_page_config(layout="wide")
 
-WEB_APP_URL = "https://script.google.com/macros/s/AKfycbyLNNVhU2B775oH7VW84dU2Ud4g88c2H1XA-M-PXyq2lpXYKZS7pwJW6Q2FiVjMjMZSbw/exec"
+# URL mise à jour avec ton nouveau déploiement
+WEB_APP_URL = "https://script.google.com/macros/s/AKfycbwA7ZGCqHcDgw_la2PDjuvLqGDx1smoqR75VOo5lytV-QgMlw2_6xnZtXI1sFensDDwfw/exec"
 
 def load_data_from_sheet():
-    response = requests.get(WEB_APP_URL)
-    data = response.json()
-    df = pd.DataFrame(data.get('data', []), columns=['Dossier', 'Matiere', 'Chapitre', 'J_Type', 'Date', 'Note', 'Statut', 'ID'])
-    df['Date'] = pd.to_datetime(df['Date']).dt.date
-    config = data.get('config', {'cours_max': 5, 'cadencier': [1, 3, 7, 14, 30], 'seuils': {'1': 12, '3': 12, '7': 14, '14': 14, '30': 16}, 'dossiers': {"PASS": []}})
-    return df, config
+    try:
+        response = requests.get(WEB_APP_URL, timeout=20)
+        data = response.json()
+        df = pd.DataFrame(data.get('data', []), columns=['Dossier', 'Matiere', 'Chapitre', 'J_Type', 'Date', 'Note', 'Statut', 'ID'])
+        df['Date'] = pd.to_datetime(df['Date']).dt.date
+        config = data.get('config', {'cours_max': 5, 'cadencier': [1, 3, 7, 14, 30], 'seuils': {'1': 12, '3': 12, '7': 14, '14': 14, '30': 16}, 'dossiers': {"PASS": []}})
+        return df, config
+    except:
+        return pd.DataFrame(columns=['Dossier', 'Matiere', 'Chapitre', 'J_Type', 'Date', 'Note', 'Statut', 'ID']), {'cours_max': 5, 'cadencier': [1, 3, 7, 14, 30], 'seuils': {'1': 12, '3': 12, '7': 14, '14': 14, '30': 16}, 'dossiers': {"PASS": []}}
 
 def save_all_to_sheet(df, config):
     df_to_send = df.copy()
     df_to_send['Date'] = df_to_send['Date'].astype(str)
     payload = {"data": df_to_send.values.tolist(), "config": config}
-    requests.post(WEB_APP_URL, json=payload)
+    try:
+        requests.post(WEB_APP_URL, json=payload, timeout=20)
+    except:
+        st.error("Erreur de sauvegarde")
 
 if 'data' not in st.session_state:
     st.session_state.data, st.session_state.config = load_data_from_sheet()
