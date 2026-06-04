@@ -5,6 +5,7 @@ import uuid
 import requests
 import json
 import altair as alt
+import time # Ajout du module pour le temps de pause
 
 st.set_page_config(layout="wide")
 
@@ -77,7 +78,6 @@ if page == "Dashboard":
         st.session_state.data = st.session_state.data[st.session_state.data['Dossier'] != choix_dos]
         save_all_to_sheet(st.session_state.data, st.session_state.config)
         st.rerun()
-    
     for m in st.session_state.config['dossiers'].get(choix_dos, []):
         with st.expander(f"📚 {m}"):
             c1, c2 = st.columns([4, 1])
@@ -97,21 +97,27 @@ if page == "Dashboard":
         j_str = str(row['J_Type']).replace('J', '')
         seuil = int(st.session_state.config['seuils'].get(j_str, 12))
         return valeur_note > 0 and valeur_note < seuil and row['Statut'] != 'Traité'
-    
     rattrapages = df_dos[df_dos.apply(est_en_rattrapage, axis=1)]
     if not rattrapages.empty:
         st.table(rattrapages[['Matiere', 'Chapitre', 'J_Type', 'Date', 'Note']])
         for _, row in rattrapages.iterrows():
             if st.button(f"Réintégrer {row['Chapitre']}", key=f"btn_{row['ID']}"):
-                date_cible = dt.date.today() + dt.timedelta(days=1)
-                taches_ce_jour = st.session_state.data[pd.to_datetime(st.session_state.data['Date']).dt.date == date_cible]
-                if len(taches_ce_jour) >= st.session_state.config['cours_max']:
-                    st.error(f"❌ Pas de place le {date_cible.strftime('%d/%m')}")
-                else:
-                    n_r = {'ID': str(uuid.uuid4()), 'Dossier': choix_dos, 'Matiere': row['Matiere'], 'Chapitre': row['Chapitre'], 'J_Type': 'RAP', 'Date': date_cible, 'Note': 0, 'Statut': 'À faire'}
-                    st.session_state.data = pd.concat([st.session_state.data, pd.DataFrame([n_r])])
-                    st.session_state.data.loc[st.session_state.data['ID'] == row['ID'], 'Statut'] = 'Traité'
-                    save_all_to_sheet(st.session_state.data, st.session_state.config)
+                date_test = dt.date.today() + dt.timedelta(days=1)
+                placé = False
+                for i in range(30):
+                    taches = st.session_state.data[(pd.to_datetime(st.session_state.data['Date']).dt.date == date_test) & (st.session_state.data['Dossier'] == choix_dos)]
+                    if len(taches) < st.session_state.config['cours_max']:
+                        n_r = {'ID': str(uuid.uuid4()), 'Dossier': choix_dos, 'Matiere': row['Matiere'], 'Chapitre': row['Chapitre'], 'J_Type': 'RAP', 'Date': date_test, 'Note': 0, 'Statut': 'À faire'}
+                        st.session_state.data = pd.concat([st.session_state.data, pd.DataFrame([n_r])])
+                        st.session_state.data.loc[st.session_state.data['ID'] == row['ID'], 'Statut'] = 'Traité'
+                        save_all_to_sheet(st.session_state.data, st.session_state.config)
+                        placé = True
+                        st.rerun()
+                        break
+                    date_test += dt.timedelta(days=1)
+                if not placé:
+                    st.error("❌ Planning complet : impossible de recaler le rattrapage avant la date limite.")
+                    time.sleep(3) # Tampon de lecture
                     st.rerun()
 
 # --- PLANNING & SAISIE ---
