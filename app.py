@@ -121,24 +121,31 @@ elif page == "Planning & Saisie":
                     st.rerun()
 
     st.subheader("🗓️ Planning Hebdomadaire")
-    # Affichage ligne par ligne : Checkbox, Nom (J), Date
-    df_week = st.session_state.data[st.session_state.data['Dossier'] == choix_dos].copy()
-    for _, r in df_week.iterrows():
-        c1, c2, c3 = st.columns([0.6, 0.2, 0.2])
-        with c1:
-            if st.checkbox(f"{r['Chapitre']} ({r['J_Type']})", value=(r['Statut'] == 'Fait'), key=f"chk_{r['ID']}"):
-                st.session_state.data.loc[st.session_state.data['ID'] == r['ID'], 'Statut'] = 'Fait'
-            else:
-                st.session_state.data.loc[st.session_state.data['ID'] == r['ID'], 'Statut'] = 'À faire'
-        with c2:
-            st.date_input("", value=r['Date'], key=f"d_{r['ID']}", label_visibility="collapsed")
-        with c3:
-            if st.button("Enregistrer", key=f"save_{r['ID']}"):
-                save_all_to_sheet(st.session_state.data, st.session_state.config)
-                st.rerun()
+    cols = st.columns(7)
+    today = dt.date.today()
+    start = today - dt.timedelta(days=today.weekday())
+    for i, col in enumerate(cols):
+        day = start + dt.timedelta(days=i)
+        with col:
+            st.markdown(f"**{day.strftime('%d/%m')}**")
+            temp = st.session_state.data[(pd.to_datetime(st.session_state.data['Date']).dt.date == day) & (st.session_state.data['Dossier'] == choix_dos)]
+            for _, r in temp.iterrows():
+                # Affichage original : Checkbox + Nom + Calendrier compact
+                c1, c2 = st.columns([0.8, 0.2])
+                with c1:
+                    if st.checkbox(f"{r['Chapitre']} ({r['J_Type']})", value=(r['Statut'] == 'Fait'), key=f"chk_{r['ID']}"):
+                        st.session_state.data.loc[st.session_state.data['ID'] == r['ID'], 'Statut'] = 'Fait'
+                    else:
+                        st.session_state.data.loc[st.session_state.data['ID'] == r['ID'], 'Statut'] = 'À faire'
+                with c2:
+                    st.date_input("", value=r['Date'], key=f"cal_{r['ID']}", label_visibility="collapsed")
+    
+    if st.button("Enregistrer Planning"):
+        save_all_to_sheet(st.session_state.data, st.session_state.config)
+        st.rerun()
 
     st.subheader("Saisie Notes")
-    df_t = st.session_state.data[st.session_state.data['Dossier'] == choix_dos].copy()
+    df_t = st.session_state.data[(pd.to_datetime(st.session_state.data['Date']).dt.date == dt.date.today()) & (st.session_state.data['Dossier'] == choix_dos)].copy()
     if not df_t.empty:
         df_display = df_t[['ID', 'Chapitre', 'J_Type', 'Note', 'Statut']].copy()
         df_display['Note'] = df_display['Note'].astype(str) 
