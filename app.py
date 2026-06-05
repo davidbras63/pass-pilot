@@ -139,27 +139,22 @@ elif page == "Planning & Saisie":
                 with c2:
                     st.date_input("", value=r['Date'], key=f"cal_{r['ID']}", label_visibility="collapsed")
     
-    st.subheader("Saisie Notes (Saisie manuelle)")
+    st.subheader("Saisie Notes")
     df_t = st.session_state.data[(pd.to_datetime(st.session_state.data['Date']).dt.date == dt.date.today()) & (st.session_state.data['Dossier'] == choix_dos)].copy()
-    
     if not df_t.empty:
-        # On utilise une liste de dictionnaires pour stocker les nouvelles notes
-        notes_input = {}
-        for idx, row in df_t.iterrows():
-            c1, c2 = st.columns([0.7, 0.3])
-            c1.write(f"{row['Chapitre']} ({row['J_Type']})")
-            notes_input[row['ID']] = c2.text_input("Note", value=str(row['Note']), key=f"input_{row['ID']}")
-            
-        if st.button("💾 Enregistrer et Calculer Moyennes"):
-            for id_row, val in notes_input.items():
-                if ',' in val:
+        df_display = df_t[['ID', 'Chapitre', 'J_Type', 'Note', 'Statut']].copy()
+        df_display['Note'] = df_display['Note'].astype(object) 
+        edited = st.data_editor(df_display, column_config={"ID": None, "Note": st.column_config.TextColumn("Note")}, use_container_width=True)
+        if st.button("💾 Enregistrer et Calculer Moyenne"):
+            for _, row in edited.iterrows():
+                val_note = str(row['Note'])
+                mask = st.session_state.data['ID'] == row['ID']
+                if ',' in val_note:
                     try:
-                        vals = [float(x.replace(',', '.')) for x in val.split(',')]
-                        moy = round(sum(vals)/len(vals), 1)
-                        st.session_state.data.loc[st.session_state.data['ID'] == id_row, 'Note'] = moy
-                    except: pass
-                else:
-                    st.session_state.data.loc[st.session_state.data['ID'] == id_row, 'Note'] = val
+                        notes_list = [float(n.strip().replace(',', '.')) for n in val_note.split(',') if n.strip()]
+                        st.session_state.data.at[st.session_state.data.index[mask][0], 'Note'] = round(sum(notes_list) / len(notes_list), 1)
+                    except: st.session_state.data.at[st.session_state.data.index[mask][0], 'Note'] = val_note
+                else: st.session_state.data.at[st.session_state.data.index[mask][0], 'Note'] = val_note
             save_all_to_sheet(st.session_state.data, st.session_state.config)
             st.rerun()
 
