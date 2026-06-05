@@ -16,7 +16,7 @@ def load_data_from_sheet():
         if response.status_code == 200:
             data = response.json()
             df = pd.DataFrame(data.get('data', []), columns=['Dossier', 'Matiere', 'Chapitre', 'J_Type', 'Date', 'Note', 'Statut', 'ID'])
-            # CORRECTION : Lecture textuelle pure pour bloquer le décalage de date
+            # SEULE MODIF : Lecture textuelle pure pour bloquer le décalage de date
             df['Date'] = df['Date'].apply(lambda x: dt.datetime.strptime(str(x), '%Y-%m-%d').date())
             config = data.get('config', {'cours_max': 5, 'cadencier': [1, 3, 7, 14, 30], 'seuils': {'1': 12, '3': 12, '7': 14, '14': 14, '30': 16}, 'dossiers': {"PASS": []}})
             return df, config
@@ -25,7 +25,7 @@ def load_data_from_sheet():
 
 def save_all_to_sheet(df, config):
     df_to_send = df.copy()
-    # CORRECTION : Écriture textuelle pure pour bloquer le décalage de date
+    # SEULE MODIF : Écriture textuelle pure pour bloquer le décalage de date
     df_to_send['Date'] = df_to_send['Date'].apply(lambda x: x.strftime('%Y-%m-%d'))
     df_to_send['Note'] = df_to_send['Note'].astype(str)
     payload = {"data": df_to_send.values.tolist(), "config": config}
@@ -104,16 +104,13 @@ if page == "Dashboard":
             if st.button(f"Réintégrer {row['Chapitre']}", key=f"btn_{row['ID']}"):
                 all_d = sorted(st.session_state.data[(st.session_state.data['Chapitre'] == row['Chapitre']) & (st.session_state.data['Dossier'] == choix_dos)]['Date'].unique())
                 idx = all_d.index(row['Date'])
-                date_cible = dt.date.today()
-                if idx + 1 < len(all_d) and date_cible < all_d[idx+1]:
-                    new_row = row.copy()
-                    new_row['ID'], new_row['Chapitre'] = str(uuid.uuid4()), f"{row['Chapitre']}R"
-                    new_row['Date'], new_row['Note'], new_row['Statut'] = date_cible, 0, 'À faire'
-                    st.session_state.data = pd.concat([st.session_state.data, pd.DataFrame([new_row])], ignore_index=True)
-                    st.session_state.data.loc[st.session_state.data['ID'] == row['ID'], 'Statut'] = 'Traité'
-                    save_all_to_sheet(st.session_state.data, st.session_state.config)
-                    st.rerun()
-                else: st.error("❌ Aucune place libre avant l'échéance suivante.")
+                new_row = row.copy()
+                new_row['ID'], new_row['Chapitre'], new_row['Date'] = str(uuid.uuid4()), f"{row['Chapitre']}R", dt.date.today()
+                new_row['Note'], new_row['Statut'] = 0, 'À faire'
+                st.session_state.data = pd.concat([st.session_state.data, pd.DataFrame([new_row])], ignore_index=True)
+                st.session_state.data.loc[st.session_state.data['ID'] == row['ID'], 'Statut'] = 'Traité'
+                save_all_to_sheet(st.session_state.data, st.session_state.config)
+                st.rerun()
 
 elif page == "Planning & Saisie":
     with st.expander("✍️ Ajouter Chapitre", expanded=True):
@@ -140,7 +137,6 @@ elif page == "Planning & Saisie":
         day = start + dt.timedelta(days=i)
         with col:
             st.markdown(f"**{day.strftime('%d/%m')}**")
-            # Correction : on compare la date, pas besoin de to_datetime ici
             temp = st.session_state.data[(st.session_state.data['Date'] == day) & (st.session_state.data['Dossier'] == choix_dos)]
             for _, r in temp.iterrows():
                 c1, c2 = st.columns([0.8, 0.2])
