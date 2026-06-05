@@ -16,7 +16,7 @@ def load_data_from_sheet():
         if response.status_code == 200:
             data = response.json()
             df = pd.DataFrame(data.get('data', []), columns=['Dossier', 'Matiere', 'Chapitre', 'J_Type', 'Date', 'Note', 'Statut', 'ID'])
-            # Correction Date : Conversion brute sans décalage de fuseau
+            # Correction Date : Verrouillage strict sans décalage
             df['Date'] = pd.to_datetime(df['Date']).dt.tz_localize(None).dt.date
             config = data.get('config', {'cours_max': 5, 'cadencier': [1, 3, 7, 14, 30], 'seuils': {'1': 12, '3': 12, '7': 14, '14': 14, '30': 16}, 'dossiers': {"PASS": []}})
             return df, config
@@ -84,31 +84,43 @@ if page == "Dashboard":
                 st.session_state.data = st.session_state.data[(st.session_state.data['Dossier'] != choix_dos) | (st.session_state.data['Matiere'] != m)]
                 save_all_to_sheet(st.session_state.data, st.session_state.config)
                 st.rerun()
+            chapitres_matiere = st.session_state.data[(st.session_state.data['Dossier'] == choix_dos) & (st.session_state.data['Matiere'] == m)]['Chapitre'].unique()
+            if len(chapitres_matiere) > 0: st.write("**Chapitres :**", ", ".join(chapitres_matiere))
 
     st.subheader("⚠️ Rattrapages à traiter")
     df_dos = st.session_state.data[st.session_state.data['Dossier'] == choix_dos].copy()
     def est_en_rattrapage(row):
-        try: v = float(str(row['Note']).replace(',', '.'))
-        except: v = 0
+        try: valeur_note = float(str(row['Note']).replace(',', '.'))
+        except: valeur_note = 0
         j_str = str(row['J_Type']).replace('J', '')
         seuil = int(st.session_state.config['seuils'].get(j_str, 12))
-        return v > 0 and v < seuil and row['Statut'] != 'Traité'
+        return valeur_note > 0 and valeur_note < seuil and row['Statut'] != 'Traité'
    
     rattrapages = df_dos[df_dos.apply(est_en_rattrapage, axis=1)]
     if not rattrapages.empty:
         st.table(rattrapages[['Matiere', 'Chapitre', 'J_Type', 'Date', 'Note']])
         for _, row in rattrapages.iterrows():
             if st.button(f"Réintégrer {row['Chapitre']} ({row['J_Type']})", key=f"btn_{row['ID']}"):
-                # Vérification de fenêtre temporelle
-                all_d = sorted(st.session_state.data[(st.session_state.data['Chapitre'] == row['Chapitre']) & (st.session_state.data['Dossier'] == choix_dos)]['Date'].unique())
-                idx = all_d.index(row['Date'])
-                if idx + 1 < len(all_d) and dt.date.today() < all_d[idx+1]:
+                all_dates = sorted(st.session_state.data[(st.session_state.data['Chapitre'] == row['Chapitre']) & (st.session_state.data['Dossier'] == choix_dos)]['Date'].unique())
+                idx = all_dates.index(row['Date'])
+                if idx + 1 < len(all_dates) and dt.date.today() < all_dates[idx+1]:
+                    # Création du rattrapage
+                    new_row = row.copy()
+                    new_row['ID'] = str(uuid.uuid4())
+                    new_row['Chapitre'] = f"{row['Chapitre']} RAP"
+                    new_row['Date'] = dt.date.today()
+                    new_row['Statut'] = 'À faire'
+                    new_row['Note'] = 0
+                    st.session_state.data = pd.concat([st.session_state.data, pd.DataFrame([new_row])], ignore_index=True)
                     st.session_state.data.loc[st.session_state.data['ID'] == row['ID'], 'Statut'] = 'Traité'
                     save_all_to_sheet(st.session_state.data, st.session_state.config)
                     st.session_state.data, st.session_state.config = load_data_from_sheet()
                     st.rerun()
                 else:
-                    st.error("❌ Impossible : pas de date disponible avant la prochaine échéance ou délai dépassé.")
+                    st.error("❌ Impossible de réintégrer : aucune place avant le J suivant.")
+                    st.session_state.data.loc[st.session_state.data['ID'] == row['ID'], 'Statut'] = 'Traité'
+                    save_all_to_sheet(st.session_state.data, st.session_state.config)
+                    if st.button("OK, supprimer du tableau"): st.rerun()
 
 elif page == "Planning & Saisie":
     with st.expander("✍️ Ajouter Chapitre", expanded=True):
@@ -121,8 +133,8 @@ elif page == "Planning & Saisie":
                 if chap and dex:
                     new_rows = [{'ID': str(uuid.uuid4()), 'Dossier': choix_dos, 'Matiere': mat, 'Chapitre': chap, 'J_Type': 'J0', 'Date': d0, 'Note': 0, 'Statut': 'À faire'}]
                     for j in st.session_state.config['cadencier']:
-                        dj = d0 + dt.timedelta(days=j)
-                        if dj <= dex: new_rows.append({'ID': str(uuid.uuid4()), 'Dossier': choix_dos, 'Matiere': mat, 'Chapitre': chap, 'J_Type': f'J{j}', 'Date': dj, 'Note': 0, 'Statut': 'À faire'})
+                        d_j = d0 + dt.timedelta(days=j)
+                        if d_j <= dex: new_rows.append({'ID': str(uuid.uuid4()), 'Dossier': choix_dos, 'Matiere': mat, 'Chapitre': chap, 'J_Type': f'J{j}', 'Date': d_j, 'Note': 0, 'Statut': 'À faire'})
                     st.session_state.data = pd.concat([st.session_state.data, pd.DataFrame(new_rows)]).drop_duplicates(subset=['Dossier', 'Chapitre', 'J_Type', 'Date'])
                     save_all_to_sheet(st.session_state.data, st.session_state.config)
                     st.rerun()
@@ -135,7 +147,7 @@ elif page == "Planning & Saisie":
         day = start + dt.timedelta(days=i)
         with col:
             st.markdown(f"**{day.strftime('%d/%m')}**")
-            temp = st.session_state.data[(st.session_state.data['Date'] == day) & (st.session_state.data['Dossier'] == choix_dos)]
+            temp = st.session_state.data[(pd.to_datetime(st.session_state.data['Date']).dt.date == day) & (st.session_state.data['Dossier'] == choix_dos)]
             for _, r in temp.iterrows():
                 c1, c2 = st.columns([0.8, 0.2])
                 with c1:
@@ -146,26 +158,39 @@ elif page == "Planning & Saisie":
                 with c2:
                     st.date_input("", value=r['Date'], key=f"cal_{r['ID']}", label_visibility="collapsed")
    
-    st.subheader("Saisie Notes")
-    df_t = st.session_state.data[(st.session_state.data['Date'] == dt.date.today()) & (st.session_state.data['Dossier'] == choix_dos)].copy()
+    st.subheader("Saisie Notes (Journée)")
+    df_t = st.session_state.data[(pd.to_datetime(st.session_state.data['Date']).dt.date == dt.date.today()) & (st.session_state.data['Dossier'] == choix_dos)].copy()
+   
     if not df_t.empty:
         temp_notes = {}
         for idx, row in df_t.iterrows():
             c1, c2 = st.columns([0.7, 0.3])
             c1.write(f"{row['Chapitre']} ({row['J_Type']})")
-            temp_notes[row['ID']] = c2.text_input("Note", value=str(row['Note']), key=f"saisie_{row['ID']}")
+            temp_notes[row['ID']] = c2.text_input("Note (pts ; sép)", value=str(row['Note']), key=f"saisie_{row['ID']}")
+           
         if st.button("💾 Enregistrer et Calculer Moyenne"):
             for id_row, val in temp_notes.items():
-                try:
-                    vals = [float(x.replace(',', '.').strip()) for x in val.split(';')]
-                    st.session_state.data.loc[st.session_state.data['ID'] == id_row, 'Note'] = round(sum(vals)/len(vals), 1)
-                except: st.session_state.data.loc[st.session_state.data['ID'] == id_row, 'Note'] = val
+                if ';' in val:
+                    try:
+                        vals = [float(x.replace(',', '.').strip()) for x in val.split(';')]
+                        st.session_state.data.loc[st.session_state.data['ID'] == id_row, 'Note'] = round(sum(vals)/len(vals), 1)
+                    except: st.session_state.data.loc[st.session_state.data['ID'] == id_row, 'Note'] = val
+                else:
+                    st.session_state.data.loc[st.session_state.data['ID'] == id_row, 'Note'] = val.replace(',', '.')
             save_all_to_sheet(st.session_state.data, st.session_state.config)
             st.rerun()
 
 elif page == "Graphiques":
-    sel_chap = st.selectbox("Chapitre", st.session_state.data['Chapitre'].unique())
-    df_n = st.session_state.data[st.session_state.data['Chapitre'] == sel_chap].copy()
-    df_n['Note_Num'] = pd.to_numeric(df_n['Note'].astype(str).str.replace(',', '.'), errors='coerce')
-    df_n['Order'] = df_n['J_Type'].str.extract('(\d+)').astype(int)
-    st.altair_chart(alt.Chart(df_n.sort_values('Order')).mark_line(point=True).encode(x='J_Type', y='Note_Num'), use_container_width=True)
+    st.title("📊 Progression")
+    matieres = st.session_state.config['dossiers'].get(choix_dos, [])
+    sel_mat = st.selectbox("Choisir une matière", matieres)
+    df_mat = st.session_state.data[(st.session_state.data['Dossier'] == choix_dos) & (st.session_state.data['Matiere'] == sel_mat)]
+    chapitres = df_mat['Chapitre'].unique()
+    if len(chapitres) > 0:
+        sel_chap = st.selectbox("Choisir un chapitre", chapitres)
+        df_notes = st.session_state.data[(st.session_state.data['Chapitre'] == sel_chap)].copy()
+        df_notes['Note_Num'] = pd.to_numeric(df_notes['Note'].astype(str).str.replace(',', '.'), errors='coerce')
+        df_notes['Order'] = df_notes['J_Type'].astype(str).str.extract('(\d+)').fillna(0).astype(int)
+        df_notes = df_notes.sort_values(by='Order')
+        chart = alt.Chart(df_notes).mark_line(point=True).encode(x='J_Type', y=alt.Y('Note_Num', scale=alt.Scale(domain=[0, 20])))
+        st.altair_chart(chart, use_container_width=True)
