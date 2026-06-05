@@ -10,6 +10,14 @@ st.set_page_config(layout="wide")
 
 WEB_APP_URL = "https://script.google.com/macros/s/AKfycbwA7ZGCqHcDgw_Ia2PDjuvLqGDx1smoqR75VOo5IytV-QgMIw2_6xnZtXI1sFensDDwfw/exec"
 
+# --- FONCTION SÉCURISÉE (Plus d'erreur ValueError) ---
+def safe_parse_date(date_val):
+    try:
+        if isinstance(date_val, dt.date): return date_val
+        return dt.datetime.strptime(str(date_val).strip(), '%Y-%m-%d').date()
+    except:
+        return dt.date.today()
+
 def load_data_from_sheet():
     try:
         response = requests.get(WEB_APP_URL, timeout=15)
@@ -130,7 +138,8 @@ elif page == "Planning & Saisie":
         day = start + dt.timedelta(days=i)
         with col:
             st.markdown(f"**{day.strftime('%d/%m')}**")
-            temp = st.session_state.data[pd.to_datetime(st.session_state.data['Date']).dt.date == day]
+            # --- FILTRAGE UTILISANT LA FONCTION SÉCURISÉE ---
+            temp = st.session_state.data[st.session_state.data['Date'].apply(safe_parse_date) == day]
             temp = temp[temp['Dossier'] == choix_dos]
             for _, r in temp.iterrows():
                 c1, c2 = st.columns([0.8, 0.2])
@@ -139,14 +148,14 @@ elif page == "Planning & Saisie":
                         st.session_state.data.loc[st.session_state.data['ID'] == r['ID'], 'Statut'] = 'Fait'
                     else: st.session_state.data.loc[st.session_state.data['ID'] == r['ID'], 'Statut'] = 'À faire'
                 with c2:
-                    new_date = st.date_input("", value=pd.to_datetime(r['Date']).date(), key=f"cal_{r['ID']}", label_visibility="collapsed")
+                    new_date = st.date_input("", value=safe_parse_date(r['Date']), key=f"cal_{r['ID']}", label_visibility="collapsed")
                     if str(new_date) != r['Date']:
                         st.session_state.data.loc[st.session_state.data['ID'] == r['ID'], 'Date'] = str(new_date)
                         save_all_to_sheet(st.session_state.data, st.session_state.config)
                         st.rerun()
    
     st.subheader("Saisie Notes (Journée)")
-    df_t = st.session_state.data[pd.to_datetime(st.session_state.data['Date']).dt.date == dt.date.today()]
+    df_t = st.session_state.data[st.session_state.data['Date'].apply(safe_parse_date) == dt.date.today()]
     df_t = df_t[df_t['Dossier'] == choix_dos].copy()
     if not df_t.empty:
         temp_notes = {}
