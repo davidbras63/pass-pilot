@@ -24,8 +24,9 @@ def load_data_from_sheet():
 
 def save_all_to_sheet(df, config):
     df_to_send = df.copy()
+    # Correction ajoutée ici pour forcer le format numérique
+    df_to_send['Note'] = pd.to_numeric(df_to_send['Note'], errors='coerce').fillna(0).astype(int)
     df_to_send['Date'] = df_to_send['Date'].astype(str)
-    df_to_send['Note'] = df_to_send['Note'].astype(str)
     payload = {"data": df_to_send.values.tolist(), "config": config}
     try:
         requests.post(WEB_APP_URL, json=payload, timeout=15)
@@ -34,7 +35,7 @@ def save_all_to_sheet(df, config):
 if 'data' not in st.session_state:
     st.session_state.data, st.session_state.config = load_data_from_sheet()
 
-# --- BLOC DE SÉCURITÉ ---
+# --- BOUTON DE RÉINITIALISATION FORCÉE ---
 if st.sidebar.button("🚨 RÉINITIALISER TOUT (FORCÉ)"):
     for key in list(st.session_state.keys()):
         del st.session_state[key]
@@ -160,7 +161,6 @@ elif page == "Planning & Saisie":
                             st.rerun()
    
     st.subheader("Saisie Notes (Journée)")
-    # --- ZONE SÉCURISÉE ---
     mask = (st.session_state.data['Date'] == str(dt.date.today())) & (st.session_state.data['Dossier'] == choix_dos)
     indices = st.session_state.data.index[mask]
     temp_saisies = {}
