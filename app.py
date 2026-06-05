@@ -16,7 +16,7 @@ def load_data_from_sheet():
         if response.status_code == 200:
             data = response.json()
             df = pd.DataFrame(data.get('data', []), columns=['Dossier', 'Matiere', 'Chapitre', 'J_Type', 'Date', 'Note', 'Statut', 'ID'])
-            # BLOCAGE DATE : Lecture forcée en string pour éviter toute transformation
+            # Verrouillage : date lue comme texte strict
             df['Date'] = df['Date'].astype(str)
             config = data.get('config', {'cours_max': 5, 'cadencier': [1, 3, 7, 14, 30], 'seuils': {'1': 12, '3': 12, '7': 14, '14': 14, '30': 16}, 'dossiers': {"PASS": []}})
             return df, config
@@ -25,7 +25,7 @@ def load_data_from_sheet():
 
 def save_all_to_sheet(df, config):
     df_to_send = df.copy()
-    # BLOCAGE DATE : Écriture forcée en string pour bloquer le format
+    # Verrouillage : date stockée comme texte strict
     df_to_send['Date'] = df_to_send['Date'].astype(str)
     df_to_send['Note'] = df_to_send['Note'].astype(str)
     payload = {"data": df_to_send.values.tolist(), "config": config}
@@ -137,8 +137,8 @@ elif page == "Planning & Saisie":
         day = start + dt.timedelta(days=i)
         with col:
             st.markdown(f"**{day.strftime('%d/%m')}**")
-            # Filtrage manuel par string pour éviter tout décalage
-            temp = st.session_state.data[(st.session_state.data['Date'] == str(day)) & (st.session_state.data['Dossier'] == choix_dos)]
+            # Comparaison dynamique en convertissant le string du dataframe en date pour l'affichage
+            temp = st.session_state.data[(pd.to_datetime(st.session_state.data['Date']).dt.date == day) & (st.session_state.data['Dossier'] == choix_dos)]
             for _, r in temp.iterrows():
                 c1, c2 = st.columns([0.8, 0.2])
                 with c1:
@@ -146,7 +146,6 @@ elif page == "Planning & Saisie":
                         st.session_state.data.loc[st.session_state.data['ID'] == r['ID'], 'Statut'] = 'Fait'
                     else: st.session_state.data.loc[st.session_state.data['ID'] == r['ID'], 'Statut'] = 'À faire'
                 with c2:
-                    # Conversion forcée pour l'affichage du date_input
                     new_date = st.date_input("", value=dt.datetime.strptime(r['Date'], '%Y-%m-%d').date(), key=f"cal_{r['ID']}", label_visibility="collapsed")
                     if str(new_date) != r['Date']:
                         st.session_state.data.loc[st.session_state.data['ID'] == r['ID'], 'Date'] = str(new_date)
@@ -154,7 +153,7 @@ elif page == "Planning & Saisie":
                         st.rerun()
    
     st.subheader("Saisie Notes (Journée)")
-    df_t = st.session_state.data[(st.session_state.data['Date'] == str(dt.date.today())) & (st.session_state.data['Dossier'] == choix_dos)].copy()
+    df_t = st.session_state.data[(pd.to_datetime(st.session_state.data['Date']).dt.date == dt.date.today()) & (st.session_state.data['Dossier'] == choix_dos)].copy()
     if not df_t.empty:
         temp_notes = {}
         for idx, row in df_t.iterrows():
