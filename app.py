@@ -5,6 +5,7 @@ import uuid
 import requests
 import json
 import altair as alt
+import time # <--- Ajouté ici
 
 st.set_page_config(layout="wide")
 
@@ -27,7 +28,9 @@ def save_all_to_sheet(df, config):
     df_to_send['Date'] = df_to_send['Date'].astype(str)
     df_to_send['Note'] = df_to_send['Note'].astype(str)
     payload = {"data": df_to_send.values.tolist(), "config": config}
-    try: requests.post(WEB_APP_URL, json=payload, timeout=15)
+    try: 
+        requests.post(WEB_APP_URL, json=payload, timeout=15)
+        time.sleep(1) # <--- Sécurité ajoutée pour laisser le temps à Google
     except: st.error("Erreur de sauvegarde")
 
 if 'data' not in st.session_state:
