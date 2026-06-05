@@ -78,15 +78,7 @@ if page == "Dashboard":
         st.session_state.data = st.session_state.data[st.session_state.data['Dossier'] != choix_dos]
         save_all_to_sheet(st.session_state.data, st.session_state.config)
         st.rerun()
-    for m in st.session_state.config['dossiers'].get(choix_dos, []):
-        with st.expander(f"📚 {m}"):
-            c1, c2 = st.columns([4, 1])
-            if c2.button("🗑️ Supprimer", key=f"del_{m}"):
-                st.session_state.config['dossiers'][choix_dos].remove(m)
-                st.session_state.data = st.session_state.data[(st.session_state.data['Dossier'] != choix_dos) | (st.session_state.data['Matiere'] != m)]
-                save_all_to_sheet(st.session_state.data, st.session_state.config)
-                st.rerun()
-
+    
     st.subheader("⚠️ Rattrapages à traiter")
     df_dos = st.session_state.data[st.session_state.data['Dossier'] == choix_dos].copy()
     def est_en_rattrapage(row):
@@ -118,10 +110,22 @@ if page == "Dashboard":
                         st.session_state.data.loc[st.session_state.data['ID'] == row['ID'], 'Statut'] = 'Traité'
                         place_trouvee = True; break
                 if place_trouvee: save_all_to_sheet(st.session_state.data, st.session_state.config); st.rerun()
-                else: st.error("❌ Aucune place libre avant la prochaine échéance.")
+                else: st.error("❌ Aucune place.")
             if c3.button("🗑️ Supprimer", key=f"trash_{row['ID']}"):
-                st.session_state.data = st.session_state.data[st.session_state.data['ID'] != row['ID']]
+                st.session_state.data.loc[st.session_state.data['ID'] == row['ID'], 'Statut'] = 'Traité'
                 save_all_to_sheet(st.session_state.data, st.session_state.config); st.rerun()
+
+    for m in st.session_state.config['dossiers'].get(choix_dos, []):
+        with st.expander(f"📚 {m}"):
+            c1, c2 = st.columns([4, 1])
+            if c2.button("🗑️ Supprimer", key=f"del_{m}"):
+                st.session_state.config['dossiers'][choix_dos].remove(m)
+                st.session_state.data = st.session_state.data[(st.session_state.data['Dossier'] != choix_dos) | (st.session_state.data['Matiere'] != m)]
+                save_all_to_sheet(st.session_state.data, st.session_state.config)
+                st.rerun()
+            chapitres_matiere = st.session_state.data[(st.session_state.data['Dossier'] == choix_dos) & (st.session_state.data['Matiere'] == m)]['Chapitre'].unique()
+            if len(chapitres_matiere) > 0: st.write("**Chapitres :**", ", ".join(chapitres_matiere))
+            else: st.write("Aucun chapitre trouvé.")
 
 elif page == "Planning & Saisie":
     with st.expander("✍️ Ajouter Chapitre", expanded=False):
