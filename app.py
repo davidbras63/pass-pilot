@@ -143,22 +143,21 @@ elif page == "Planning & Saisie":
     df_t = st.session_state.data[(pd.to_datetime(st.session_state.data['Date']).dt.date == dt.date.today()) & (st.session_state.data['Dossier'] == choix_dos)].copy()
     
     if not df_t.empty:
-        saisie_temp = {}
+        # Correction uniquement sur ce bloc : on transforme tout en chaîne de caractère
+        df_t['Note'] = df_t['Note'].astype(str)
+        # Saisie simple sans data_editor
         for idx, row in df_t.iterrows():
-            c1, c2 = st.columns([0.7, 0.3])
-            c1.write(f"{row['Chapitre']} ({row['J_Type']})")
-            saisie_temp[row['ID']] = c2.text_input("Note (pts ; pour sép)", value=str(row['Note']), key=f"saisie_{row['ID']}")
-            
+            new_note = st.text_input(f"Note pour {row['Chapitre']} ({row['J_Type']})", value=row['Note'], key=f"n_{row['ID']}")
+            st.session_state.data.loc[st.session_state.data['ID'] == row['ID'], 'Note'] = new_note
+        
         if st.button("💾 Enregistrer et Calculer Moyenne"):
-            for id_row, val in saisie_temp.items():
+            for idx, row in st.session_state.data.iterrows():
+                val = str(row['Note'])
                 if ';' in val:
                     try:
-                        vals = [float(x.strip()) for x in val.split(';')]
-                        moy = round(sum(vals)/len(vals), 1)
-                        st.session_state.data.loc[st.session_state.data['ID'] == id_row, 'Note'] = moy
-                    except: st.session_state.data.loc[st.session_state.data['ID'] == id_row, 'Note'] = val
-                else:
-                    st.session_state.data.loc[st.session_state.data['ID'] == id_row, 'Note'] = val
+                        vals = [float(x.replace(',', '.').strip()) for x in val.split(';')]
+                        st.session_state.data.at[idx, 'Note'] = str(round(sum(vals)/len(vals), 1))
+                    except: pass
             save_all_to_sheet(st.session_state.data, st.session_state.config)
             st.rerun()
 
