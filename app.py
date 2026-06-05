@@ -154,7 +154,6 @@ elif page == "Planning & Saisie":
                             st.rerun()
    
     st.subheader("Saisie Notes (Journée)")
-    # --- ZONE SAISIE ---
     if not st.session_state.data.empty:
         mask = (st.session_state.data['Date'] == str(dt.date.today())) & (st.session_state.data['Dossier'] == choix_dos)
         indices = st.session_state.data.index[mask]
@@ -163,10 +162,10 @@ elif page == "Planning & Saisie":
             row = st.session_state.data.loc[idx]
             c1, c2 = st.columns([0.7, 0.3])
             c1.write(f"{row['Chapitre']} ({row['J_Type']})")
-            temp_saisies[idx] = c2.text_input("Notes", value=str(row['Note']), key=f"in_{idx}")
-        if st.button("💾 Enregistrer Notes"):
-            for idx, val in temp_saisies.items():
-                st.session_state.data.at[idx, 'Note'] = val
+            temp_saisies[idx] = c2.text_input("Note", value=str(row['Note']), key=f"saisie_{idx}")
+        if st.button("💾 Enregistrer toutes les notes"):
+            for idx, valeur in temp_saisies.items():
+                st.session_state.data.at[idx, 'Note'] = valeur
             save_all_to_sheet(st.session_state.data, st.session_state.config)
             st.rerun()
 
