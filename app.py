@@ -130,7 +130,7 @@ elif page == "Planning & Saisie":
         day = start + dt.timedelta(days=i)
         with col:
             st.markdown(f"**{day.strftime('%d/%m')}**")
-            # --- MODIF : Comparaison textuelle stricte pour bloquer la date ---
+            # --- LECTURE BRUTE : On compare le texte string avec le texte string ---
             temp = st.session_state.data[(st.session_state.data['Date'] == str(day)) & (st.session_state.data['Dossier'] == choix_dos)]
             for _, r in temp.iterrows():
                 c1, c2 = st.columns([0.8, 0.2])
@@ -139,8 +139,7 @@ elif page == "Planning & Saisie":
                         st.session_state.data.loc[st.session_state.data['ID'] == r['ID'], 'Statut'] = 'Fait'
                     else: st.session_state.data.loc[st.session_state.data['ID'] == r['ID'], 'Statut'] = 'À faire'
                 with c2:
-                    # On affiche la date mais on garde le contrôle sur le texte enregistré
-                    new_date = st.date_input("", value=pd.to_datetime(r['Date']).date(), key=f"cal_{r['ID']}", label_visibility="collapsed")
+                    new_date = st.date_input("", value=dt.datetime.strptime(r['Date'], '%Y-%m-%d').date(), key=f"cal_{r['ID']}", label_visibility="collapsed")
                     if str(new_date) != r['Date']:
                         st.session_state.data.loc[st.session_state.data['ID'] == r['ID'], 'Date'] = str(new_date)
                         save_all_to_sheet(st.session_state.data, st.session_state.config)
