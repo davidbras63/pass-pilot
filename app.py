@@ -16,8 +16,8 @@ def load_data_from_sheet():
         if response.status_code == 200:
             data = response.json()
             df = pd.DataFrame(data.get('data', []), columns=['Dossier', 'Matiere', 'Chapitre', 'J_Type', 'Date', 'Note', 'Statut', 'ID'])
-            # Correctif : On force la lecture en texte brut puis conversion directe, sans décalage de fuseau
-            df['Date'] = pd.to_datetime(df['Date'].astype(str)).dt.date
+            # CORRECTION : Lecture textuelle pure sans aucune interprétation de fuseau
+            df['Date'] = df['Date'].apply(lambda x: dt.datetime.strptime(str(x), '%Y-%m-%d').date())
             config = data.get('config', {'cours_max': 5, 'cadencier': [1, 3, 7, 14, 30], 'seuils': {'1': 12, '3': 12, '7': 14, '14': 14, '30': 16}, 'dossiers': {"PASS": []}})
             return df, config
     except: pass
@@ -25,8 +25,8 @@ def load_data_from_sheet():
 
 def save_all_to_sheet(df, config):
     df_to_send = df.copy()
-    # Correctif : Formatage strict ISO pour empêcher tout décalage au stockage
-    df_to_send['Date'] = df_to_send['Date'].apply(lambda x: x.isoformat() if isinstance(x, dt.date) else str(x))
+    # CORRECTION : Écriture textuelle pure, formatée de façon fixe
+    df_to_send['Date'] = df_to_send['Date'].apply(lambda x: x.strftime('%Y-%m-%d'))
     df_to_send['Note'] = df_to_send['Note'].astype(str)
     payload = {"data": df_to_send.values.tolist(), "config": config}
     try:
@@ -102,7 +102,6 @@ if page == "Dashboard":
         st.table(rattrapages[['Matiere', 'Chapitre', 'J_Type', 'Date', 'Note']])
         for _, row in rattrapages.iterrows():
             if st.button(f"Réintégrer {row['Chapitre']}", key=f"btn_{row['ID']}"):
-                # Correctif Réintégration : On cherche une place libre avant l'échéance suivante
                 all_chap_dates = sorted(st.session_state.data[(st.session_state.data['Chapitre'] == row['Chapitre']) & (st.session_state.data['Dossier'] == choix_dos)]['Date'].unique())
                 idx = all_chap_dates.index(row['Date'])
                 date_cible = row['Date'] + dt.timedelta(days=1)
@@ -141,7 +140,7 @@ elif page == "Planning & Saisie":
         day = start + dt.timedelta(days=i)
         with col:
             st.markdown(f"**{day.strftime('%d/%m')}**")
-            temp = st.session_state.data[(pd.to_datetime(st.session_state.data['Date']).dt.date == day) & (st.session_state.data['Dossier'] == choix_dos)]
+            temp = st.session_state.data[(st.session_state.data['Date'] == day) & (st.session_state.data['Dossier'] == choix_dos)]
             for _, r in temp.iterrows():
                 c1, c2 = st.columns([0.8, 0.2])
                 with c1:
@@ -149,7 +148,6 @@ elif page == "Planning & Saisie":
                         st.session_state.data.loc[st.session_state.data['ID'] == r['ID'], 'Statut'] = 'Fait'
                     else: st.session_state.data.loc[st.session_state.data['ID'] == r['ID'], 'Statut'] = 'À faire'
                 with c2:
-                    # Correctif : Le date_input est maintenant lié à la mise à jour de la date de la ligne
                     new_date = st.date_input("", value=r['Date'], key=f"cal_{r['ID']}", label_visibility="collapsed")
                     if new_date != r['Date']:
                         st.session_state.data.loc[st.session_state.data['ID'] == r['ID'], 'Date'] = new_date
@@ -157,7 +155,7 @@ elif page == "Planning & Saisie":
                         st.rerun()
    
     st.subheader("Saisie Notes (Journée)")
-    df_t = st.session_state.data[(pd.to_datetime(st.session_state.data['Date']).dt.date == dt.date.today()) & (st.session_state.data['Dossier'] == choix_dos)].copy()
+    df_t = st.session_state.data[(st.session_state.data['Date'] == dt.date.today()) & (st.session_state.data['Dossier'] == choix_dos)].copy()
     if not df_t.empty:
         temp_notes = {}
         for idx, row in df_t.iterrows():
