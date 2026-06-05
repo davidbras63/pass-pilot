@@ -159,22 +159,20 @@ elif page == "Planning & Saisie":
    
     st.subheader("Saisie Notes (Journée)")
     if not st.session_state.data.empty:
-        # Filtrage sécurisé pour la saisie
         mask = (st.session_state.data['Date'] == str(dt.date.today())) & (st.session_state.data['Dossier'] == choix_dos)
         df_t = st.session_state.data[mask].copy()
         
-        # Utilisation d'un dictionnaire temporaire pour la saisie
-        temp_notes = {}
+        # Dictionnaire pour collecter les saisies : { ID_unique : valeur_saisie }
+        saisies_temp = {}
         for idx, row in df_t.iterrows():
             c1, c2 = st.columns([0.7, 0.3])
             c1.write(f"{row['Chapitre']} ({row['J_Type']})")
-            # Stockage de la valeur saisie dans le dictionnaire avec l'index comme clé
-            temp_notes[idx] = c2.text_input("Notes (ex: 12 10 15)", value=str(row['Note']), key=f"saisie_{row['ID']}")
+            saisies_temp[row['ID']] = c2.text_input("Notes (ex: 12 10 15)", value=str(row['Note']), key=f"saisie_{row['ID']}")
             
         if st.button("💾 Enregistrer Notes"):
-            # Application des modifications en une seule fois hors de la boucle
-            for idx, val in temp_notes.items():
-                st.session_state.data.at[idx, 'Note'] = str(val).replace(',', '.')
+            # On parcourt le dictionnaire et on met à jour en utilisant l'ID unique
+            for id_unique, val in saisies_temp.items():
+                st.session_state.data.loc[st.session_state.data['ID'] == id_unique, 'Note'] = str(val).replace(',', '.')
             save_all_to_sheet(st.session_state.data, st.session_state.config)
             st.rerun()
 
