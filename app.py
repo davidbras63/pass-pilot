@@ -16,7 +16,8 @@ def load_data_from_sheet():
         if response.status_code == 200:
             data = response.json()
             df = pd.DataFrame(data.get('data', []), columns=['Dossier', 'Matiere', 'Chapitre', 'J_Type', 'Date', 'Note', 'Statut', 'ID'])
-            df['Date'] = pd.to_datetime(df['Date']).dt.date
+            # Correction : Normalisation forcée pour éviter le décalage de jour
+            df['Date'] = pd.to_datetime(df['Date']).dt.normalize().dt.date
             config = data.get('config', {'cours_max': 5, 'cadencier': [1, 3, 7, 14, 30], 'seuils': {'1': 12, '3': 12, '7': 14, '14': 14, '30': 16}, 'dossiers': {"PASS": []}})
             return df, config
     except: pass
@@ -25,6 +26,7 @@ def load_data_from_sheet():
 def save_all_to_sheet(df, config):
     df_to_send = df.copy()
     df_to_send['Date'] = df_to_send['Date'].astype(str)
+    df_to_send['Note'] = df_to_send['Note'].astype(str)
     payload = {"data": df_to_send.values.tolist(), "config": config}
     try:
         requests.post(WEB_APP_URL, json=payload, timeout=15)
@@ -93,15 +95,23 @@ if page == "Dashboard":
         j_str = str(row['J_Type']).replace('J', '')
         seuil = int(st.session_state.config['seuils'].get(j_str, 12))
         return valeur_note > 0 and valeur_note < seuil and row['Statut'] != 'Traité'
-    
+   
     rattrapages = df_dos[df_dos.apply(est_en_rattrapage, axis=1)]
     if not rattrapages.empty:
         st.table(rattrapages[['Matiere', 'Chapitre', 'J_Type', 'Date', 'Note']])
         for _, row in rattrapages.iterrows():
-            if st.button(f"Réintégrer {row['Chapitre']}", key=f"btn_{row['ID']}"):
-                st.session_state.data.loc[st.session_state.data['ID'] == row['ID'], 'Statut'] = 'Traité'
-                save_all_to_sheet(st.session_state.data, st.session_state.config)
-                st.rerun()
+            if st.button(f"Réintégrer {row['Chapitre']} ({row['J_Type']})", key=f"btn_{row['ID']}"):
+                # Logique de contrôle de fenêtre temporelle
+                all_dates = sorted(st.session_state.data[(st.session_state.data['Chapitre'] == row['Chapitre']) & (st.session_state.data['Dossier'] == choix_dos)]['Date'].unique())
+                idx = all_dates.index(row['Date'])
+                if idx + 1 < len(all_dates) and dt.date.today() < all_dates[idx+1]:
+                    st.session_state.data.loc[st.session_state.data['ID'] == row['ID'], 'Statut'] = 'Traité'
+                    save_all_to_sheet(st.session_state.data, st.session_state.config)
+                    st.session_state.data, st.session_state.config = load_data_from_sheet()
+                    st.rerun()
+                else:
+                    st.error(f"❌ Impossible de réintégrer : la date limite ({all_dates[idx+1] if idx+1 < len(all_dates) else 'inconnue'}) est dépassée.")
+                    if st.button("Compris", key=f"ack_{row['ID']}"): st.rerun()
 
 elif page == "Planning & Saisie":
     with st.expander("✍️ Ajouter Chapitre", expanded=True):
@@ -138,23 +148,21 @@ elif page == "Planning & Saisie":
                         st.session_state.data.loc[st.session_state.data['ID'] == r['ID'], 'Statut'] = 'À faire'
                 with c2:
                     st.date_input("", value=r['Date'], key=f"cal_{r['ID']}", label_visibility="collapsed")
-    
+   
     st.subheader("Saisie Notes (Journée)")
     df_t = st.session_state.data[(pd.to_datetime(st.session_state.data['Date']).dt.date == dt.date.today()) & (st.session_state.data['Dossier'] == choix_dos)].copy()
-    
+   
     if not df_t.empty:
-        # Stockage propre des notes pour calcul manuel
         temp_notes = {}
         for idx, row in df_t.iterrows():
             c1, c2 = st.columns([0.7, 0.3])
             c1.write(f"{row['Chapitre']} ({row['J_Type']})")
             temp_notes[row['ID']] = c2.text_input("Note (pts ; sép)", value=str(row['Note']), key=f"saisie_{row['ID']}")
-            
+           
         if st.button("💾 Enregistrer et Calculer Moyenne"):
             for id_row, val in temp_notes.items():
                 if ';' in val:
                     try:
-                        # On force le point pour le calcul
                         vals = [float(x.replace(',', '.').strip()) for x in val.split(';')]
                         st.session_state.data.loc[st.session_state.data['ID'] == id_row, 'Note'] = round(sum(vals)/len(vals), 1)
                     except: st.session_state.data.loc[st.session_state.data['ID'] == id_row, 'Note'] = val
@@ -172,7 +180,6 @@ elif page == "Graphiques":
     if len(chapitres) > 0:
         sel_chap = st.selectbox("Choisir un chapitre", chapitres)
         df_notes = st.session_state.data[(st.session_state.data['Chapitre'] == sel_chap)].copy()
-        # Nettoyage pour graphique
         df_notes['Note_Num'] = pd.to_numeric(df_notes['Note'].astype(str).str.replace(',', '.'), errors='coerce')
         df_notes['Order'] = df_notes['J_Type'].astype(str).str.extract('(\d+)').fillna(0).astype(int)
         df_notes = df_notes.sort_values(by='Order')
