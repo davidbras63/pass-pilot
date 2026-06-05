@@ -49,7 +49,7 @@ def reset_matiere():
 
 st.sidebar.title("⚙️ Pilot Expert")
 with st.sidebar.expander("🛠️ Réglages", expanded=False):
-    st.session_state.config['cours_max'] = st.number_input("Max cours/jour", 1, 20, st.session_state.config.get('cours_max', 5))
+    st.session_state.config['cours_max'] = st.number_input("Max cours/jour", 1, 20, int(st.session_state.config.get('cours_max', 5)))
     cad_str = st.text_input("Cadencier (jours)", ",".join(map(str, st.session_state.config['cadencier'])))
     st.session_state.config['cadencier'] = [int(x.strip()) for x in cad_str.split(",")]
     for j in st.session_state.config['cadencier']:
@@ -97,8 +97,6 @@ if page == "Dashboard":
         st.table(rattrapages[['Matiere', 'Chapitre', 'J_Type', 'Date', 'Note']])
         for _, row in rattrapages.iterrows():
             if st.button(f"Réintégrer {row['Chapitre']}", key=f"btn_{row['ID']}"):
-                all_d = sorted(st.session_state.data[(st.session_state.data['Chapitre'] == row['Chapitre']) & (st.session_state.data['Dossier'] == choix_dos)]['Date'].unique())
-                idx = all_d.index(row['Date'])
                 new_r = row.copy()
                 new_r['ID'], new_r['Chapitre'], new_r['Date'] = str(uuid.uuid4()), f"{row['Chapitre']}R", str(dt.date.today())
                 new_r['Note'], new_r['Statut'] = 0, 'À faire'
@@ -116,12 +114,11 @@ elif page == "Planning & Saisie":
             dex = st.date_input("Date Examen", value=None)
             if st.form_submit_button("Générer Planning"):
                 if chap and dex:
-                    # J0 est créé à la date d0, et les suivants sont calculés par rapport à cette date
                     new_rows = [{'ID': str(uuid.uuid4()), 'Dossier': choix_dos, 'Matiere': mat, 'Chapitre': chap, 'J_Type': 'J0', 'Date': str(d0), 'Note': 0, 'Statut': 'À faire'}]
                     for j in st.session_state.config['cadencier']:
                         d_j = d0 + dt.timedelta(days=j)
                         if d_j <= dex: new_rows.append({'ID': str(uuid.uuid4()), 'Dossier': choix_dos, 'Matiere': mat, 'Chapitre': chap, 'J_Type': f'J{j}', 'Date': str(d_j), 'Note': 0, 'Statut': 'À faire'})
-                    st.session_state.data = pd.concat([st.session_state.data, pd.DataFrame(new_rows)]).drop_duplicates()
+                    st.session_state.data = pd.concat([st.session_state.data, pd.DataFrame(new_rows)])
                     save_all_to_sheet(st.session_state.data, st.session_state.config)
                     st.rerun()
 
@@ -133,7 +130,6 @@ elif page == "Planning & Saisie":
         day = start + dt.timedelta(days=i)
         with col:
             st.markdown(f"**{day.strftime('%d/%m')}**")
-            # Lecture normale sans transformation forcée pour éviter de perdre les données
             temp = st.session_state.data[pd.to_datetime(st.session_state.data['Date']).dt.date == day]
             temp = temp[temp['Dossier'] == choix_dos]
             for _, r in temp.iterrows():
