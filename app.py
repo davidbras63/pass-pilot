@@ -86,7 +86,6 @@ if page == "Dashboard":
                 st.session_state.config['dossiers'][choix_dos].remove(m)
                 st.session_state.data = st.session_state.data[(st.session_state.data['Dossier'] != choix_dos) | (st.session_state.data['Matiere'] != m)]
                 save_all_to_sheet(st.session_state.data, st.session_state.config)
-                st.session_state.data = None
                 st.rerun()
             chapitres_matiere = st.session_state.data[(st.session_state.data['Dossier'] == choix_dos) & (st.session_state.data['Matiere'] == m)]['Chapitre'].unique()
             if len(chapitres_matiere) > 0: st.write("**Chapitres :**", ", ".join(chapitres_matiere))
@@ -124,13 +123,13 @@ if page == "Dashboard":
                         place_trouvee = True; break
                 if place_trouvee:
                     save_all_to_sheet(st.session_state.data, st.session_state.config)
-                    st.session_state.data = None
+                    st.session_state.data, st.session_state.config = load_data_from_sheet()
                     st.rerun()
                 else: st.error("❌ Aucune place.")
             if c3.button("🗑️ Supprimer", key=f"trash_{row['ID']}"):
                 st.session_state.data.loc[st.session_state.data['ID'] == row['ID'], 'Statut'] = 'Traité'
                 save_all_to_sheet(st.session_state.data, st.session_state.config)
-                st.session_state.data = None
+                st.session_state.data, st.session_state.config = load_data_from_sheet()
                 st.rerun()
 
 elif page == "Planning & Saisie":
@@ -176,32 +175,34 @@ elif page == "Planning & Saisie":
     mask = (st.session_state.data['Date'] == str(dt.date.today())) & (st.session_state.data['Dossier'] == choix_dos)
     indices = st.session_state.data.index[mask]
     
+    # Stockage temporaire pour éviter les conflits de clés
     temp_saisies = {}
     
     with st.form("Saisie_Notes_Form"):
         for idx in indices:
             row = st.session_state.data.loc[idx]
             col1, col2 = st.columns([0.8, 0.2])
+            
+            # Champ texte pour les notes
             temp_saisies[idx] = col1.text_input(f"{row['Chapitre']} ({row['J_Type']})", value=str(row['Note']), key=f"saisie_{idx}")
             
+            # Bouton Calculer
             if col2.form_submit_button(f"Calculer {row['ID'][:4]}", key=f"calc_{idx}"):
                 raw_notes = temp_saisies[idx].replace(',', '.')
                 try:
                     notes_list = [float(n) for n in raw_notes.split()]
                     if notes_list:
-                        st.session_state.data.at[idx, 'Note'] = round(sum(notes_list) / len(notes_list), 2)
+                        moyenne = sum(notes_list) / len(notes_list)
+                        st.session_state.data.at[idx, 'Note'] = round(moyenne, 2)
                         save_all_to_sheet(st.session_state.data, st.session_state.config)
-                        st.session_state.data = None
                         st.rerun()
-                except: pass
+                except: st.error("Erreur saisie")
 
         if st.form_submit_button("💾 Enregistrer"):
             for idx, valeur in temp_saisies.items():
                 try: st.session_state.data.at[idx, 'Note'] = float(str(valeur).replace(',', '.'))
                 except: st.session_state.data.at[idx, 'Note'] = 0
-            save_all_to_sheet(st.session_state.data, st.session_state.config)
-            st.session_state.data = None
-            st.rerun()
+            save_all_to_sheet(st.session_state.data, st.session_state.config); st.rerun()
 
 elif page == "Graphiques":
     st.title("📊 Progression")
