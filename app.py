@@ -76,16 +76,15 @@ st.sidebar.button("➕ Ajouter Matière", on_click=reset_matiere)
 page = st.sidebar.radio("Navigation", ["Dashboard", "Planning & Saisie", "Graphiques"])
 
 if page == "Dashboard":
-    # FORCE LE RECHARGEMENT À CHAQUE FOIS QUE TU ES SUR CETTE PAGE
     st.session_state.data, st.session_state.config = load_data_from_sheet()
-    
+   
     st.title(f"🎯 Dashboard : {choix_dos}")
     if st.button("❌ Supprimer ce Dossier"):
         del st.session_state.config['dossiers'][choix_dos]
         st.session_state.data = st.session_state.data[st.session_state.data['Dossier'] != choix_dos]
         save_all_to_sheet(st.session_state.data, st.session_state.config)
         st.rerun()
-    
+   
     for m in st.session_state.config['dossiers'].get(choix_dos, []):
         with st.expander(f"📚 {m}"):
             c1, c2 = st.columns([4, 1])
@@ -97,7 +96,7 @@ if page == "Dashboard":
             chapitres_matiere = st.session_state.data[(st.session_state.data['Dossier'] == choix_dos) & (st.session_state.data['Matiere'] == m)]['Chapitre'].unique()
             if len(chapitres_matiere) > 0: st.write("**Chapitres :**", ", ".join(chapitres_matiere))
             else: st.write("Aucun chapitre trouvé.")
-            
+           
     st.subheader("⚠️ Rattrapages à traiter")
     df_dos = st.session_state.data[st.session_state.data['Dossier'] == choix_dos].copy()
     def est_en_rattrapage(row):
@@ -116,7 +115,6 @@ if page == "Dashboard":
                 all_dates = sorted(st.session_state.data[(st.session_state.data['Chapitre'] == row['Chapitre']) & (st.session_state.data['Dossier'] == choix_dos)]['Date'].unique())
                 next_date_str = all_dates[all_dates.index(row['Date']) + 1] if (all_dates.index(row['Date']) + 1) < len(all_dates) else (date_debut + dt.timedelta(days=365)).strftime('%Y-%m-%d')
                 date_limite = dt.datetime.strptime(next_date_str, '%Y-%m-%d')
-                
                 place_trouvee = False
                 for delta in range(1, 60):
                     test_date = (date_debut + dt.timedelta(days=delta)).strftime('%Y-%m-%d')
@@ -163,33 +161,32 @@ elif page == "Planning & Saisie":
             st.markdown(f"**{day_str[8:]}/{day_str[5:7]}**")
             temp = st.session_state.data[(st.session_state.data['Date'] == day_str) & (st.session_state.data['Dossier'] == choix_dos)]
             for _, r in temp.iterrows():
-                c1, c2 = st.columns([0.8, 0.2])
+                # Rétablissement de l'affichage original : Checkbox + Calendrier sur la même ligne
+                c1, c2 = st.columns([0.7, 0.3])
                 with c1:
                     if st.checkbox(f"{r['Chapitre']} ({r['J_Type']})", value=(r['Statut'] == 'Fait'), key=f"chk_{r['ID']}"):
                         st.session_state.data.loc[st.session_state.data['ID'] == r['ID'], 'Statut'] = 'Fait'
                     else: st.session_state.data.loc[st.session_state.data['ID'] == r['ID'], 'Statut'] = 'À faire'
                 with c2:
-                    if r['J_Type'] == 'J0': st.text("🔒")
-                    else:
+                    if r['J_Type'] != 'J0':
                         new_date = st.date_input("", value=dt.datetime.strptime(r['Date'], '%Y-%m-%d'), key=f"cal_{r['ID']}", label_visibility="collapsed")
                         if str(new_date) != r['Date']:
                             st.session_state.data.loc[st.session_state.data['ID'] == r['ID'], 'Date'] = str(new_date)
                             save_all_to_sheet(st.session_state.data, st.session_state.config); st.rerun()
+                    else: st.text("🔒")
    
     st.subheader("Saisie Notes (Journée)")
     mask = (st.session_state.data['Date'] == str(dt.date.today())) & (st.session_state.data['Dossier'] == choix_dos)
     indices = st.session_state.data.index[mask]
-    
+   
     temp_saisies = {}
-    
+   
     with st.form("Saisie_Notes_Form"):
         for idx in indices:
             row = st.session_state.data.loc[idx]
             col1, col2 = st.columns([0.8, 0.2])
-            
             temp_saisies[idx] = col1.text_input(f"{row['Chapitre']} ({row['J_Type']})", value=str(row['Note']), key=f"saisie_{idx}")
-            
-            if col2.form_submit_button(f"Calculer {row['ID'][:4]}", key=f"calc_{idx}"):
+            if col2.form_submit_button(f"Calc {row['ID'][:4]}", key=f"calc_{idx}"):
                 raw_notes = temp_saisies[idx].replace(',', '.')
                 try:
                     notes_list = [float(n) for n in raw_notes.split()]
@@ -198,7 +195,7 @@ elif page == "Planning & Saisie":
                         st.session_state.data.at[idx, 'Note'] = round(moyenne, 2)
                         save_all_to_sheet(st.session_state.data, st.session_state.config)
                         st.rerun()
-                except: st.error("Erreur saisie")
+                except: st.error("Erreur")
 
         if st.form_submit_button("💾 Enregistrer"):
             for idx, valeur in temp_saisies.items():
