@@ -89,11 +89,15 @@ if page == "Dashboard":
     st.subheader("⚠️ Rattrapages à traiter")
     df_dos = st.session_state.data[st.session_state.data['Dossier'] == choix_dos].copy()
     def est_en_rattrapage(row):
-        try: valeur_note = float(str(row['Note']).replace(',', '.'))
-        except: valeur_note = 0
-        j_str = str(row['J_Type']).replace('J', '')
+        # CALCUL DE LA MOYENNE SUR LA LISTE DE NOTES
+        try:
+            notes_str = str(row['Note']).replace(',', ' ').split()
+            notes_vals = [float(n) for n in notes_str if n.replace('.','',1).isdigit()]
+            moyenne = sum(notes_vals) / len(notes_vals) if notes_vals else 0
+        except: moyenne = 0
+        j_str = str(row['J_Type']).replace('J', '').replace('R', '')
         seuil = int(st.session_state.config['seuils'].get(j_str, 12))
-        return valeur_note > 0 and valeur_note < seuil and row['Statut'] != 'Traité'
+        return moyenne > 0 and moyenne < seuil and row['Statut'] != 'Traité'
    
     rattrapages = df_dos[df_dos.apply(est_en_rattrapage, axis=1)]
     if not rattrapages.empty:
@@ -106,7 +110,7 @@ if page == "Dashboard":
                 if idx + 1 < len(all_chap_dates) and date_cible < all_chap_dates[idx+1]:
                     new_row = row.copy()
                     new_row['ID'], new_row['J_Type'], new_row['Date'] = str(uuid.uuid4()), f"{row['J_Type']}R", date_cible
-                    new_row['Note'], new_row['Statut'] = 0, 'À faire'
+                    new_row['Note'], new_row['Statut'] = "0", 'À faire'
                     st.session_state.data = pd.concat([st.session_state.data, pd.DataFrame([new_row])], ignore_index=True)
                     st.session_state.data.loc[st.session_state.data['ID'] == row['ID'], 'Statut'] = 'Traité'
                     save_all_to_sheet(st.session_state.data, st.session_state.config)
@@ -122,10 +126,10 @@ elif page == "Planning & Saisie":
             dex_date = st.date_input("Date Examen", value=None)
             if st.form_submit_button("Générer Planning"):
                 if chap and dex_date:
-                    new_rows = [{'ID': str(uuid.uuid4()), 'Dossier': choix_dos, 'Matiere': mat, 'Chapitre': chap, 'J_Type': 'J0', 'Date': str(d0_date), 'Note': 0, 'Statut': 'À faire'}]
+                    new_rows = [{'ID': str(uuid.uuid4()), 'Dossier': choix_dos, 'Matiere': mat, 'Chapitre': chap, 'J_Type': 'J0', 'Date': str(d0_date), 'Note': "0", 'Statut': 'À faire'}]
                     for j in st.session_state.config['cadencier']:
                         d_j = d0_date + dt.timedelta(days=j)
-                        if d_j <= dex_date: new_rows.append({'ID': str(uuid.uuid4()), 'Dossier': choix_dos, 'Matiere': mat, 'Chapitre': chap, 'J_Type': f'J{j}', 'Date': str(d_j), 'Note': 0, 'Statut': 'À faire'})
+                        if d_j <= dex_date: new_rows.append({'ID': str(uuid.uuid4()), 'Dossier': choix_dos, 'Matiere': mat, 'Chapitre': chap, 'J_Type': f'J{j}', 'Date': str(d_j), 'Note': "0", 'Statut': 'À faire'})
                     st.session_state.data = pd.concat([st.session_state.data, pd.DataFrame(new_rows)]).drop_duplicates(subset=['Dossier', 'Chapitre', 'J_Type', 'Date'])
                     save_all_to_sheet(st.session_state.data, st.session_state.config)
                     st.rerun()
@@ -146,8 +150,7 @@ elif page == "Planning & Saisie":
                         st.session_state.data.loc[st.session_state.data['ID'] == r['ID'], 'Statut'] = 'Fait'
                     else: st.session_state.data.loc[st.session_state.data['ID'] == r['ID'], 'Statut'] = 'À faire'
                 with c2:
-                    if r['J_Type'] == 'J0':
-                        st.text("🔒")
+                    if r['J_Type'] == 'J0': st.text("🔒")
                     else:
                         new_date = st.date_input("", value=dt.datetime.strptime(r['Date'], '%Y-%m-%d'), key=f"cal_{r['ID']}", label_visibility="collapsed")
                         if str(new_date) != r['Date']:
@@ -159,16 +162,16 @@ elif page == "Planning & Saisie":
     if not st.session_state.data.empty:
         df_t = st.session_state.data[(st.session_state.data['Date'] == str(dt.date.today())) & (st.session_state.data['Dossier'] == choix_dos)].copy()
         
-        # --- SOLUTION : Saisie dans un dictionnaire temporaire pour éviter les crashs ---
+        # --- SAISIE À LA VOLÉE : On stocke tout dans 'saisies' ---
         saisies = {}
         for idx, row in df_t.iterrows():
             c1, c2 = st.columns([0.7, 0.3])
             c1.write(f"{row['Chapitre']} ({row['J_Type']})")
-            saisies[row['ID']] = c2.text_input("Note", value=str(row['Note']), key=f"saisie_{row['ID']}")
+            saisies[row['ID']] = c2.text_input("Notes (ex: 12 10 15)", value=str(row['Note']), key=f"saisie_{row['ID']}")
             
         if st.button("💾 Enregistrer Notes"):
             for id_row, val in saisies.items():
-                st.session_state.data.loc[st.session_state.data['ID'] == id_row, 'Note'] = str(val).replace(',', '.')
+                st.session_state.data.loc[st.session_state.data['ID'] == id_row, 'Note'] = str(val)
             save_all_to_sheet(st.session_state.data, st.session_state.config)
             st.rerun()
 
@@ -181,7 +184,16 @@ elif page == "Graphiques":
     if len(chapitres) > 0:
         sel_chap = st.selectbox("Choisir un chapitre", chapitres)
         df_notes = st.session_state.data[(st.session_state.data['Chapitre'] == sel_chap)].copy()
-        df_notes['Note_Num'] = pd.to_numeric(df_notes['Note'].astype(str).str.replace(',', '.'), errors='coerce')
+        
+        # CALCUL DE LA MOYENNE POUR CHAQUE POINT DU GRAPHIQUE
+        def calc_moyenne(val):
+            try:
+                ns = str(val).replace(',', ' ').split()
+                vals = [float(n) for n in ns if n.replace('.','',1).isdigit()]
+                return sum(vals) / len(vals) if vals else 0
+            except: return 0
+
+        df_notes['Note_Num'] = df_notes['Note'].apply(calc_moyenne)
         df_notes['Order'] = df_notes['J_Type'].astype(str).str.extract('(\d+)').fillna(0).astype(int)
         df_notes = df_notes.sort_values(by='Order')
         chart = alt.Chart(df_notes).mark_line(point=True).encode(x='J_Type', y=alt.Y('Note_Num', scale=alt.Scale(domain=[0, 20])))
