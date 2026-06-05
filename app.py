@@ -161,16 +161,18 @@ elif page == "Planning & Saisie":
             st.markdown(f"**{day_str[8:]}/{day_str[5:7]}**")
             temp = st.session_state.data[(st.session_state.data['Date'] == day_str) & (st.session_state.data['Dossier'] == choix_dos)]
             for _, r in temp.iterrows():
-                # Rétablissement de l'affichage original : Checkbox + Calendrier sur la même ligne
                 c1, c2 = st.columns([0.7, 0.3])
                 with c1:
                     if st.checkbox(f"{r['Chapitre']} ({r['J_Type']})", value=(r['Statut'] == 'Fait'), key=f"chk_{r['ID']}"):
                         st.session_state.data.loc[st.session_state.data['ID'] == r['ID'], 'Statut'] = 'Fait'
-                    else: st.session_state.data.loc[st.session_state.data['ID'] == r['ID'], 'Statut'] = 'À faire'
+                    else: 
+                        if r['Statut'] != 'Traité':
+                            st.session_state.data.loc[st.session_state.data['ID'] == r['ID'], 'Statut'] = 'À faire'
                 with c2:
                     if r['J_Type'] != 'J0':
-                        new_date = st.date_input("", value=dt.datetime.strptime(r['Date'], '%Y-%m-%d'), key=f"cal_{r['ID']}", label_visibility="collapsed")
-                        if str(new_date) != r['Date']:
+                        is_disabled = (r['Statut'] == 'Traité')
+                        new_date = st.date_input("", value=dt.datetime.strptime(r['Date'], '%Y-%m-%d'), key=f"cal_{r['ID']}", label_visibility="collapsed", disabled=is_disabled)
+                        if str(new_date) != r['Date'] and not is_disabled:
                             st.session_state.data.loc[st.session_state.data['ID'] == r['ID'], 'Date'] = str(new_date)
                             save_all_to_sheet(st.session_state.data, st.session_state.config); st.rerun()
                     else: st.text("🔒")
