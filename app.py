@@ -16,6 +16,7 @@ def load_data_from_sheet():
         if response.status_code == 200:
             data = response.json()
             df = pd.DataFrame(data.get('data', []), columns=['Dossier', 'Matiere', 'Chapitre', 'J_Type', 'Date', 'Note', 'Statut', 'ID'])
+            # BLOCAGE ABSOLU : on force la conversion en string sans aucune interprétation par Pandas
             df['Date'] = df['Date'].astype(str)
             config = data.get('config', {'cours_max': 5, 'cadencier': [1, 3, 7, 14, 30], 'seuils': {'1': 12, '3': 12, '7': 14, '14': 14, '30': 16}, 'dossiers': {"PASS": []}})
             return df, config
@@ -24,6 +25,7 @@ def load_data_from_sheet():
 
 def save_all_to_sheet(df, config):
     df_to_send = df.copy()
+    # BLOCAGE ABSOLU : on s'assure que rien n'est modifié avant l'envoi
     df_to_send['Date'] = df_to_send['Date'].astype(str)
     df_to_send['Note'] = df_to_send['Note'].astype(str)
     payload = {"data": df_to_send.values.tolist(), "config": config}
@@ -34,11 +36,10 @@ def save_all_to_sheet(df, config):
 if 'data' not in st.session_state:
     st.session_state.data, st.session_state.config = load_data_from_sheet()
 
+# Fonction de parsing sécurisée qui ne touche pas aux données du dataframe
 def parse_date(date_str):
-    for fmt in ('%Y-%m-%d', '%d/%m/%Y', '%Y-%m-%d %H:%M:%S'):
-        try: return dt.datetime.strptime(date_str, fmt).date()
-        except: continue
-    return dt.date.today()
+    try: return dt.datetime.strptime(str(date_str), '%Y-%m-%d').date()
+    except: return dt.date.today()
 
 def reset_dossier():
     nom = st.session_state.d_in
@@ -106,8 +107,7 @@ if page == "Dashboard":
         st.table(rattrapages[['Matiere', 'Chapitre', 'J_Type', 'Date', 'Note']])
         for _, row in rattrapages.iterrows():
             if st.button(f"Réintégrer {row['Chapitre']}", key=f"btn_{row['ID']}"):
-                all_d = sorted(st.session_state.data[(st.session_state.data['Chapitre'] == row['Chapitre']) & (st.session_state.data['Dossier'] == choix_dos)]['Date'].unique())
-                idx = all_d.index(row['Date'])
+                # Calcul de la nouvelle date de rattrapage
                 new_r = row.copy()
                 new_r['ID'], new_r['Chapitre'], new_r['Date'] = str(uuid.uuid4()), f"{row['Chapitre']}R", str(dt.date.today())
                 new_r['Note'], new_r['Statut'] = 0, 'À faire'
@@ -125,12 +125,11 @@ elif page == "Planning & Saisie":
             dex = st.date_input("Date Examen", value=None)
             if st.form_submit_button("Générer Planning"):
                 if chap and dex:
-                    # Génération forcée avec calcul d0 + j
                     new_rows = [{'ID': str(uuid.uuid4()), 'Dossier': choix_dos, 'Matiere': mat, 'Chapitre': chap, 'J_Type': 'J0', 'Date': str(d0), 'Note': 0, 'Statut': 'À faire'}]
                     for j in st.session_state.config['cadencier']:
                         d_j = d0 + dt.timedelta(days=j)
                         if d_j <= dex: new_rows.append({'ID': str(uuid.uuid4()), 'Dossier': choix_dos, 'Matiere': mat, 'Chapitre': chap, 'J_Type': f'J{j}', 'Date': str(d_j), 'Note': 0, 'Statut': 'À faire'})
-                    st.session_state.data = pd.concat([st.session_state.data, pd.DataFrame(new_rows)]).drop_duplicates(subset=['Dossier', 'Chapitre', 'J_Type', 'Date'])
+                    st.session_state.data = pd.concat([st.session_state.data, pd.DataFrame(new_rows)])
                     save_all_to_sheet(st.session_state.data, st.session_state.config)
                     st.rerun()
 
@@ -142,8 +141,8 @@ elif page == "Planning & Saisie":
         day = start + dt.timedelta(days=i)
         with col:
             st.markdown(f"**{day.strftime('%d/%m')}**")
-            temp = st.session_state.data[st.session_state.data['Date'].apply(parse_date) == day]
-            temp = temp[temp['Dossier'] == choix_dos]
+            # Filtrage strict sur la chaine de caractère
+            temp = st.session_state.data[(st.session_state.data['Date'] == str(day)) & (st.session_state.data['Dossier'] == choix_dos)]
             for _, r in temp.iterrows():
                 c1, c2 = st.columns([0.8, 0.2])
                 with c1:
@@ -158,8 +157,7 @@ elif page == "Planning & Saisie":
                         st.rerun()
    
     st.subheader("Saisie Notes (Journée)")
-    df_t = st.session_state.data[st.session_state.data['Date'].apply(parse_date) == dt.date.today()]
-    df_t = df_t[df_t['Dossier'] == choix_dos].copy()
+    df_t = st.session_state.data[(st.session_state.data['Date'] == str(dt.date.today())) & (st.session_state.data['Dossier'] == choix_dos)].copy()
     if not df_t.empty:
         temp_notes = {}
         for idx, row in df_t.iterrows():
