@@ -16,7 +16,6 @@ def load_data_from_sheet():
         if response.status_code == 200:
             data = response.json()
             df = pd.DataFrame(data.get('data', []), columns=['Dossier', 'Matiere', 'Chapitre', 'J_Type', 'Date', 'Note', 'Statut', 'ID'])
-            # ICI : On ne touche à rien, on prend le texte brut de la colonne Date
             df['Date'] = df['Date'].astype(str).apply(lambda x: x[:10])
             config = data.get('config', {'cours_max': 5, 'cadencier': [1, 3, 7, 14, 30], 'seuils': {'1': 12, '3': 12, '7': 14, '14': 14, '30': 16}, 'dossiers': {"PASS": []}})
             return df, config
@@ -160,7 +159,8 @@ elif page == "Planning & Saisie":
     if not st.session_state.data.empty:
         df_t = st.session_state.data[(st.session_state.data['Date'] == str(dt.date.today())) & (st.session_state.data['Dossier'] == choix_dos)].copy()
         
-        # --- SEULE MODIFICATION : La boucle de saisie est isolée pour éviter le plantage ---
+        # --- SOLUTION : On stocke les notes dans un dictionnaire temporaire ---
+        # --- Cela évite de modifier le DataFrame en pleine lecture ---
         saisies = {}
         for idx, row in df_t.iterrows():
             c1, c2 = st.columns([0.7, 0.3])
@@ -186,4 +186,4 @@ elif page == "Graphiques":
         df_notes['Order'] = df_notes['J_Type'].astype(str).str.extract('(\d+)').fillna(0).astype(int)
         df_notes = df_notes.sort_values(by='Order')
         chart = alt.Chart(df_notes).mark_line(point=True).encode(x='J_Type', y=alt.Y('Note_Num', scale=alt.Scale(domain=[0, 20])))
-        st.altair_chart(chart, use_container_width=True
+        st.altair_chart(chart, use_container_width=True)
