@@ -160,7 +160,7 @@ elif page == "Planning & Saisie":
     if not st.session_state.data.empty:
         df_t = st.session_state.data[(st.session_state.data['Date'] == str(dt.date.today())) & (st.session_state.data['Dossier'] == choix_dos)].copy()
         
-        # --- MODIFICATION POUR LA SAISIE ---
+        # --- BLOC SAISIE CORRIGÉ ---
         saisies = {}
         for idx, row in df_t.iterrows():
             c1, c2 = st.columns([0.7, 0.3])
