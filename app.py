@@ -24,9 +24,8 @@ def load_data_from_sheet():
 
 def save_all_to_sheet(df, config):
     df_to_send = df.copy()
-    # Correction ajoutée ici pour forcer le format numérique
-    df_to_send['Note'] = pd.to_numeric(df_to_send['Note'], errors='coerce').fillna(0).astype(int)
     df_to_send['Date'] = df_to_send['Date'].astype(str)
+    df_to_send['Note'] = df_to_send['Note'].astype(str)
     payload = {"data": df_to_send.values.tolist(), "config": config}
     try:
         requests.post(WEB_APP_URL, json=payload, timeout=15)
@@ -35,7 +34,7 @@ def save_all_to_sheet(df, config):
 if 'data' not in st.session_state:
     st.session_state.data, st.session_state.config = load_data_from_sheet()
 
-# --- BOUTON DE RÉINITIALISATION FORCÉE ---
+# --- BLOC DE RÉINITIALISATION ---
 if st.sidebar.button("🚨 RÉINITIALISER TOUT (FORCÉ)"):
     for key in list(st.session_state.keys()):
         del st.session_state[key]
@@ -170,7 +169,10 @@ elif page == "Planning & Saisie":
             temp_saisies[idx] = st.text_input(f"{row['Chapitre']} ({row['J_Type']})", value=str(row['Note']), key=f"saisie_{idx}")
         if st.form_submit_button("💾 Enregistrer toutes les notes"):
             for idx, valeur in temp_saisies.items():
-                st.session_state.data.at[idx, 'Note'] = valeur
+                try:
+                    st.session_state.data.at[idx, 'Note'] = float(str(valeur).replace(',', '.'))
+                except:
+                    st.session_state.data.at[idx, 'Note'] = 0
             save_all_to_sheet(st.session_state.data, st.session_state.config)
             st.rerun()
 
