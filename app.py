@@ -154,20 +154,18 @@ elif page == "Planning & Saisie":
                             st.rerun()
    
     st.subheader("Saisie Notes (Journée)")
-    if not st.session_state.data.empty:
-        mask = (st.session_state.data['Date'] == str(dt.date.today())) & (st.session_state.data['Dossier'] == choix_dos)
-        indices = st.session_state.data.index[mask]
-        temp_saisies = {}
-        for idx in indices:
-            row = st.session_state.data.loc[idx]
-            c1, c2 = st.columns([0.7, 0.3])
-            c1.write(f"{row['Chapitre']} ({row['J_Type']})")
-            temp_saisies[idx] = c2.text_input("Note", value=str(row['Note']), key=f"saisie_{idx}")
-        if st.button("💾 Enregistrer toutes les notes"):
-            for idx, valeur in temp_saisies.items():
-                st.session_state.data.at[idx, 'Note'] = valeur
-            save_all_to_sheet(st.session_state.data, st.session_state.config)
-            st.rerun()
+    mask = (st.session_state.data['Date'] == str(dt.date.today())) & (st.session_state.data['Dossier'] == choix_dos)
+    temp_saisies = {}
+    for idx in st.session_state.data.index[mask]:
+        row = st.session_state.data.loc[idx]
+        c1, c2 = st.columns([0.7, 0.3])
+        c1.write(f"{row['Chapitre']} ({row['J_Type']})")
+        temp_saisies[idx] = c2.text_input("Note", value=str(row['Note']), key=f"saisie_{idx}")
+    if st.button("💾 Enregistrer toutes les notes"):
+        for idx, valeur in temp_saisies.items():
+            st.session_state.data.at[idx, 'Note'] = valeur
+        save_all_to_sheet(st.session_state.data, st.session_state.config)
+        st.rerun()
 
 elif page == "Graphiques":
     st.title("📊 Progression")
