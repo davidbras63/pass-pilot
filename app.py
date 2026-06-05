@@ -15,7 +15,10 @@ def load_data_from_sheet():
         response = requests.get(WEB_APP_URL, timeout=15)
         if response.status_code == 200:
             data = response.json()
+            # --- LECTURE ORIGINALE ---
             df = pd.DataFrame(data.get('data', []), columns=['Dossier', 'Matiere', 'Chapitre', 'J_Type', 'Date', 'Note', 'Statut', 'ID'])
+            # --- FORCE LES DATES EN TEXTE BRUT ---
+            df['Date'] = df['Date'].astype(str)
             config = data.get('config', {'cours_max': 5, 'cadencier': [1, 3, 7, 14, 30], 'seuils': {'1': 12, '3': 12, '7': 14, '14': 14, '30': 16}, 'dossiers': {"PASS": []}})
             return df, config
     except: pass
@@ -129,7 +132,7 @@ elif page == "Planning & Saisie":
         day = start + dt.timedelta(days=i)
         with col:
             st.markdown(f"**{day.strftime('%d/%m')}**")
-            # --- LECTURE SANS CONVERSION ---
+            # --- AFFICHAGE ORIGINAL ---
             temp = st.session_state.data[(st.session_state.data['Date'] == str(day)) & (st.session_state.data['Dossier'] == choix_dos)]
             for _, r in temp.iterrows():
                 c1, c2 = st.columns([0.8, 0.2])
@@ -138,7 +141,11 @@ elif page == "Planning & Saisie":
                         st.session_state.data.loc[st.session_state.data['ID'] == r['ID'], 'Statut'] = 'Fait'
                     else: st.session_state.data.loc[st.session_state.data['ID'] == r['ID'], 'Statut'] = 'À faire'
                 with c2:
-                    st.text(r['Date'])
+                    new_date = st.date_input("", value=dt.datetime.strptime(r['Date'], '%Y-%m-%d').date(), key=f"cal_{r['ID']}", label_visibility="collapsed")
+                    if str(new_date) != r['Date']:
+                        st.session_state.data.loc[st.session_state.data['ID'] == r['ID'], 'Date'] = str(new_date)
+                        save_all_to_sheet(st.session_state.data, st.session_state.config)
+                        st.rerun()
    
     st.subheader("Saisie Notes (Journée)")
     df_t = st.session_state.data[st.session_state.data['Date'] == str(dt.date.today())]
