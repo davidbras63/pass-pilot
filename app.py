@@ -158,18 +158,25 @@ elif page == "Planning & Saisie":
     
     st.subheader("Saisie Notes (Journée)")
     if not st.session_state.data.empty:
+        # Masque pour filtrer les données du jour
         mask = (st.session_state.data['Date'] == str(dt.date.today())) & (st.session_state.data['Dossier'] == choix_dos)
-        df_affichage = st.session_state.data[mask].copy()
-        saisies_temporaires = {}
+        indices_a_modifier = st.session_state.data.index[mask]
         
-        for _, row in df_affichage.iterrows():
+        # Dictionnaire temporaire pour capturer la saisie
+        temp_saisies = {}
+        
+        for idx in indices_a_modifier:
+            row = st.session_state.data.loc[idx]
             c1, c2 = st.columns([0.7, 0.3])
             c1.write(f"{row['Chapitre']} ({row['J_Type']})")
-            saisies_temporaires[row['ID']] = c2.text_input("Notes", value=str(row['Note']), key=f"in_{row['ID']}")
+            # Stockage dans le dictionnaire temporaire
+            temp_saisies[idx] = c2.text_input("Notes", value=str(row['Note']), key=f"in_{idx}")
             
         if st.button("💾 Enregistrer Notes"):
-            for id_ligne, valeur in saisies_temporaires.items():
-                st.session_state.data.loc[st.session_state.data['ID'] == id_ligne, 'Note'] = str(valeur).replace(',', '.')
+            # Application groupée en dehors de la boucle d'affichage
+            for idx, valeur in temp_saisies.items():
+                st.session_state.data.at[idx, 'Note'] = str(valeur).replace(',', '.')
+            
             save_all_to_sheet(st.session_state.data, st.session_state.config)
             st.rerun()
 
