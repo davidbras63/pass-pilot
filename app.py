@@ -88,7 +88,7 @@ if page == "Dashboard":
     st.subheader("⚠️ Rattrapages à traiter")
     df_dos = st.session_state.data[st.session_state.data['Dossier'] == choix_dos].copy()
     def est_en_rattrapage(row):
-        try: valeur_note = float(str(row['Note']).replace(',', '.'))
+        try: valeur_note = float(str(row['Note']))
         except: valeur_note = 0
         j_str = str(row['J_Type']).replace('J', '')
         seuil = int(st.session_state.config['seuils'].get(j_str, 12))
@@ -143,25 +143,22 @@ elif page == "Planning & Saisie":
     df_t = st.session_state.data[(pd.to_datetime(st.session_state.data['Date']).dt.date == dt.date.today()) & (st.session_state.data['Dossier'] == choix_dos)].copy()
     
     if not df_t.empty:
-        # Stockage propre des saisies avant clic
+        saisie_temp = {}
         for idx, row in df_t.iterrows():
             c1, c2 = st.columns([0.7, 0.3])
             c1.write(f"{row['Chapitre']} ({row['J_Type']})")
-            # Le champ de saisie est unique par ID, aucune confusion possible
-            new_val = c2.text_input("Note", value=str(row['Note']), key=f"val_{row['ID']}")
-            # Mise à jour immédiate en session pour éviter de perdre les données
-            if new_val != str(row['Note']):
-                st.session_state.data.loc[st.session_state.data['ID'] == row['ID'], 'Note'] = new_val
-        
+            saisie_temp[row['ID']] = c2.text_input("Note (pts ; pour sép)", value=str(row['Note']), key=f"saisie_{row['ID']}")
+            
         if st.button("💾 Enregistrer et Calculer Moyenne"):
-            # On passe une dernière fois sur la donnée pour le calcul
-            for idx, row in st.session_state.data.iterrows():
-                val = str(row['Note'])
-                if ',' in val:
+            for id_row, val in saisie_temp.items():
+                if ';' in val:
                     try:
-                        vals = [float(x.replace(',', '.')) for x in val.split(',')]
-                        st.session_state.data.at[idx, 'Note'] = round(sum(vals)/len(vals), 1)
-                    except: pass
+                        vals = [float(x.strip()) for x in val.split(';')]
+                        moy = round(sum(vals)/len(vals), 1)
+                        st.session_state.data.loc[st.session_state.data['ID'] == id_row, 'Note'] = moy
+                    except: st.session_state.data.loc[st.session_state.data['ID'] == id_row, 'Note'] = val
+                else:
+                    st.session_state.data.loc[st.session_state.data['ID'] == id_row, 'Note'] = val
             save_all_to_sheet(st.session_state.data, st.session_state.config)
             st.rerun()
 
