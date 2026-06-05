@@ -6,7 +6,6 @@ import requests
 import json
 import altair as alt
 
-# Configuration de base
 st.set_page_config(layout="wide")
 
 WEB_APP_URL = "https://script.google.com/macros/s/AKfycbwA7ZGCqHcDgw_Ia2PDjuvLqGDx1smoqR75VOo5IytV-QgMIw2_6xnZtXI1sFensDDwfw/exec"
@@ -32,11 +31,9 @@ def save_all_to_sheet(df, config):
         requests.post(WEB_APP_URL, json=payload, timeout=15)
     except: st.error("Erreur de sauvegarde")
 
-# Initialisation session_state
 if 'data' not in st.session_state:
     st.session_state.data, st.session_state.config = load_data_from_sheet()
 
-# Fonctions de gestion (Dossiers/Matieres)
 def reset_dossier():
     nom = st.session_state.d_in
     if nom and nom not in st.session_state.config['dossiers']:
@@ -53,7 +50,13 @@ def reset_matiere():
         st.session_state.data, st.session_state.config = load_data_from_sheet()
     st.session_state.m_in = ""
 
-# Sidebar
+# --- BOUTON DE RÉINITIALISATION FORCÉE ---
+if st.sidebar.button("🚨 RÉINITIALISER TOUT (FORCÉ)"):
+    for key in st.session_state.keys():
+        del st.session_state[key]
+    st.rerun()
+# ----------------------------------------
+
 st.sidebar.title("⚙️ Pilot Expert")
 with st.sidebar.expander("🛠️ Réglages", expanded=False):
     st.session_state.config['cours_max'] = st.number_input("Max cours/jour", 1, 20, int(st.session_state.config.get('cours_max', 5)))
@@ -72,7 +75,6 @@ st.sidebar.text_input("Nom Matière", key="m_in")
 st.sidebar.button("➕ Ajouter Matière", on_click=reset_matiere)
 page = st.sidebar.radio("Navigation", ["Dashboard", "Planning & Saisie", "Graphiques"])
 
-# Page Dashboard
 if page == "Dashboard":
     st.title(f"🎯 Dashboard : {choix_dos}")
     if st.button("❌ Supprimer ce Dossier"):
@@ -117,7 +119,6 @@ if page == "Dashboard":
                     st.rerun()
                 else: st.error("❌ Aucune place libre.")
 
-# Page Planning
 elif page == "Planning & Saisie":
     with st.expander("✍️ Ajouter Chapitre", expanded=True):
         with st.form("Add_Form", clear_on_submit=True):
@@ -161,21 +162,19 @@ elif page == "Planning & Saisie":
    
     st.subheader("Saisie Notes (Journée)")
     # --- ZONE SÉCURISÉE ---
-    placeholder = st.empty()
-    with placeholder.container():
-        mask = (st.session_state.data['Date'] == str(dt.date.today())) & (st.session_state.data['Dossier'] == choix_dos)
-        indices = st.session_state.data.index[mask]
-        temp_saisies = {}
-        for idx in indices:
-            row = st.session_state.data.loc[idx]
-            c1, c2 = st.columns([0.7, 0.3])
-            c1.write(f"{row['Chapitre']} ({row['J_Type']})")
-            temp_saisies[idx] = c2.text_input("Note", value=str(row['Note']), key=f"saisie_{idx}")
-        if st.button("💾 Enregistrer toutes les notes"):
-            for idx, valeur in temp_saisies.items():
-                st.session_state.data.at[idx, 'Note'] = valeur
-            save_all_to_sheet(st.session_state.data, st.session_state.config)
-            st.rerun()
+    mask = (st.session_state.data['Date'] == str(dt.date.today())) & (st.session_state.data['Dossier'] == choix_dos)
+    indices = st.session_state.data.index[mask]
+    temp_saisies = {}
+    for idx in indices:
+        row = st.session_state.data.loc[idx]
+        c1, c2 = st.columns([0.7, 0.3])
+        c1.write(f"{row['Chapitre']} ({row['J_Type']})")
+        temp_saisies[idx] = c2.text_input("Note", value=str(row['Note']), key=f"saisie_{idx}")
+    if st.button("💾 Enregistrer toutes les notes"):
+        for idx, valeur in temp_saisies.items():
+            st.session_state.data.at[idx, 'Note'] = valeur
+        save_all_to_sheet(st.session_state.data, st.session_state.config)
+        st.rerun()
 
 elif page == "Graphiques":
     st.title("📊 Progression")
