@@ -184,21 +184,17 @@ elif page == "Planning & Saisie":
     for idx in indices:
         row = st.session_state.data.loc[idx]
         with st.expander(f"📝 {row['Chapitre']} ({row['J_Type']}) - Note actuelle : {row['Note']}"):
-            notes_input = st.text_input(f"Entrer notes (ex: 12 14.5)", key=f"input_{row['ID']}")
+            notes_input = st.text_input(f"Entrer notes (séparées par espace)", key=f"input_{row['ID']}")
             if st.button("Calculer et Enregistrer", key=f"calc_{row['ID']}"):
-                # Nettoyage robuste pour accepter différents séparateurs
-                clean_input = notes_input.replace(',', '.').replace(';', ' ')
                 try:
-                    notes_list = [float(n) for n in clean_input.split()]
+                    notes_list = [float(n.replace(',', '.')) for n in notes_input.split()]
                     if notes_list:
                         moyenne = round(sum(notes_list) / len(notes_list), 2)
                         st.session_state.data.at[idx, 'Note'] = moyenne
                         save_all_to_sheet(st.session_state.data, st.session_state.config)
                         st.rerun()
-                    else:
-                        st.warning("Veuillez entrer au moins un chiffre.")
                 except: 
-                    st.error("Erreur : Entrez des nombres séparés par des espaces.")
+                    st.error("Format invalide")
 
 elif page == "Graphiques":
     st.title("📊 Progression")
