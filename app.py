@@ -16,7 +16,7 @@ def load_data_from_sheet():
         if response.status_code == 200:
             data = response.json()
             df = pd.DataFrame(data.get('data', []), columns=['Dossier', 'Matiere', 'Chapitre', 'J_Type', 'Date', 'Note', 'Statut', 'ID'])
-            # CORRECTIF DATE : Normalisation stricte pour éviter le décalage de fuseau
+            # Correction Date : Normalisation stricte pour éviter le décalage
             df['Date'] = pd.to_datetime(df['Date']).dt.normalize().dt.date
             config = data.get('config', {'cours_max': 5, 'cadencier': [1, 3, 7, 14, 30], 'seuils': {'1': 12, '3': 12, '7': 14, '14': 14, '30': 16}, 'dossiers': {"PASS": []}})
             return df, config
@@ -100,7 +100,6 @@ if page == "Dashboard":
     if not rattrapages.empty:
         st.table(rattrapages[['Matiere', 'Chapitre', 'J_Type', 'Date', 'Note']])
         for _, row in rattrapages.iterrows():
-            # CORRECTIF REINTEGRATION : Logique de sécurité sans décalage
             if st.button(f"Réintégrer {row['Chapitre']}", key=f"btn_{row['ID']}"):
                 all_d = sorted(st.session_state.data[(st.session_state.data['Chapitre'] == row['Chapitre']) & (st.session_state.data['Dossier'] == choix_dos)]['Date'].unique())
                 idx = all_d.index(row['Date'])
@@ -161,7 +160,13 @@ elif page == "Planning & Saisie":
             temp_notes[row['ID']] = st.text_input(f"{row['Chapitre']} ({row['J_Type']})", value=str(row['Note']), key=f"saisie_{row['ID']}")
         if st.button("💾 Enregistrer Notes"):
             for id_row, val in temp_notes.items():
-                st.session_state.data.loc[st.session_state.data['ID'] == id_row, 'Note'] = val
+                if ';' in val:
+                    try:
+                        vals = [float(x.replace(',', '.').strip()) for x in val.split(';')]
+                        st.session_state.data.loc[st.session_state.data['ID'] == id_row, 'Note'] = round(sum(vals)/len(vals), 1)
+                    except: st.session_state.data.loc[st.session_state.data['ID'] == id_row, 'Note'] = val
+                else:
+                    st.session_state.data.loc[st.session_state.data['ID'] == id_row, 'Note'] = val.replace(',', '.')
             save_all_to_sheet(st.session_state.data, st.session_state.config)
             st.session_state.data, st.session_state.config = load_data_from_sheet()
             st.rerun()
