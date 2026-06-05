@@ -5,7 +5,7 @@ import uuid
 import requests
 import json
 import altair as alt
-import time # <--- Ajouté ici
+import time
 
 st.set_page_config(layout="wide")
 
@@ -30,9 +30,10 @@ def save_all_to_sheet(df, config):
     payload = {"data": df_to_send.values.tolist(), "config": config}
     try: 
         requests.post(WEB_APP_URL, json=payload, timeout=15)
-        time.sleep(1) # <--- Sécurité ajoutée pour laisser le temps à Google
+        time.sleep(1)
     except: st.error("Erreur de sauvegarde")
 
+# Chargement initial
 if 'data' not in st.session_state:
     st.session_state.data, st.session_state.config = load_data_from_sheet()
 
@@ -75,12 +76,14 @@ st.sidebar.button("➕ Ajouter Matière", on_click=reset_matiere)
 page = st.sidebar.radio("Navigation", ["Dashboard", "Planning & Saisie", "Graphiques"])
 
 if page == "Dashboard":
+    # FORCE LE RECHARGEMENT À CHAQUE FOIS QUE TU ES SUR CETTE PAGE
+    st.session_state.data, st.session_state.config = load_data_from_sheet()
+    
     st.title(f"🎯 Dashboard : {choix_dos}")
     if st.button("❌ Supprimer ce Dossier"):
         del st.session_state.config['dossiers'][choix_dos]
         st.session_state.data = st.session_state.data[st.session_state.data['Dossier'] != choix_dos]
         save_all_to_sheet(st.session_state.data, st.session_state.config)
-        if 'data' in st.session_state: del st.session_state['data']
         st.rerun()
     
     for m in st.session_state.config['dossiers'].get(choix_dos, []):
@@ -90,7 +93,6 @@ if page == "Dashboard":
                 st.session_state.config['dossiers'][choix_dos].remove(m)
                 st.session_state.data = st.session_state.data[(st.session_state.data['Dossier'] != choix_dos) | (st.session_state.data['Matiere'] != m)]
                 save_all_to_sheet(st.session_state.data, st.session_state.config)
-                if 'data' in st.session_state: del st.session_state['data']
                 st.rerun()
             chapitres_matiere = st.session_state.data[(st.session_state.data['Dossier'] == choix_dos) & (st.session_state.data['Matiere'] == m)]['Chapitre'].unique()
             if len(chapitres_matiere) > 0: st.write("**Chapitres :**", ", ".join(chapitres_matiere))
@@ -128,13 +130,11 @@ if page == "Dashboard":
                         place_trouvee = True; break
                 if place_trouvee:
                     save_all_to_sheet(st.session_state.data, st.session_state.config)
-                    if 'data' in st.session_state: del st.session_state['data']
                     st.rerun()
                 else: st.error("❌ Aucune place.")
             if c3.button("🗑️ Supprimer", key=f"trash_{row['ID']}"):
                 st.session_state.data.loc[st.session_state.data['ID'] == row['ID'], 'Statut'] = 'Traité'
                 save_all_to_sheet(st.session_state.data, st.session_state.config)
-                if 'data' in st.session_state: del st.session_state['data']
                 st.rerun()
 
 elif page == "Planning & Saisie":
