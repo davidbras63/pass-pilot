@@ -123,12 +123,14 @@ if page == "Dashboard":
                         place_trouvee = True; break
                 if place_trouvee:
                     save_all_to_sheet(st.session_state.data, st.session_state.config)
+                    st.session_state.data = None
                     st.session_state.data, st.session_state.config = load_data_from_sheet()
                     st.rerun()
                 else: st.error("❌ Aucune place.")
             if c3.button("🗑️ Supprimer", key=f"trash_{row['ID']}"):
                 st.session_state.data.loc[st.session_state.data['ID'] == row['ID'], 'Statut'] = 'Traité'
                 save_all_to_sheet(st.session_state.data, st.session_state.config)
+                st.session_state.data = None
                 st.session_state.data, st.session_state.config = load_data_from_sheet()
                 st.rerun()
 
