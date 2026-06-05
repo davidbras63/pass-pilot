@@ -89,7 +89,6 @@ if page == "Dashboard":
     st.subheader("⚠️ Rattrapages à traiter")
     df_dos = st.session_state.data[st.session_state.data['Dossier'] == choix_dos].copy()
     def est_en_rattrapage(row):
-        # CALCUL DE LA MOYENNE SUR LA LISTE DE NOTES
         try:
             notes_str = str(row['Note']).replace(',', ' ').split()
             notes_vals = [float(n) for n in notes_str if n.replace('.','',1).isdigit()]
@@ -160,18 +159,18 @@ elif page == "Planning & Saisie":
    
     st.subheader("Saisie Notes (Journée)")
     if not st.session_state.data.empty:
-        df_t = st.session_state.data[(st.session_state.data['Date'] == str(dt.date.today())) & (st.session_state.data['Dossier'] == choix_dos)].copy()
+        mask = (st.session_state.data['Date'] == str(dt.date.today())) & (st.session_state.data['Dossier'] == choix_dos)
+        df_t = st.session_state.data[mask].copy()
         
-        # --- SAISIE À LA VOLÉE : On stocke tout dans 'saisies' ---
         saisies = {}
         for idx, row in df_t.iterrows():
             c1, c2 = st.columns([0.7, 0.3])
             c1.write(f"{row['Chapitre']} ({row['J_Type']})")
-            saisies[row['ID']] = c2.text_input("Notes (ex: 12 10 15)", value=str(row['Note']), key=f"saisie_{row['ID']}")
+            saisies[idx] = c2.text_input("Notes (ex: 12 10 15)", value=str(row['Note']), key=f"saisie_{row['ID']}")
             
         if st.button("💾 Enregistrer Notes"):
-            for id_row, val in saisies.items():
-                st.session_state.data.loc[st.session_state.data['ID'] == id_row, 'Note'] = str(val)
+            for idx, val in saisies.items():
+                st.session_state.data.at[idx, 'Note'] = str(val).replace(',', '.')
             save_all_to_sheet(st.session_state.data, st.session_state.config)
             st.rerun()
 
@@ -185,7 +184,6 @@ elif page == "Graphiques":
         sel_chap = st.selectbox("Choisir un chapitre", chapitres)
         df_notes = st.session_state.data[(st.session_state.data['Chapitre'] == sel_chap)].copy()
         
-        # CALCUL DE LA MOYENNE POUR CHAQUE POINT DU GRAPHIQUE
         def calc_moyenne(val):
             try:
                 ns = str(val).replace(',', ' ').split()
