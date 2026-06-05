@@ -16,6 +16,8 @@ def load_data_from_sheet():
         if response.status_code == 200:
             data = response.json()
             df = pd.DataFrame(data.get('data', []), columns=['Dossier', 'Matiere', 'Chapitre', 'J_Type', 'Date', 'Note', 'Statut', 'ID'])
+            # --- NETTOYAGE STRICT : On normalise la date pour que la recherche fonctionne ---
+            df['Date'] = df['Date'].astype(str).str.strip()
             config = data.get('config', {'cours_max': 5, 'cadencier': [1, 3, 7, 14, 30], 'seuils': {'1': 12, '3': 12, '7': 14, '14': 14, '30': 16}, 'dossiers': {"PASS": []}})
             return df, config
     except: pass
@@ -130,8 +132,8 @@ elif page == "Planning & Saisie":
         day = start + dt.timedelta(days=i)
         with col:
             st.markdown(f"**{day.strftime('%d/%m')}**")
-            # --- LECTURE BRUTE : On compare le texte string avec le texte string ---
-            temp = st.session_state.data[(st.session_state.data['Date'] == str(day)) & (st.session_state.data['Dossier'] == choix_dos)]
+            # --- COMPARAISON NETTOYÉE ---
+            temp = st.session_state.data[(st.session_state.data['Date'].str.strip() == str(day)) & (st.session_state.data['Dossier'] == choix_dos)]
             for _, r in temp.iterrows():
                 c1, c2 = st.columns([0.8, 0.2])
                 with c1:
@@ -139,14 +141,14 @@ elif page == "Planning & Saisie":
                         st.session_state.data.loc[st.session_state.data['ID'] == r['ID'], 'Statut'] = 'Fait'
                     else: st.session_state.data.loc[st.session_state.data['ID'] == r['ID'], 'Statut'] = 'À faire'
                 with c2:
-                    new_date = st.date_input("", value=dt.datetime.strptime(r['Date'], '%Y-%m-%d').date(), key=f"cal_{r['ID']}", label_visibility="collapsed")
+                    new_date = st.date_input("", value=dt.datetime.strptime(r['Date'].strip(), '%Y-%m-%d').date(), key=f"cal_{r['ID']}", label_visibility="collapsed")
                     if str(new_date) != r['Date']:
                         st.session_state.data.loc[st.session_state.data['ID'] == r['ID'], 'Date'] = str(new_date)
                         save_all_to_sheet(st.session_state.data, st.session_state.config)
                         st.rerun()
    
     st.subheader("Saisie Notes (Journée)")
-    df_t = st.session_state.data[st.session_state.data['Date'] == str(dt.date.today())]
+    df_t = st.session_state.data[st.session_state.data['Date'].str.strip() == str(dt.date.today())]
     df_t = df_t[df_t['Dossier'] == choix_dos].copy()
     if not df_t.empty:
         temp_notes = {}
