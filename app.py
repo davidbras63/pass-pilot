@@ -16,6 +16,8 @@ def load_data_from_sheet():
         if response.status_code == 200:
             data = response.json()
             df = pd.DataFrame(data.get('data', []), columns=['Dossier', 'Matiere', 'Chapitre', 'J_Type', 'Date', 'Note', 'Statut', 'ID'])
+            # MODIFICATION CRUCIALE : on force la colonne en texte tout de suite
+            df['Note'] = df['Note'].astype(str)
             df['Date'] = pd.to_datetime(df['Date']).dt.date
             config = data.get('config', {'cours_max': 5, 'cadencier': [1, 3, 7, 14, 30], 'seuils': {'1': 12, '3': 12, '7': 14, '14': 14, '30': 16}, 'dossiers': {"PASS": []}})
             return df, config
@@ -25,6 +27,8 @@ def load_data_from_sheet():
 def save_all_to_sheet(df, config):
     df_to_send = df.copy()
     df_to_send['Date'] = df_to_send['Date'].astype(str)
+    # On s'assure qu'on envoie du texte
+    df_to_send['Note'] = df_to_send['Note'].astype(str)
     payload = {"data": df_to_send.values.tolist(), "config": config}
     try:
         requests.post(WEB_APP_URL, json=payload, timeout=15)
@@ -112,10 +116,10 @@ elif page == "Planning & Saisie":
             dex = st.date_input("Date Examen", value=None)
             if st.form_submit_button("Générer Planning"):
                 if chap and dex:
-                    new_rows = [{'ID': str(uuid.uuid4()), 'Dossier': choix_dos, 'Matiere': mat, 'Chapitre': chap, 'J_Type': 'J0', 'Date': d0, 'Note': 0, 'Statut': 'À faire'}]
+                    new_rows = [{'ID': str(uuid.uuid4()), 'Dossier': choix_dos, 'Matiere': mat, 'Chapitre': chap, 'J_Type': 'J0', 'Date': d0, 'Note': '0', 'Statut': 'À faire'}]
                     for j in st.session_state.config['cadencier']:
                         d_j = d0 + dt.timedelta(days=j)
-                        if d_j <= dex: new_rows.append({'ID': str(uuid.uuid4()), 'Dossier': choix_dos, 'Matiere': mat, 'Chapitre': chap, 'J_Type': f'J{j}', 'Date': d_j, 'Note': 0, 'Statut': 'À faire'})
+                        if d_j <= dex: new_rows.append({'ID': str(uuid.uuid4()), 'Dossier': choix_dos, 'Matiere': mat, 'Chapitre': chap, 'J_Type': f'J{j}', 'Date': d_j, 'Note': '0', 'Statut': 'À faire'})
                     st.session_state.data = pd.concat([st.session_state.data, pd.DataFrame(new_rows)]).drop_duplicates(subset=['Dossier', 'Chapitre', 'J_Type', 'Date'])
                     save_all_to_sheet(st.session_state.data, st.session_state.config)
                     st.rerun()
@@ -143,20 +147,22 @@ elif page == "Planning & Saisie":
     df_t = st.session_state.data[(pd.to_datetime(st.session_state.data['Date']).dt.date == dt.date.today()) & (st.session_state.data['Dossier'] == choix_dos)].copy()
     
     if not df_t.empty:
-        # Correction uniquement sur ce bloc : on transforme tout en chaîne de caractère
-        df_t['Note'] = df_t['Note'].astype(str)
-        # Saisie simple sans data_editor
+        # Saisie sécurisée : on utilise des text_input classiques
         for idx, row in df_t.iterrows():
-            new_note = st.text_input(f"Note pour {row['Chapitre']} ({row['J_Type']})", value=row['Note'], key=f"n_{row['ID']}")
-            st.session_state.data.loc[st.session_state.data['ID'] == row['ID'], 'Note'] = new_note
+            # key est unique par ID
+            val = st.text_input(f"Note {row['Chapitre']} ({row['J_Type']})", value=row['Note'], key=f"saisie_{row['ID']}")
+            st.session_state.data.loc[st.session_state.data['ID'] == row['ID'], 'Note'] = str(val)
         
         if st.button("💾 Enregistrer et Calculer Moyenne"):
+            # Traitement du calcul uniquement lors du clic
             for idx, row in st.session_state.data.iterrows():
                 val = str(row['Note'])
                 if ';' in val:
                     try:
-                        vals = [float(x.replace(',', '.').strip()) for x in val.split(';')]
-                        st.session_state.data.at[idx, 'Note'] = str(round(sum(vals)/len(vals), 1))
+                        # Remplace virgules par points, divise par ;
+                        nums = [float(x.replace(',', '.').strip()) for x in val.split(';')]
+                        moy = round(sum(nums)/len(nums), 1)
+                        st.session_state.data.at[idx, 'Note'] = str(moy)
                     except: pass
             save_all_to_sheet(st.session_state.data, st.session_state.config)
             st.rerun()
@@ -170,7 +176,8 @@ elif page == "Graphiques":
     if len(chapitres) > 0:
         sel_chap = st.selectbox("Choisir un chapitre", chapitres)
         df_notes = st.session_state.data[(st.session_state.data['Chapitre'] == sel_chap)].copy()
-        df_notes['Note_Num'] = pd.to_numeric(df_notes['Note'], errors='coerce')
+        # Conversion forcée pour le graphique
+        df_notes['Note_Num'] = pd.to_numeric(df_notes['Note'].str.replace(',', '.'), errors='coerce')
         df_notes['Order'] = df_notes['J_Type'].astype(str).str.extract('(\d+)').fillna(0).astype(int)
         df_notes = df_notes.sort_values(by='Order')
         chart = alt.Chart(df_notes).mark_line(point=True).encode(x='J_Type', y=alt.Y('Note_Num', scale=alt.Scale(domain=[0, 20])))
