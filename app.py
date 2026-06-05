@@ -143,22 +143,25 @@ elif page == "Planning & Saisie":
     df_t = st.session_state.data[(pd.to_datetime(st.session_state.data['Date']).dt.date == dt.date.today()) & (st.session_state.data['Dossier'] == choix_dos)].copy()
     
     if not df_t.empty:
-        notes_dict = {}
+        # Stockage propre des saisies avant clic
         for idx, row in df_t.iterrows():
             c1, c2 = st.columns([0.7, 0.3])
             c1.write(f"{row['Chapitre']} ({row['J_Type']})")
-            notes_dict[row['ID']] = c2.text_input("Note", value=str(row['Note']), key=f"inp_{row['ID']}")
-            
+            # Le champ de saisie est unique par ID, aucune confusion possible
+            new_val = c2.text_input("Note", value=str(row['Note']), key=f"val_{row['ID']}")
+            # Mise à jour immédiate en session pour éviter de perdre les données
+            if new_val != str(row['Note']):
+                st.session_state.data.loc[st.session_state.data['ID'] == row['ID'], 'Note'] = new_val
+        
         if st.button("💾 Enregistrer et Calculer Moyenne"):
-            for id_row, val in notes_dict.items():
+            # On passe une dernière fois sur la donnée pour le calcul
+            for idx, row in st.session_state.data.iterrows():
+                val = str(row['Note'])
                 if ',' in val:
                     try:
                         vals = [float(x.replace(',', '.')) for x in val.split(',')]
-                        moy = round(sum(vals)/len(vals), 1)
-                        st.session_state.data.loc[st.session_state.data['ID'] == id_row, 'Note'] = moy
+                        st.session_state.data.at[idx, 'Note'] = round(sum(vals)/len(vals), 1)
                     except: pass
-                else:
-                    st.session_state.data.loc[st.session_state.data['ID'] == id_row, 'Note'] = val
             save_all_to_sheet(st.session_state.data, st.session_state.config)
             st.rerun()
 
