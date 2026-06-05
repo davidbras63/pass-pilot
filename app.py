@@ -143,20 +143,18 @@ elif page == "Planning & Saisie":
     df_t = st.session_state.data[(pd.to_datetime(st.session_state.data['Date']).dt.date == dt.date.today()) & (st.session_state.data['Dossier'] == choix_dos)].copy()
     if not df_t.empty:
         df_display = df_t[['ID', 'Chapitre', 'J_Type', 'Note', 'Statut']].copy()
-        df_display['Note'] = df_display['Note'].astype(str) 
+        df_display['Note'] = df_display['Note'].astype(object) 
         edited = st.data_editor(df_display, column_config={"ID": None, "Note": st.column_config.TextColumn("Note")}, use_container_width=True)
         if st.button("💾 Enregistrer et Calculer Moyenne"):
-            temp_df = st.session_state.data.copy()
             for _, row in edited.iterrows():
                 val_note = str(row['Note'])
-                mask = temp_df['ID'] == row['ID']
+                mask = st.session_state.data['ID'] == row['ID']
                 if ',' in val_note:
                     try:
                         notes_list = [float(n.strip().replace(',', '.')) for n in val_note.split(',') if n.strip()]
-                        temp_df.loc[mask, 'Note'] = round(sum(notes_list) / len(notes_list), 1)
-                    except: temp_df.loc[mask, 'Note'] = val_note
-                else: temp_df.loc[mask, 'Note'] = val_note
-            st.session_state.data = temp_df
+                        st.session_state.data.at[st.session_state.data.index[mask][0], 'Note'] = round(sum(notes_list) / len(notes_list), 1)
+                    except: st.session_state.data.at[st.session_state.data.index[mask][0], 'Note'] = val_note
+                else: st.session_state.data.at[st.session_state.data.index[mask][0], 'Note'] = val_note
             save_all_to_sheet(st.session_state.data, st.session_state.config)
             st.rerun()
 
