@@ -15,17 +15,20 @@ def load_data_from_sheet():
         response = requests.get(WEB_APP_URL, timeout=15)
         if response.status_code == 200:
             data = response.json()
-            # --- LECTURE ORIGINALE ---
             df = pd.DataFrame(data.get('data', []), columns=['Dossier', 'Matiere', 'Chapitre', 'J_Type', 'Date', 'Note', 'Statut', 'ID'])
-            # --- FORCE LES DATES EN TEXTE BRUT ---
-            df['Date'] = df['Date'].astype(str)
+            # Correctif : On force la lecture en texte brut puis conversion directe, sans décalage de fuseau
+            df['Date'] = pd.to_datetime(df['Date'].astype(str)).dt.date
             config = data.get('config', {'cours_max': 5, 'cadencier': [1, 3, 7, 14, 30], 'seuils': {'1': 12, '3': 12, '7': 14, '14': 14, '30': 16}, 'dossiers': {"PASS": []}})
             return df, config
     except: pass
     return pd.DataFrame(columns=['Dossier', 'Matiere', 'Chapitre', 'J_Type', 'Date', 'Note', 'Statut', 'ID']), {'cours_max': 5, 'cadencier': [1, 3, 7, 14, 30], 'seuils': {'1': 12, '3': 12, '7': 14, '14': 14, '30': 16}, 'dossiers': {"PASS": []}}
 
 def save_all_to_sheet(df, config):
-    payload = {"data": df.values.tolist(), "config": config}
+    df_to_send = df.copy()
+    # Correctif : Formatage strict ISO pour empêcher tout décalage au stockage
+    df_to_send['Date'] = df_to_send['Date'].apply(lambda x: x.isoformat() if isinstance(x, dt.date) else str(x))
+    df_to_send['Note'] = df_to_send['Note'].astype(str)
+    payload = {"data": df_to_send.values.tolist(), "config": config}
     try:
         requests.post(WEB_APP_URL, json=payload, timeout=15)
     except: st.error("Erreur de sauvegarde")
@@ -51,7 +54,7 @@ def reset_matiere():
 
 st.sidebar.title("⚙️ Pilot Expert")
 with st.sidebar.expander("🛠️ Réglages", expanded=False):
-    st.session_state.config['cours_max'] = st.number_input("Max cours/jour", 1, 20, int(st.session_state.config.get('cours_max', 5)))
+    st.session_state.config['cours_max'] = st.number_input("Max cours/jour", 1, 20, st.session_state.config.get('cours_max', 5))
     cad_str = st.text_input("Cadencier (jours)", ",".join(map(str, st.session_state.config['cadencier'])))
     st.session_state.config['cadencier'] = [int(x.strip()) for x in cad_str.split(",")]
     for j in st.session_state.config['cadencier']:
@@ -88,24 +91,30 @@ if page == "Dashboard":
     st.subheader("⚠️ Rattrapages à traiter")
     df_dos = st.session_state.data[st.session_state.data['Dossier'] == choix_dos].copy()
     def est_en_rattrapage(row):
-        try: v = float(str(row['Note']).replace(',', '.'))
-        except: v = 0
-        j_str = str(row['J_Type']).replace('J', '').replace('R', '')
+        try: valeur_note = float(str(row['Note']).replace(',', '.'))
+        except: valeur_note = 0
+        j_str = str(row['J_Type']).replace('J', '')
         seuil = int(st.session_state.config['seuils'].get(j_str, 12))
-        return v > 0 and v < seuil and row['Statut'] != 'Traité'
-    
+        return valeur_note > 0 and valeur_note < seuil and row['Statut'] != 'Traité'
+   
     rattrapages = df_dos[df_dos.apply(est_en_rattrapage, axis=1)]
     if not rattrapages.empty:
         st.table(rattrapages[['Matiere', 'Chapitre', 'J_Type', 'Date', 'Note']])
         for _, row in rattrapages.iterrows():
             if st.button(f"Réintégrer {row['Chapitre']}", key=f"btn_{row['ID']}"):
-                new_r = row.copy()
-                new_r['ID'], new_r['Chapitre'], new_r['Date'] = str(uuid.uuid4()), f"{row['Chapitre']}R", str(dt.date.today())
-                new_r['Note'], new_r['Statut'] = 0, 'À faire'
-                st.session_state.data = pd.concat([st.session_state.data, pd.DataFrame([new_r])], ignore_index=True)
-                st.session_state.data.loc[st.session_state.data['ID'] == row['ID'], 'Statut'] = 'Traité'
-                save_all_to_sheet(st.session_state.data, st.session_state.config)
-                st.rerun()
+                # Correctif Réintégration : On cherche une place libre avant l'échéance suivante
+                all_chap_dates = sorted(st.session_state.data[(st.session_state.data['Chapitre'] == row['Chapitre']) & (st.session_state.data['Dossier'] == choix_dos)]['Date'].unique())
+                idx = all_chap_dates.index(row['Date'])
+                date_cible = row['Date'] + dt.timedelta(days=1)
+                if idx + 1 < len(all_chap_dates) and date_cible < all_chap_dates[idx+1]:
+                    new_row = row.copy()
+                    new_row['ID'], new_row['J_Type'], new_row['Date'] = str(uuid.uuid4()), f"{row['J_Type']}R", date_cible
+                    new_row['Note'], new_row['Statut'] = 0, 'À faire'
+                    st.session_state.data = pd.concat([st.session_state.data, pd.DataFrame([new_row])], ignore_index=True)
+                    st.session_state.data.loc[st.session_state.data['ID'] == row['ID'], 'Statut'] = 'Traité'
+                    save_all_to_sheet(st.session_state.data, st.session_state.config)
+                    st.rerun()
+                else: st.error("❌ Aucune place libre avant l'échéance suivante.")
 
 elif page == "Planning & Saisie":
     with st.expander("✍️ Ajouter Chapitre", expanded=True):
@@ -116,11 +125,11 @@ elif page == "Planning & Saisie":
             dex = st.date_input("Date Examen", value=None)
             if st.form_submit_button("Générer Planning"):
                 if chap and dex:
-                    new_rows = [{'ID': str(uuid.uuid4()), 'Dossier': choix_dos, 'Matiere': mat, 'Chapitre': chap, 'J_Type': 'J0', 'Date': str(d0), 'Note': 0, 'Statut': 'À faire'}]
+                    new_rows = [{'ID': str(uuid.uuid4()), 'Dossier': choix_dos, 'Matiere': mat, 'Chapitre': chap, 'J_Type': 'J0', 'Date': d0, 'Note': 0, 'Statut': 'À faire'}]
                     for j in st.session_state.config['cadencier']:
-                        d_j = d0 + dt.timedelta(days=int(j))
-                        if d_j <= dex: new_rows.append({'ID': str(uuid.uuid4()), 'Dossier': choix_dos, 'Matiere': mat, 'Chapitre': chap, 'J_Type': f'J{j}', 'Date': str(d_j), 'Note': 0, 'Statut': 'À faire'})
-                    st.session_state.data = pd.concat([st.session_state.data, pd.DataFrame(new_rows)])
+                        d_j = d0 + dt.timedelta(days=j)
+                        if d_j <= dex: new_rows.append({'ID': str(uuid.uuid4()), 'Dossier': choix_dos, 'Matiere': mat, 'Chapitre': chap, 'J_Type': f'J{j}', 'Date': d_j, 'Note': 0, 'Statut': 'À faire'})
+                    st.session_state.data = pd.concat([st.session_state.data, pd.DataFrame(new_rows)]).drop_duplicates(subset=['Dossier', 'Chapitre', 'J_Type', 'Date'])
                     save_all_to_sheet(st.session_state.data, st.session_state.config)
                     st.rerun()
 
@@ -132,8 +141,7 @@ elif page == "Planning & Saisie":
         day = start + dt.timedelta(days=i)
         with col:
             st.markdown(f"**{day.strftime('%d/%m')}**")
-            # --- AFFICHAGE ORIGINAL ---
-            temp = st.session_state.data[(st.session_state.data['Date'] == str(day)) & (st.session_state.data['Dossier'] == choix_dos)]
+            temp = st.session_state.data[(pd.to_datetime(st.session_state.data['Date']).dt.date == day) & (st.session_state.data['Dossier'] == choix_dos)]
             for _, r in temp.iterrows():
                 c1, c2 = st.columns([0.8, 0.2])
                 with c1:
@@ -141,15 +149,15 @@ elif page == "Planning & Saisie":
                         st.session_state.data.loc[st.session_state.data['ID'] == r['ID'], 'Statut'] = 'Fait'
                     else: st.session_state.data.loc[st.session_state.data['ID'] == r['ID'], 'Statut'] = 'À faire'
                 with c2:
-                    new_date = st.date_input("", value=dt.datetime.strptime(r['Date'], '%Y-%m-%d').date(), key=f"cal_{r['ID']}", label_visibility="collapsed")
-                    if str(new_date) != r['Date']:
-                        st.session_state.data.loc[st.session_state.data['ID'] == r['ID'], 'Date'] = str(new_date)
+                    # Correctif : Le date_input est maintenant lié à la mise à jour de la date de la ligne
+                    new_date = st.date_input("", value=r['Date'], key=f"cal_{r['ID']}", label_visibility="collapsed")
+                    if new_date != r['Date']:
+                        st.session_state.data.loc[st.session_state.data['ID'] == r['ID'], 'Date'] = new_date
                         save_all_to_sheet(st.session_state.data, st.session_state.config)
                         st.rerun()
    
     st.subheader("Saisie Notes (Journée)")
-    df_t = st.session_state.data[st.session_state.data['Date'] == str(dt.date.today())]
-    df_t = df_t[df_t['Dossier'] == choix_dos].copy()
+    df_t = st.session_state.data[(pd.to_datetime(st.session_state.data['Date']).dt.date == dt.date.today()) & (st.session_state.data['Dossier'] == choix_dos)].copy()
     if not df_t.empty:
         temp_notes = {}
         for idx, row in df_t.iterrows():
