@@ -154,24 +154,26 @@ elif page == "Planning & Saisie":
                             st.rerun()
    
     st.subheader("Saisie Notes (Journée)")
-    if not st.session_state.data.empty:
-        # Filtrage des lignes pour aujourd'hui
-        mask = (st.session_state.data['Date'] == str(dt.date.today())) & (st.session_state.data['Dossier'] == choix_dos)
-        df_t = st.session_state.data[mask]
+    # --- DÉBUT DE LA CORRECTION ---
+    # On isole les notes du jour dans un dictionnaire temporaire
+    # pour ne pas modifier le DataFrame tant que l'utilisateur n'a pas cliqué sur Enregistrer.
+    mask = (st.session_state.data['Date'] == str(dt.date.today())) & (st.session_state.data['Dossier'] == choix_dos)
+    temp_saisies = {}
+    
+    for idx in st.session_state.data.index[mask]:
+        row = st.session_state.data.loc[idx]
+        c1, c2 = st.columns([0.7, 0.3])
+        c1.write(f"{row['Chapitre']} ({row['J_Type']})")
+        # Chaque saisie est stockée dans le dictionnaire, pas dans le DataFrame
+        temp_saisies[idx] = c2.text_input("Notes (ex: 12 14)", value=str(row['Note']), key=f"in_{idx}")
         
-        # Dictionnaire pour capturer les notes sans toucher au DataFrame pendant la boucle
-        temp_saisies = {}
-        for _, row in df_t.iterrows():
-            c1, c2 = st.columns([0.7, 0.3])
-            c1.write(f"{row['Chapitre']} ({row['J_Type']})")
-            temp_saisies[row['ID']] = c2.text_input("Notes", value=str(row['Note']), key=f"in_{row['ID']}")
-            
-        # Bouton d'enregistrement qui applique tout d'un coup
-        if st.button("💾 Enregistrer Notes"):
-            for id_unique, valeur in temp_saisies.items():
-                st.session_state.data.loc[st.session_state.data['ID'] == id_unique, 'Note'] = valeur
-            save_all_to_sheet(st.session_state.data, st.session_state.config)
-            st.rerun()
+    if st.button("💾 Enregistrer Notes"):
+        # La mise à jour du DataFrame se fait ici, en une seule fois, après la boucle.
+        for idx, valeur in temp_saisies.items():
+            st.session_state.data.at[idx, 'Note'] = valeur
+        save_all_to_sheet(st.session_state.data, st.session_state.config)
+        st.rerun()
+    # --- FIN DE LA CORRECTION ---
 
 elif page == "Graphiques":
     st.title("📊 Progression")
