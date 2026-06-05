@@ -101,16 +101,16 @@ if page == "Dashboard":
             c1, c2, c3 = st.columns([0.6, 0.2, 0.2])
             c1.write(f"{row['Matiere']} | {row['Chapitre']} ({row['J_Type']}) | Note: {row['Note']}")
             if c2.button("Réintégrer", key=f"btn_{row['ID']}"):
-                dates_prises = st.session_state.data[st.session_state.data['Dossier'] == choix_dos]['Date'].values
                 date_debut = dt.datetime.strptime(row['Date'], '%Y-%m-%d')
-                all_chap_dates = sorted(st.session_state.data[(st.session_state.data['Chapitre'] == row['Chapitre']) & (st.session_state.data['Dossier'] == choix_dos)]['Date'].unique())
-                date_limite = dt.datetime.strptime(all_chap_dates[all_chap_dates.index(row['Date']) + 1], '%Y-%m-%d') if (all_chap_dates.index(row['Date']) + 1) < len(all_chap_dates) else date_debut + dt.timedelta(days=365)
+                all_dates = sorted(st.session_state.data[(st.session_state.data['Chapitre'] == row['Chapitre']) & (st.session_state.data['Dossier'] == choix_dos)]['Date'].unique())
+                next_date_str = all_dates[all_dates.index(row['Date']) + 1] if (all_dates.index(row['Date']) + 1) < len(all_dates) else (date_debut + dt.timedelta(days=365)).strftime('%Y-%m-%d')
+                date_limite = dt.datetime.strptime(next_date_str, '%Y-%m-%d')
                 
                 place_trouvee = False
-                for delta in range(1, 100):
+                for delta in range(1, 60):
                     test_date = (date_debut + dt.timedelta(days=delta)).strftime('%Y-%m-%d')
                     if dt.datetime.strptime(test_date, '%Y-%m-%d') >= date_limite: break
-                    if test_date not in dates_prises:
+                    if test_date not in st.session_state.data[(st.session_state.data['Chapitre'] == row['Chapitre']) & (st.session_state.data['Dossier'] == choix_dos)]['Date'].values:
                         new_row = row.copy()
                         new_row['ID'], new_row['J_Type'], new_row['Date'] = str(uuid.uuid4()), f"{row['J_Type'].replace('R','')}R", test_date
                         new_row['Note'], new_row['Statut'] = 0, 'À faire'
@@ -118,7 +118,7 @@ if page == "Dashboard":
                         st.session_state.data.loc[st.session_state.data['ID'] == row['ID'], 'Statut'] = 'Traité'
                         place_trouvee = True; break
                 if place_trouvee: save_all_to_sheet(st.session_state.data, st.session_state.config); st.rerun()
-                else: st.error("❌ Aucune place libre.")
+                else: st.error("❌ Aucune place libre avant la prochaine échéance.")
             if c3.button("🗑️ Supprimer", key=f"trash_{row['ID']}"):
                 st.session_state.data = st.session_state.data[st.session_state.data['ID'] != row['ID']]
                 save_all_to_sheet(st.session_state.data, st.session_state.config); st.rerun()
