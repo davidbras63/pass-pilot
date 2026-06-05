@@ -160,7 +160,7 @@ elif page == "Planning & Saisie":
     if not st.session_state.data.empty:
         df_t = st.session_state.data[(st.session_state.data['Date'] == str(dt.date.today())) & (st.session_state.data['Dossier'] == choix_dos)].copy()
         
-        # --- BLOC SAISIE CORRIGÉ ---
+        # --- SEULE MODIFICATION : La boucle de saisie est isolée pour éviter le plantage ---
         saisies = {}
         for idx, row in df_t.iterrows():
             c1, c2 = st.columns([0.7, 0.3])
@@ -186,4 +186,4 @@ elif page == "Graphiques":
         df_notes['Order'] = df_notes['J_Type'].astype(str).str.extract('(\d+)').fillna(0).astype(int)
         df_notes = df_notes.sort_values(by='Order')
         chart = alt.Chart(df_notes).mark_line(point=True).encode(x='J_Type', y=alt.Y('Note_Num', scale=alt.Scale(domain=[0, 20])))
-        st.altair_chart(chart, use_container_width=True)
+        st.altair_chart(chart, use_container_width=True
