@@ -16,7 +16,6 @@ def load_data_from_sheet():
         if response.status_code == 200:
             data = response.json()
             df = pd.DataFrame(data.get('data', []), columns=['Dossier', 'Matiere', 'Chapitre', 'J_Type', 'Date', 'Note', 'Statut', 'ID'])
-            # Verrouillage : date lue comme texte strict
             df['Date'] = df['Date'].astype(str)
             config = data.get('config', {'cours_max': 5, 'cadencier': [1, 3, 7, 14, 30], 'seuils': {'1': 12, '3': 12, '7': 14, '14': 14, '30': 16}, 'dossiers': {"PASS": []}})
             return df, config
@@ -25,7 +24,6 @@ def load_data_from_sheet():
 
 def save_all_to_sheet(df, config):
     df_to_send = df.copy()
-    # Verrouillage : date stockée comme texte strict
     df_to_send['Date'] = df_to_send['Date'].astype(str)
     df_to_send['Note'] = df_to_send['Note'].astype(str)
     payload = {"data": df_to_send.values.tolist(), "config": config}
@@ -51,6 +49,13 @@ def reset_matiere():
         save_all_to_sheet(st.session_state.data, st.session_state.config)
         st.session_state.data, st.session_state.config = load_data_from_sheet()
     st.session_state.m_in = ""
+
+# Fonction sécurisée de lecture de date
+def parse_date(date_str):
+    for fmt in ('%Y-%m-%d', '%d/%m/%Y', '%Y-%m-%d %H:%M:%S'):
+        try: return dt.datetime.strptime(date_str, fmt).date()
+        except: continue
+    return dt.date.today()
 
 st.sidebar.title("⚙️ Pilot Expert")
 with st.sidebar.expander("🛠️ Réglages", expanded=False):
@@ -137,8 +142,8 @@ elif page == "Planning & Saisie":
         day = start + dt.timedelta(days=i)
         with col:
             st.markdown(f"**{day.strftime('%d/%m')}**")
-            # Comparaison dynamique en convertissant le string du dataframe en date pour l'affichage
-            temp = st.session_state.data[(pd.to_datetime(st.session_state.data['Date']).dt.date == day) & (st.session_state.data['Dossier'] == choix_dos)]
+            temp = st.session_state.data[st.session_state.data['Date'].apply(parse_date) == day]
+            temp = temp[temp['Dossier'] == choix_dos]
             for _, r in temp.iterrows():
                 c1, c2 = st.columns([0.8, 0.2])
                 with c1:
@@ -146,14 +151,15 @@ elif page == "Planning & Saisie":
                         st.session_state.data.loc[st.session_state.data['ID'] == r['ID'], 'Statut'] = 'Fait'
                     else: st.session_state.data.loc[st.session_state.data['ID'] == r['ID'], 'Statut'] = 'À faire'
                 with c2:
-                    new_date = st.date_input("", value=dt.datetime.strptime(r['Date'], '%Y-%m-%d').date(), key=f"cal_{r['ID']}", label_visibility="collapsed")
+                    new_date = st.date_input("", value=parse_date(r['Date']), key=f"cal_{r['ID']}", label_visibility="collapsed")
                     if str(new_date) != r['Date']:
                         st.session_state.data.loc[st.session_state.data['ID'] == r['ID'], 'Date'] = str(new_date)
                         save_all_to_sheet(st.session_state.data, st.session_state.config)
                         st.rerun()
    
     st.subheader("Saisie Notes (Journée)")
-    df_t = st.session_state.data[(pd.to_datetime(st.session_state.data['Date']).dt.date == dt.date.today()) & (st.session_state.data['Dossier'] == choix_dos)].copy()
+    df_t = st.session_state.data[st.session_state.data['Date'].apply(parse_date) == dt.date.today()]
+    df_t = df_t[df_t['Dossier'] == choix_dos].copy()
     if not df_t.empty:
         temp_notes = {}
         for idx, row in df_t.iterrows():
