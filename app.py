@@ -34,6 +34,12 @@ def save_all_to_sheet(df, config):
 if 'data' not in st.session_state:
     st.session_state.data, st.session_state.config = load_data_from_sheet()
 
+def parse_date(date_str):
+    for fmt in ('%Y-%m-%d', '%d/%m/%Y', '%Y-%m-%d %H:%M:%S'):
+        try: return dt.datetime.strptime(date_str, fmt).date()
+        except: continue
+    return dt.date.today()
+
 def reset_dossier():
     nom = st.session_state.d_in
     if nom and nom not in st.session_state.config['dossiers']:
@@ -49,13 +55,6 @@ def reset_matiere():
         save_all_to_sheet(st.session_state.data, st.session_state.config)
         st.session_state.data, st.session_state.config = load_data_from_sheet()
     st.session_state.m_in = ""
-
-# Fonction sécurisée de lecture de date
-def parse_date(date_str):
-    for fmt in ('%Y-%m-%d', '%d/%m/%Y', '%Y-%m-%d %H:%M:%S'):
-        try: return dt.datetime.strptime(date_str, fmt).date()
-        except: continue
-    return dt.date.today()
 
 st.sidebar.title("⚙️ Pilot Expert")
 with st.sidebar.expander("🛠️ Réglages", expanded=False):
@@ -126,6 +125,7 @@ elif page == "Planning & Saisie":
             dex = st.date_input("Date Examen", value=None)
             if st.form_submit_button("Générer Planning"):
                 if chap and dex:
+                    # Génération forcée avec calcul d0 + j
                     new_rows = [{'ID': str(uuid.uuid4()), 'Dossier': choix_dos, 'Matiere': mat, 'Chapitre': chap, 'J_Type': 'J0', 'Date': str(d0), 'Note': 0, 'Statut': 'À faire'}]
                     for j in st.session_state.config['cadencier']:
                         d_j = d0 + dt.timedelta(days=j)
