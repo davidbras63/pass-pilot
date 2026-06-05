@@ -10,27 +10,21 @@ st.set_page_config(layout="wide")
 
 WEB_APP_URL = "https://script.google.com/macros/s/AKfycbwA7ZGCqHcDgw_Ia2PDjuvLqGDx1smoqR75VOo5IytV-QgMIw2_6xnZtXI1sFensDDwfw/exec"
 
-# --- FONCTION SÉCURISÉE (Plus d'erreur ValueError) ---
-def safe_parse_date(date_val):
-    try:
-        if isinstance(date_val, dt.date): return date_val
-        return dt.datetime.strptime(str(date_val).strip(), '%Y-%m-%d').date()
-    except:
-        return dt.date.today()
-
 def load_data_from_sheet():
     try:
         response = requests.get(WEB_APP_URL, timeout=15)
         if response.status_code == 200:
             data = response.json()
             df = pd.DataFrame(data.get('data', []), columns=['Dossier', 'Matiere', 'Chapitre', 'J_Type', 'Date', 'Note', 'Statut', 'ID'])
+            # Conversion sécurisée pour l'affichage uniquement
+            df['Date_Obj'] = pd.to_datetime(df['Date'], errors='coerce').dt.date
             config = data.get('config', {'cours_max': 5, 'cadencier': [1, 3, 7, 14, 30], 'seuils': {'1': 12, '3': 12, '7': 14, '14': 14, '30': 16}, 'dossiers': {"PASS": []}})
             return df, config
     except: pass
     return pd.DataFrame(columns=['Dossier', 'Matiere', 'Chapitre', 'J_Type', 'Date', 'Note', 'Statut', 'ID']), {'cours_max': 5, 'cadencier': [1, 3, 7, 14, 30], 'seuils': {'1': 12, '3': 12, '7': 14, '14': 14, '30': 16}, 'dossiers': {"PASS": []}}
 
 def save_all_to_sheet(df, config):
-    df_to_send = df.copy()
+    df_to_send = df.drop(columns=['Date_Obj'], errors='ignore')
     payload = {"data": df_to_send.values.tolist(), "config": config}
     try:
         requests.post(WEB_APP_URL, json=payload, timeout=15)
@@ -126,7 +120,9 @@ elif page == "Planning & Saisie":
                     for j in st.session_state.config['cadencier']:
                         d_j = d0 + dt.timedelta(days=j)
                         if d_j <= dex: new_rows.append({'ID': str(uuid.uuid4()), 'Dossier': choix_dos, 'Matiere': mat, 'Chapitre': chap, 'J_Type': f'J{j}', 'Date': str(d_j), 'Note': 0, 'Statut': 'À faire'})
-                    st.session_state.data = pd.concat([st.session_state.data, pd.DataFrame(new_rows)])
+                    temp_df = pd.DataFrame(new_rows)
+                    temp_df['Date_Obj'] = pd.to_datetime(temp_df['Date']).dt.date
+                    st.session_state.data = pd.concat([st.session_state.data, temp_df])
                     save_all_to_sheet(st.session_state.data, st.session_state.config)
                     st.rerun()
 
@@ -138,9 +134,7 @@ elif page == "Planning & Saisie":
         day = start + dt.timedelta(days=i)
         with col:
             st.markdown(f"**{day.strftime('%d/%m')}**")
-            # --- FILTRAGE UTILISANT LA FONCTION SÉCURISÉE ---
-            temp = st.session_state.data[st.session_state.data['Date'].apply(safe_parse_date) == day]
-            temp = temp[temp['Dossier'] == choix_dos]
+            temp = st.session_state.data[(st.session_state.data['Date_Obj'] == day) & (st.session_state.data['Dossier'] == choix_dos)]
             for _, r in temp.iterrows():
                 c1, c2 = st.columns([0.8, 0.2])
                 with c1:
@@ -148,14 +142,15 @@ elif page == "Planning & Saisie":
                         st.session_state.data.loc[st.session_state.data['ID'] == r['ID'], 'Statut'] = 'Fait'
                     else: st.session_state.data.loc[st.session_state.data['ID'] == r['ID'], 'Statut'] = 'À faire'
                 with c2:
-                    new_date = st.date_input("", value=safe_parse_date(r['Date']), key=f"cal_{r['ID']}", label_visibility="collapsed")
+                    new_date = st.date_input("", value=r['Date_Obj'], key=f"cal_{r['ID']}", label_visibility="collapsed")
                     if str(new_date) != r['Date']:
                         st.session_state.data.loc[st.session_state.data['ID'] == r['ID'], 'Date'] = str(new_date)
+                        st.session_state.data.loc[st.session_state.data['ID'] == r['ID'], 'Date_Obj'] = new_date
                         save_all_to_sheet(st.session_state.data, st.session_state.config)
                         st.rerun()
    
     st.subheader("Saisie Notes (Journée)")
-    df_t = st.session_state.data[st.session_state.data['Date'].apply(safe_parse_date) == dt.date.today()]
+    df_t = st.session_state.data[st.session_state.data['Date_Obj'] == dt.date.today()]
     df_t = df_t[df_t['Dossier'] == choix_dos].copy()
     if not df_t.empty:
         temp_notes = {}
