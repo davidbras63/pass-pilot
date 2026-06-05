@@ -16,8 +16,8 @@ def load_data_from_sheet():
         if response.status_code == 200:
             data = response.json()
             df = pd.DataFrame(data.get('data', []), columns=['Dossier', 'Matiere', 'Chapitre', 'J_Type', 'Date', 'Note', 'Statut', 'ID'])
-            # Lecture forcée en chaîne pour éviter toute interférence de fuseau horaire
-            df['Date'] = pd.to_datetime(df['Date'].astype(str)).dt.date
+            # VERROU DATE : Parse manuel sans interprétation de fuseau
+            df['Date'] = df['Date'].apply(lambda x: dt.datetime.strptime(str(x), '%Y-%m-%d').date())
             config = data.get('config', {'cours_max': 5, 'cadencier': [1, 3, 7, 14, 30], 'seuils': {'1': 12, '3': 12, '7': 14, '14': 14, '30': 16}, 'dossiers': {"PASS": []}})
             return df, config
     except: pass
@@ -25,8 +25,8 @@ def load_data_from_sheet():
 
 def save_all_to_sheet(df, config):
     df_to_send = df.copy()
-    # Conversion stricte en chaîne ISO pour bloquer les dates
-    df_to_send['Date'] = df_to_send['Date'].apply(lambda x: x.isoformat() if isinstance(x, (dt.date, dt.datetime)) else str(x))
+    # VERROU DATE : Formatage explicite ISO
+    df_to_send['Date'] = df_to_send['Date'].apply(lambda x: x.strftime('%Y-%m-%d'))
     df_to_send['Note'] = df_to_send['Note'].astype(str)
     payload = {"data": df_to_send.values.tolist(), "config": config}
     try:
@@ -36,7 +36,6 @@ def save_all_to_sheet(df, config):
 if 'data' not in st.session_state:
     st.session_state.data, st.session_state.config = load_data_from_sheet()
 
-# [FONCTIONS RESET ET SIDEBAR IDENTIQUES]
 def reset_dossier():
     nom = st.session_state.d_in
     if nom and nom not in st.session_state.config['dossiers']:
@@ -73,7 +72,6 @@ page = st.sidebar.radio("Navigation", ["Dashboard", "Planning & Saisie", "Graphi
 
 if page == "Dashboard":
     st.title(f"🎯 Dashboard : {choix_dos}")
-    # ... (Suppression dossier/chapitre identique) ...
     if st.button("❌ Supprimer ce Dossier"):
         del st.session_state.config['dossiers'][choix_dos]
         st.session_state.data = st.session_state.data[st.session_state.data['Dossier'] != choix_dos]
@@ -104,23 +102,19 @@ if page == "Dashboard":
         st.table(rattrapages[['Matiere', 'Chapitre', 'J_Type', 'Date', 'Note']])
         for _, row in rattrapages.iterrows():
             if st.button(f"Réintégrer {row['Chapitre']}", key=f"btn_{row['ID']}"):
-                chap_dates = sorted(st.session_state.data[(st.session_state.data['Chapitre'] == row['Chapitre']) & (st.session_state.data['Dossier'] == choix_dos)]['Date'].unique())
-                idx = chap_dates.index(row['Date'])
-                date_cible = row['Date'] + dt.timedelta(days=1)
-                # Vérification : date cible avant l'échéance suivante
-                if idx + 1 < len(chap_dates) and date_cible < chap_dates[idx+1]:
+                all_d = sorted(st.session_state.data[(st.session_state.data['Chapitre'] == row['Chapitre']) & (st.session_state.data['Dossier'] == choix_dos)]['Date'].unique())
+                idx = all_d.index(row['Date'])
+                if idx + 1 < len(all_d) and (dt.date.today() + dt.timedelta(days=1)) < all_d[idx+1]:
                     new_r = row.copy()
-                    new_r['ID'], new_r['Chapitre'] = str(uuid.uuid4()), f"{row['Chapitre']} R"
-                    new_r['Date'], new_r['Statut'], new_r['Note'] = date_cible, 'À faire', 0
+                    new_r['ID'], new_r['Chapitre'] = str(uuid.uuid4()), f"{row['Chapitre']} RAP"
+                    new_r['Date'], new_r['Statut'], new_r['Note'] = dt.date.today() + dt.timedelta(days=1), 'À faire', 0
                     st.session_state.data = pd.concat([st.session_state.data, pd.DataFrame([new_r])], ignore_index=True)
                     st.session_state.data.loc[st.session_state.data['ID'] == row['ID'], 'Statut'] = 'Traité'
                     save_all_to_sheet(st.session_state.data, st.session_state.config)
                     st.rerun()
-                else:
-                    st.error(f"❌ Impossible : pas de place avant le {chap_dates[idx+1].strftime('%d/%m')}.")
+                else: st.error("❌ Pas de place avant échéance suivante.")
 
 elif page == "Planning & Saisie":
-    # ... (Bloc Ajouter identique) ...
     with st.expander("✍️ Ajouter Chapitre", expanded=True):
         with st.form("Add_Form", clear_on_submit=True):
             mat = st.selectbox("Matière", st.session_state.config['dossiers'].get(choix_dos, []))
@@ -169,7 +163,12 @@ elif page == "Planning & Saisie":
             temp_notes[row['ID']] = c2.text_input("Note", value=str(row['Note']), key=f"saisie_{row['ID']}")
         if st.button("💾 Enregistrer Notes"):
             for id_row, val in temp_notes.items():
-                st.session_state.data.loc[st.session_state.data['ID'] == id_row, 'Note'] = val.replace(',', '.')
+                if ';' in val:
+                    try:
+                        vals = [float(x.replace(',', '.').strip()) for x in val.split(';')]
+                        st.session_state.data.loc[st.session_state.data['ID'] == id_row, 'Note'] = round(sum(vals)/len(vals), 1)
+                    except: st.session_state.data.loc[st.session_state.data['ID'] == id_row, 'Note'] = val
+                else: st.session_state.data.loc[st.session_state.data['ID'] == id_row, 'Note'] = val.replace(',', '.')
             save_all_to_sheet(st.session_state.data, st.session_state.config)
             st.rerun()
 
