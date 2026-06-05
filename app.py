@@ -140,26 +140,25 @@ elif page == "Planning & Saisie":
                     st.date_input("", value=r['Date'], key=f"cal_{r['ID']}", label_visibility="collapsed")
     
     st.subheader("Saisie Notes")
-    df_t = st.session_state.data[(pd.to_datetime(st.session_state.data['Date']).dt.date == dt.date.today()) & (st.session_state.data['Dossier'] == choix_dos)].copy()
-    if not df_t.empty:
-        df_display = df_t[['ID', 'Chapitre', 'J_Type', 'Note', 'Statut']].copy()
-        df_display['Note'] = df_display['Note'].astype(str) 
-        # Rétablissement du data_editor tel que tu l'avais
-        edited = st.data_editor(df_display, column_config={"ID": None, "Note": st.column_config.TextColumn("Note")}, use_container_width=True)
-        if st.button("💾 Enregistrer Notes"):
-            temp_df = st.session_state.data.copy()
-            for _, row in edited.iterrows():
-                val_note = str(row['Note'])
-                mask = temp_df['ID'] == row['ID']
-                if ',' in val_note:
-                    try:
-                        notes_list = [float(n.strip().replace(',', '.')) for n in val_note.split(',') if n.strip()]
-                        temp_df.loc[mask, 'Note'] = round(sum(notes_list) / len(notes_list), 1)
-                    except: temp_df.loc[mask, 'Note'] = val_note
-                else: temp_df.loc[mask, 'Note'] = val_note
-            st.session_state.data = temp_df
-            save_all_to_sheet(st.session_state.data, st.session_state.config)
-            st.rerun()
+    df_t = st.session_state.data[st.session_state.data['Dossier'] == choix_dos].copy()
+    # Affichage systématique du tableau sans filtrage par date
+    df_display = df_t[['ID', 'Chapitre', 'J_Type', 'Note', 'Statut']].copy()
+    df_display['Note'] = df_display['Note'].astype(str) 
+    edited = st.data_editor(df_display, column_config={"ID": None, "Note": st.column_config.TextColumn("Note")}, use_container_width=True)
+    if st.button("💾 Enregistrer Notes"):
+        temp_df = st.session_state.data.copy()
+        for _, row in edited.iterrows():
+            val_note = str(row['Note'])
+            mask = temp_df['ID'] == row['ID']
+            if ',' in val_note:
+                try:
+                    notes_list = [float(n.strip().replace(',', '.')) for n in val_note.split(',') if n.strip()]
+                    temp_df.loc[mask, 'Note'] = round(sum(notes_list) / len(notes_list), 1)
+                except: temp_df.loc[mask, 'Note'] = val_note
+            else: temp_df.loc[mask, 'Note'] = val_note
+        st.session_state.data = temp_df
+        save_all_to_sheet(st.session_state.data, st.session_state.config)
+        st.rerun()
 
 elif page == "Graphiques":
     st.title("📊 Progression")
