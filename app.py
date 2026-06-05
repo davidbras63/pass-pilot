@@ -16,7 +16,7 @@ def load_data_from_sheet():
         if response.status_code == 200:
             data = response.json()
             df = pd.DataFrame(data.get('data', []), columns=['Dossier', 'Matiere', 'Chapitre', 'J_Type', 'Date', 'Note', 'Statut', 'ID'])
-            # Correctif Date : Conversion normalisée sans décalage
+            # CORRECTIF DATE : Normalisation stricte pour éviter le décalage de fuseau
             df['Date'] = pd.to_datetime(df['Date']).dt.normalize().dt.date
             config = data.get('config', {'cours_max': 5, 'cadencier': [1, 3, 7, 14, 30], 'seuils': {'1': 12, '3': 12, '7': 14, '14': 14, '30': 16}, 'dossiers': {"PASS": []}})
             return df, config
@@ -100,6 +100,7 @@ if page == "Dashboard":
     if not rattrapages.empty:
         st.table(rattrapages[['Matiere', 'Chapitre', 'J_Type', 'Date', 'Note']])
         for _, row in rattrapages.iterrows():
+            # CORRECTIF REINTEGRATION : Logique de sécurité sans décalage
             if st.button(f"Réintégrer {row['Chapitre']}", key=f"btn_{row['ID']}"):
                 all_d = sorted(st.session_state.data[(st.session_state.data['Chapitre'] == row['Chapitre']) & (st.session_state.data['Dossier'] == choix_dos)]['Date'].unique())
                 idx = all_d.index(row['Date'])
@@ -116,7 +117,9 @@ if page == "Dashboard":
                     st.error("❌ Impossible : pas de place avant échéance suivante.")
                     st.session_state.data.loc[st.session_state.data['ID'] == row['ID'], 'Statut'] = 'Traité'
                     save_all_to_sheet(st.session_state.data, st.session_state.config)
-                    if st.button("OK, supprimer"): st.rerun()
+                    if st.button("OK, supprimer du tableau"):
+                        st.session_state.data, st.session_state.config = load_data_from_sheet()
+                        st.rerun()
 
 elif page == "Planning & Saisie":
     with st.expander("✍️ Ajouter Chapitre", expanded=True):
