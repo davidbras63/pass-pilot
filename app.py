@@ -6,7 +6,6 @@ import requests
 import json
 import altair as alt
 import time
-from streamlit.components.v1 import html
 
 st.set_page_config(layout="wide")
 
@@ -24,17 +23,17 @@ def load_data_from_sheet():
     except: pass
     return pd.DataFrame(columns=['Dossier', 'Matiere', 'Chapitre', 'J_Type', 'Date', 'Note', 'Statut', 'ID']), {'cours_max': 5, 'cadencier': [1, 3, 7, 14, 30], 'seuils': {'1': 12, '3': 12, '7': 14, '14': 14, '30': 16}, 'dossiers': {"PASS": []}}
 
-# --- SÉCURITÉ DE FERMETURE ---
-html(f"""
-<script>
-window.addEventListener('beforeunload', function (e) {{
-    const data = {st.session_state.data.to_json(orient='records') if 'data' in st.session_state else '[]'};
-    const config = {json.dumps(st.session_state.config) if 'config' in st.session_state else '{}'};
-    navigator.sendBeacon('{WEB_APP_URL}', JSON.stringify({{"data": data, "config": config}}));
-}});
-</script>
-""")
+def save_all_to_sheet(df, config):
+    df_to_send = df.copy()
+    df_to_send['Date'] = df_to_send['Date'].astype(str)
+    df_to_send['Note'] = df_to_send['Note'].astype(str)
+    payload = {"data": df_to_send.values.tolist(), "config": config}
+    try: 
+        requests.post(WEB_APP_URL, json=payload, timeout=15)
+        time.sleep(1)
+    except: st.error("Erreur de sauvegarde")
 
+# Chargement initial
 if 'data' not in st.session_state:
     st.session_state.data, st.session_state.config = load_data_from_sheet()
 
@@ -46,12 +45,16 @@ def reset_dossier():
     nom = st.session_state.d_in
     if nom and nom not in st.session_state.config['dossiers']:
         st.session_state.config['dossiers'][nom] = []
+        save_all_to_sheet(st.session_state.data, st.session_state.config)
+        st.session_state.data, st.session_state.config = load_data_from_sheet()
     st.session_state.d_in = ""
 
 def reset_matiere():
     nom = st.session_state.m_in
     if nom and nom not in st.session_state.config['dossiers'][choix_dos]:
         st.session_state.config['dossiers'][choix_dos].append(nom)
+        save_all_to_sheet(st.session_state.data, st.session_state.config)
+        st.session_state.data, st.session_state.config = load_data_from_sheet()
     st.session_state.m_in = ""
 
 st.sidebar.title("⚙️ Pilot Expert")
@@ -61,6 +64,9 @@ with st.sidebar.expander("🛠️ Réglages", expanded=False):
     st.session_state.config['cadencier'] = [int(x.strip()) for x in cad_str.split(",")]
     for j in st.session_state.config['cadencier']:
         st.session_state.config['seuils'][str(j)] = st.slider(f"Seuil Note J{j}", 10, 20, int(st.session_state.config['seuils'].get(str(j), 12)))
+    if st.button("💾 Enregistrer"):
+        save_all_to_sheet(st.session_state.data, st.session_state.config)
+        st.rerun()
 
 st.sidebar.text_input("Nouveau Dossier", key="d_in")
 st.sidebar.button("➕ Créer Dossier", on_click=reset_dossier)
@@ -70,10 +76,13 @@ st.sidebar.button("➕ Ajouter Matière", on_click=reset_matiere)
 page = st.sidebar.radio("Navigation", ["Dashboard", "Planning & Saisie", "Graphiques"])
 
 if page == "Dashboard":
+    st.session_state.data, st.session_state.config = load_data_from_sheet()
+   
     st.title(f"🎯 Dashboard : {choix_dos}")
     if st.button("❌ Supprimer ce Dossier"):
         del st.session_state.config['dossiers'][choix_dos]
         st.session_state.data = st.session_state.data[st.session_state.data['Dossier'] != choix_dos]
+        save_all_to_sheet(st.session_state.data, st.session_state.config)
         st.rerun()
    
     for m in st.session_state.config['dossiers'].get(choix_dos, []):
@@ -82,9 +91,11 @@ if page == "Dashboard":
             if c2.button("🗑️ Supprimer", key=f"del_{m}"):
                 st.session_state.config['dossiers'][choix_dos].remove(m)
                 st.session_state.data = st.session_state.data[(st.session_state.data['Dossier'] != choix_dos) | (st.session_state.data['Matiere'] != m)]
+                save_all_to_sheet(st.session_state.data, st.session_state.config)
                 st.rerun()
             chapitres_matiere = st.session_state.data[(st.session_state.data['Dossier'] == choix_dos) & (st.session_state.data['Matiere'] == m)]['Chapitre'].unique()
             if len(chapitres_matiere) > 0: st.write("**Chapitres :**", ", ".join(chapitres_matiere))
+            else: st.write("Aucun chapitre trouvé.")
            
     st.subheader("⚠️ Rattrapages à traiter")
     df_dos = st.session_state.data[st.session_state.data['Dossier'] == choix_dos].copy()
@@ -115,9 +126,13 @@ if page == "Dashboard":
                         st.session_state.data = pd.concat([st.session_state.data, pd.DataFrame([new_row])], ignore_index=True)
                         st.session_state.data.loc[st.session_state.data['ID'] == row['ID'], 'Statut'] = 'Traité'
                         place_trouvee = True; break
-                if place_trouvee: st.rerun()
+                if place_trouvee:
+                    save_all_to_sheet(st.session_state.data, st.session_state.config)
+                    st.rerun()
+                else: st.error("❌ Aucune place.")
             if c3.button("🗑️ Supprimer", key=f"trash_{row['ID']}"):
                 st.session_state.data.loc[st.session_state.data['ID'] == row['ID'], 'Statut'] = 'Traité'
+                save_all_to_sheet(st.session_state.data, st.session_state.config)
                 st.rerun()
 
 elif page == "Planning & Saisie":
@@ -134,7 +149,7 @@ elif page == "Planning & Saisie":
                         d_j = d0_date + dt.timedelta(days=j)
                         if d_j <= dex_date: new_rows.append({'ID': str(uuid.uuid4()), 'Dossier': choix_dos, 'Matiere': mat, 'Chapitre': chap, 'J_Type': f'J{j}', 'Date': str(d_j), 'Note': 0, 'Statut': 'À faire'})
                     st.session_state.data = pd.concat([st.session_state.data, pd.DataFrame(new_rows)]).drop_duplicates(subset=['Dossier', 'Chapitre', 'J_Type', 'Date'])
-                    st.rerun()
+                    save_all_to_sheet(st.session_state.data, st.session_state.config); st.rerun()
 
     st.subheader("🗓️ Planning Hebdomadaire")
     cols = st.columns(7)
@@ -150,6 +165,7 @@ elif page == "Planning & Saisie":
                 with c1:
                     if st.checkbox(f"{r['Chapitre']} ({r['J_Type']})", value=(r['Statut'] == 'Fait'), key=f"chk_{r['ID']}"):
                         st.session_state.data.loc[st.session_state.data['ID'] == r['ID'], 'Statut'] = 'Fait'
+                        save_all_to_sheet(st.session_state.data, st.session_state.config)
                     else: 
                         if r['Statut'] != 'Traité':
                             st.session_state.data.loc[st.session_state.data['ID'] == r['ID'], 'Statut'] = 'À faire'
@@ -159,11 +175,13 @@ elif page == "Planning & Saisie":
                         new_date = st.date_input("", value=dt.datetime.strptime(r['Date'], '%Y-%m-%d'), key=f"cal_{r['ID']}", label_visibility="collapsed", disabled=is_disabled)
                         if str(new_date) != r['Date'] and not is_disabled:
                             st.session_state.data.loc[st.session_state.data['ID'] == r['ID'], 'Date'] = str(new_date)
-                            st.rerun()
+                            save_all_to_sheet(st.session_state.data, st.session_state.config); st.rerun()
+                    else: st.text("🔒")
    
     st.subheader("🗓️ Grille de Suivi & Saisie (Journée)")
     mask = (st.session_state.data['Date'] == str(dt.date.today())) & (st.session_state.data['Dossier'] == choix_dos)
     indices = st.session_state.data.index[mask]
+    
     cols_h = st.columns([0.4, 0.15, 0.35, 0.1])
     cols_h[0].write("**Chapitre & J**")
     cols_h[1].write("**Fait**")
@@ -174,19 +192,30 @@ elif page == "Planning & Saisie":
         row = st.session_state.data.loc[idx]
         cols = st.columns([0.4, 0.15, 0.35, 0.1])
         cols[0].write(f"{row['Chapitre']} ({row['J_Type']})")
+        
+        # Checkbox synchronisée
         is_done = cols[1].checkbox("Fait", value=(row['Statut'] == 'Fait'), key=f"grid_chk_{row['ID']}")
         if is_done != (row['Statut'] == 'Fait'):
             st.session_state.data.at[idx, 'Statut'] = 'Fait' if is_done else 'À faire'
+            save_all_to_sheet(st.session_state.data, st.session_state.config)
+            st.rerun()
+            
+        # Saisie note avec valeur de session temporaire pour éviter la perte
         note_key = f"grid_note_{row['ID']}"
         notes_in = cols[2].text_input("", value=str(row['Note']), key=note_key, label_visibility="collapsed")
+        
         if cols[3].button("∑", key=f"grid_calc_{row['ID']}"):
             try:
-                nums = [float(x.replace(',', '.')) for x in notes_in.replace(';', ' ').split()]
+                # Utilise la valeur saisie juste avant le clic
+                valeur_saisie = st.session_state.get(note_key, notes_in)
+                nums = [float(x.replace(',', '.')) for x in valeur_saisie.replace(';', ' ').split()]
                 if nums:
                     moyenne = round(sum(nums) / len(nums), 2)
                     st.session_state.data.at[idx, 'Note'] = moyenne
+                    save_all_to_sheet(st.session_state.data, st.session_state.config)
                     st.rerun()
-            except: cols[3].error("!")
+            except: 
+                cols[3].error("!")
 
 elif page == "Graphiques":
     st.title("📊 Progression")
