@@ -191,14 +191,13 @@ elif page == "Planning & Saisie":
         
         if cols[3].button("∑", key=f"grid_calc_{row['ID']}"):
             try:
-                # Calcul robuste de la moyenne
-                clean_str = note_in.replace(',', '.').replace(';', ' ')
-                nums = [float(n) for n in clean_str.split() if n.strip()]
+                nums = [float(n.replace(',', '.')) for n in note_in.replace(';', ' ').split() if n.strip()]
                 if nums:
                     st.session_state.data.at[idx, 'Note'] = round(sum(nums) / len(nums), 2)
                     save_all_to_sheet(st.session_state.data, st.session_state.config)
                     st.rerun()
-            except: cols[3].error("!")
+            except:
+                cols[3].error("!")
         elif note_in != str(row['Note']):
             st.session_state.data.at[idx, 'Note'] = note_in
             save_all_to_sheet(st.session_state.data, st.session_state.config)
