@@ -4,7 +4,6 @@ import datetime as dt
 import uuid
 import requests
 import json
-import altair as alt
 import time
 import streamlit.components.v1 as components
 
@@ -35,14 +34,16 @@ def save_all_to_sheet(df, config):
         time.sleep(1)
     except: st.error("Erreur de sauvegarde")
 
-# --- BLINDAGE FERMETURE ---
+# --- BLINDAGE FERMETURE (Correction syntaxique) ---
 sync_script = f"""
     <script>
         window.addEventListener('beforeunload', function (e) {{
+            const data_payload = {json.dumps(st.session_state.data.values.tolist() if 'data' in st.session_state else [])};
+            const config_payload = {json.dumps(st.session_state.config if 'config' in st.session_state else {})};
             navigator.sendBeacon('{WEB_APP_URL}', JSON.stringify({{
-                "data": {st.session_state.data.values.tolist() if 'data' in st.session_state else []},
-                "config": {json.dumps(st.session_state.config) if 'config' in st.session_state else {{}}}}
-            )));
+                "data": data_payload,
+                "config": config_payload
+            }}));
         }});
     </script>
 """
