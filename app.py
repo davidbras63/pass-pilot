@@ -164,35 +164,42 @@ elif page == "Planning & Saisie":
             for _, r in temp.iterrows():
                 c1, c2 = st.columns([0.7, 0.3])
                 with c1:
-                    if st.checkbox(f"{r['Chapitre']} ({r['J_Type']})", value=(r['Statut'] == 'Fait'), key=f"chk_{r['ID']}_{r['Date']}"):
+                    if st.checkbox(f"{r['Chapitre']} ({r['J_Type']})", value=(r['Statut'] == 'Fait'), key=f"chk_{r['ID']}"):
                         st.session_state.data.loc[st.session_state.data['ID'] == r['ID'], 'Statut'] = 'Fait'
+                        save_all_to_sheet(st.session_state.data, st.session_state.config)
                 with c2:
                     if r['J_Type'] != 'J0':
-                        new_date = st.date_input("", value=dt.datetime.strptime(r['Date'], '%Y-%m-%d'), key=f"cal_{r['ID']}_{r['Date']}", label_visibility="collapsed")
+                        new_date = st.date_input("", value=dt.datetime.strptime(r['Date'], '%Y-%m-%d'), key=f"cal_{r['ID']}", label_visibility="collapsed")
                         if str(new_date) != r['Date']:
                             st.session_state.data.loc[st.session_state.data['ID'] == r['ID'], 'Date'] = str(new_date)
+                            save_all_to_sheet(st.session_state.data, st.session_state.config)
                             st.rerun()
    
     st.subheader("🗓️ Grille de Suivi & Saisie (Journée)")
     mask = (st.session_state.data['Date'] == str(dt.date.today())) & (st.session_state.data['Dossier'] == choix_dos)
-    indices = st.session_state.data.index[mask]
-    for idx in indices:
-        row = st.session_state.data.loc[idx]
+    for idx, row in st.session_state.data[mask].iterrows():
         cols = st.columns([0.4, 0.15, 0.35, 0.1])
         cols[0].write(f"{row['Chapitre']} ({row['J_Type']})")
-        is_done = cols[1].checkbox("Fait", value=(row['Statut'] == 'Fait'), key=f"grid_chk_{row['ID']}_{idx}")
+        
+        is_done = cols[1].checkbox("Fait", value=(row['Statut'] == 'Fait'), key=f"grid_chk_{row['ID']}")
         if is_done != (row['Statut'] == 'Fait'):
             st.session_state.data.at[idx, 'Statut'] = 'Fait' if is_done else 'À faire'
+            save_all_to_sheet(st.session_state.data, st.session_state.config)
             st.rerun()
-        note_key = f"grid_note_{row['ID']}_{idx}"
-        notes_in = cols[2].text_input("", value=str(row['Note']), key=note_key, label_visibility="collapsed")
-        if cols[3].button("∑", key=f"grid_calc_{row['ID']}_{idx}"):
+            
+        note_in = cols[2].text_input("", value=str(row['Note']), key=f"grid_note_{row['ID']}", label_visibility="collapsed")
+        
+        if cols[3].button("∑", key=f"grid_calc_{row['ID']}"):
             try:
-                nums = [float(x.replace(',', '.')) for x in notes_in.replace(';', ' ').split()]
+                nums = [float(x.replace(',', '.')) for x in note_in.replace(';', ' ').split()]
                 if nums:
                     st.session_state.data.at[idx, 'Note'] = round(sum(nums) / len(nums), 2)
+                    save_all_to_sheet(st.session_state.data, st.session_state.config)
                     st.rerun()
             except: cols[3].error("!")
+        elif note_in != str(row['Note']):
+            st.session_state.data.at[idx, 'Note'] = note_in
+            save_all_to_sheet(st.session_state.data, st.session_state.config)
 
 elif page == "Graphiques":
     st.title("📊 Progression")
