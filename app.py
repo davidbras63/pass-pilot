@@ -193,22 +193,29 @@ elif page == "Planning & Saisie":
         cols = st.columns([0.4, 0.15, 0.35, 0.1])
         cols[0].write(f"{row['Chapitre']} ({row['J_Type']})")
         
+        # Checkbox synchronisée
         is_done = cols[1].checkbox("Fait", value=(row['Statut'] == 'Fait'), key=f"grid_chk_{row['ID']}")
         if is_done != (row['Statut'] == 'Fait'):
             st.session_state.data.at[idx, 'Statut'] = 'Fait' if is_done else 'À faire'
             save_all_to_sheet(st.session_state.data, st.session_state.config)
             st.rerun()
             
-        notes_in = cols[2].text_input("", value=str(row['Note']), key=f"grid_note_{row['ID']}", label_visibility="collapsed")
+        # Saisie note avec valeur de session temporaire pour éviter la perte
+        note_key = f"grid_note_{row['ID']}"
+        notes_in = cols[2].text_input("", value=str(row['Note']), key=note_key, label_visibility="collapsed")
         
         if cols[3].button("∑", key=f"grid_calc_{row['ID']}"):
             try:
-                nums = [float(x.replace(',', '.')) for x in notes_in.replace(';', ' ').split()]
+                # Utilise la valeur saisie juste avant le clic
+                valeur_saisie = st.session_state.get(note_key, notes_in)
+                nums = [float(x.replace(',', '.')) for x in valeur_saisie.replace(';', ' ').split()]
                 if nums:
-                    st.session_state.data.at[idx, 'Note'] = round(sum(nums) / len(nums), 2)
+                    moyenne = round(sum(nums) / len(nums), 2)
+                    st.session_state.data.at[idx, 'Note'] = moyenne
                     save_all_to_sheet(st.session_state.data, st.session_state.config)
                     st.rerun()
-            except: cols[3].error("!")
+            except: 
+                cols[3].error("!")
 
 elif page == "Graphiques":
     st.title("📊 Progression")
