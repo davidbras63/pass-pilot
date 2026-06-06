@@ -34,7 +34,7 @@ def save_all_to_sheet(df, config):
         time.sleep(1)
     except: st.error("Erreur de sauvegarde")
 
-# --- BLINDAGE FERMETURE (Correction syntaxique) ---
+# --- BLINDAGE FERMETURE ---
 sync_script = f"""
     <script>
         window.addEventListener('beforeunload', function (e) {{
@@ -133,6 +133,7 @@ if page == "Dashboard":
                         st.session_state.data.loc[st.session_state.data['ID'] == row['ID'], 'Statut'] = 'Traité'
                         place_trouvee = True; break
                 if place_trouvee: st.rerun()
+                else: st.error("❌ Aucune place disponible pour réintégrer.")
             if c3.button("🗑️ Supprimer", key=f"trash_{row['ID']}"):
                 st.session_state.data.loc[st.session_state.data['ID'] == row['ID'], 'Statut'] = 'Traité'
                 st.rerun()
@@ -208,5 +209,6 @@ elif page == "Graphiques":
         df_notes['Note_Num'] = pd.to_numeric(df_notes['Note'].astype(str).str.replace(',', '.'), errors='coerce')
         df_notes['Order'] = df_notes['J_Type'].astype(str).str.extract('(\d+)').fillna(0).astype(int)
         df_notes = df_notes.sort_values(by='Order')
-        chart = alt.Chart(df_notes).mark_line(point=True).encode(x='J_Type', y=alt.Y('Note_Num', scale=alt.Scale(domain=[0, 20])))
-        st.altair_chart(chart, use_container_width=True)
+        if not df_notes.empty:
+            chart = alt.Chart(df_notes).mark_line(point=True).encode(x='J_Type', y=alt.Y('Note_Num', scale=alt.Scale(domain=[0, 20])))
+            st.altair_chart(chart, use_container_width=True)
