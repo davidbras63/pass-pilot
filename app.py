@@ -198,22 +198,22 @@ elif page == "Planning & Saisie":
         if is_done != (row['Statut'] == 'Fait'):
             st.session_state.data.at[idx, 'Statut'] = 'Fait' if is_done else 'À faire'
             save_all_to_sheet(st.session_state.data, st.session_state.config)
-            st.rerun()
             
-        # Saisie note avec valeur de session temporaire pour éviter la perte
+        # Saisie note
         note_key = f"grid_note_{row['ID']}"
         notes_in = cols[2].text_input("", value=str(row['Note']), key=note_key, label_visibility="collapsed")
         
+        # Calcul : mise à jour visuelle sans rafraîchir tout le programme
         if cols[3].button("∑", key=f"grid_calc_{row['ID']}"):
             try:
-                # Utilise la valeur saisie juste avant le clic
                 valeur_saisie = st.session_state.get(note_key, notes_in)
                 nums = [float(x.replace(',', '.')) for x in valeur_saisie.replace(';', ' ').split()]
                 if nums:
                     moyenne = round(sum(nums) / len(nums), 2)
                     st.session_state.data.at[idx, 'Note'] = moyenne
+                    st.session_state[note_key] = str(moyenne)
                     save_all_to_sheet(st.session_state.data, st.session_state.config)
-                    st.rerun()
+                    st.toast(f"Moyenne : {moyenne}", icon="✅")
             except: 
                 cols[3].error("!")
 
