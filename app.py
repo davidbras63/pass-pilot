@@ -182,11 +182,6 @@ elif page == "Planning & Saisie":
     mask = (st.session_state.data['Date'] == str(dt.date.today())) & (st.session_state.data['Dossier'] == choix_dos)
     indices = st.session_state.data.index[mask]
     
-    # Bouton unique pour enregistrer tout à la fin
-    if st.button("💾 ENREGISTRER TOUT LE TRAVAIL"):
-        save_all_to_sheet(st.session_state.data, st.session_state.config)
-        st.success("Données synchronisées avec le serveur !")
-
     cols_h = st.columns([0.4, 0.15, 0.35, 0.1])
     cols_h[0].write("**Chapitre & J**")
     cols_h[1].write("**Fait**")
@@ -198,22 +193,27 @@ elif page == "Planning & Saisie":
         cols = st.columns([0.4, 0.15, 0.35, 0.1])
         cols[0].write(f"{row['Chapitre']} ({row['J_Type']})")
         
-        # Checkbox locale (n'enregistre pas immédiatement)
+        # Checkbox synchronisée
         is_done = cols[1].checkbox("Fait", value=(row['Statut'] == 'Fait'), key=f"grid_chk_{row['ID']}")
-        st.session_state.data.at[idx, 'Statut'] = 'Fait' if is_done else 'À faire'
+        if is_done != (row['Statut'] == 'Fait'):
+            st.session_state.data.at[idx, 'Statut'] = 'Fait' if is_done else 'À faire'
+            save_all_to_sheet(st.session_state.data, st.session_state.config)
+            st.rerun()
             
-        # Saisie note locale
+        # Saisie note avec valeur de session temporaire pour éviter la perte
         note_key = f"grid_note_{row['ID']}"
         notes_in = cols[2].text_input("", value=str(row['Note']), key=note_key, label_visibility="collapsed")
         
-        # Calcul : mise à jour immédiate à l'écran
         if cols[3].button("∑", key=f"grid_calc_{row['ID']}"):
             try:
-                nums = [float(x.replace(',', '.')) for x in notes_in.replace(';', ' ').split()]
+                # Utilise la valeur saisie juste avant le clic
+                valeur_saisie = st.session_state.get(note_key, notes_in)
+                nums = [float(x.replace(',', '.')) for x in valeur_saisie.replace(';', ' ').split()]
                 if nums:
                     moyenne = round(sum(nums) / len(nums), 2)
                     st.session_state.data.at[idx, 'Note'] = moyenne
-                    st.session_state[note_key] = str(moyenne) # Force l'affichage de la moyenne
+                    save_all_to_sheet(st.session_state.data, st.session_state.config)
+                    st.rerun()
             except: 
                 cols[3].error("!")
 
