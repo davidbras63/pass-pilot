@@ -5,6 +5,7 @@ import uuid
 import requests
 import json
 import time
+import altair as alt
 import streamlit.components.v1 as components
 
 st.set_page_config(layout="wide")
@@ -31,7 +32,7 @@ def save_all_to_sheet(df, config):
     payload = {"data": df_to_send.values.tolist(), "config": config}
     try: 
         requests.post(WEB_APP_URL, json=payload, timeout=15)
-        time.sleep(1)
+        time.sleep(0.5)
     except: st.error("Erreur de sauvegarde")
 
 # --- BLINDAGE FERMETURE ---
@@ -40,10 +41,7 @@ sync_script = f"""
         window.addEventListener('beforeunload', function (e) {{
             const data_payload = {json.dumps(st.session_state.data.values.tolist() if 'data' in st.session_state else [])};
             const config_payload = {json.dumps(st.session_state.config if 'config' in st.session_state else {})};
-            navigator.sendBeacon('{WEB_APP_URL}', JSON.stringify({{
-                "data": data_payload,
-                "config": config_payload
-            }}));
+            navigator.sendBeacon('{WEB_APP_URL}', JSON.stringify({{"data": data_payload, "config": config_payload}}));
         }});
     </script>
 """
@@ -139,20 +137,20 @@ if page == "Dashboard":
                 st.rerun()
 
 elif page == "Planning & Saisie":
-    with st.expander("✍️ Ajouter Chapitre", expanded=False):
+    with st.expander("✍️ Ajouter Chapitre", expanded=True):
         with st.form("Add_Form", clear_on_submit=True):
             mat = st.selectbox("Matière", st.session_state.config['dossiers'].get(choix_dos, []))
             chap = st.text_input("Titre")
             d0_date = st.date_input("Date J0", value=dt.date.today())
             dex_date = st.date_input("Date Examen", value=None)
-            if st.form_submit_button("Générer Planning"):
-                if chap and dex_date:
-                    new_rows = [{'ID': str(uuid.uuid4()), 'Dossier': choix_dos, 'Matiere': mat, 'Chapitre': chap, 'J_Type': 'J0', 'Date': str(d0_date), 'Note': 0, 'Statut': 'À faire'}]
-                    for j in st.session_state.config['cadencier']:
-                        d_j = d0_date + dt.timedelta(days=j)
-                        if d_j <= dex_date: new_rows.append({'ID': str(uuid.uuid4()), 'Dossier': choix_dos, 'Matiere': mat, 'Chapitre': chap, 'J_Type': f'J{j}', 'Date': str(d_j), 'Note': 0, 'Statut': 'À faire'})
-                    st.session_state.data = pd.concat([st.session_state.data, pd.DataFrame(new_rows)]).drop_duplicates(subset=['Dossier', 'Chapitre', 'J_Type', 'Date'])
-                    st.rerun()
+            submitted = st.form_submit_button("Générer Planning")
+        if submitted and chap and dex_date:
+            new_rows = [{'ID': str(uuid.uuid4()), 'Dossier': choix_dos, 'Matiere': mat, 'Chapitre': chap, 'J_Type': 'J0', 'Date': str(d0_date), 'Note': 0, 'Statut': 'À faire'}]
+            for j in st.session_state.config['cadencier']:
+                d_j = d0_date + dt.timedelta(days=j)
+                if d_j <= dex_date: new_rows.append({'ID': str(uuid.uuid4()), 'Dossier': choix_dos, 'Matiere': mat, 'Chapitre': chap, 'J_Type': f'J{j}', 'Date': str(d_j), 'Note': 0, 'Statut': 'À faire'})
+            st.session_state.data = pd.concat([st.session_state.data, pd.DataFrame(new_rows)]).drop_duplicates(subset=['Dossier', 'Chapitre', 'J_Type', 'Date'])
+            st.rerun()
 
     st.subheader("🗓️ Planning Hebdomadaire")
     cols = st.columns(7)
@@ -166,13 +164,12 @@ elif page == "Planning & Saisie":
             for _, r in temp.iterrows():
                 c1, c2 = st.columns([0.7, 0.3])
                 with c1:
-                    if st.checkbox(f"{r['Chapitre']} ({r['J_Type']})", value=(r['Statut'] == 'Fait'), key=f"chk_{r['ID']}"):
+                    if st.checkbox(f"{r['Chapitre']} ({r['J_Type']})", value=(r['Statut'] == 'Fait'), key=f"chk_{r['ID']}_{r['Date']}"):
                         st.session_state.data.loc[st.session_state.data['ID'] == r['ID'], 'Statut'] = 'Fait'
                 with c2:
                     if r['J_Type'] != 'J0':
-                        is_disabled = (r['Statut'] == 'Traité')
-                        new_date = st.date_input("", value=dt.datetime.strptime(r['Date'], '%Y-%m-%d'), key=f"cal_{r['ID']}", label_visibility="collapsed", disabled=is_disabled)
-                        if str(new_date) != r['Date'] and not is_disabled:
+                        new_date = st.date_input("", value=dt.datetime.strptime(r['Date'], '%Y-%m-%d'), key=f"cal_{r['ID']}_{r['Date']}", label_visibility="collapsed")
+                        if str(new_date) != r['Date']:
                             st.session_state.data.loc[st.session_state.data['ID'] == r['ID'], 'Date'] = str(new_date)
                             st.rerun()
    
@@ -183,13 +180,13 @@ elif page == "Planning & Saisie":
         row = st.session_state.data.loc[idx]
         cols = st.columns([0.4, 0.15, 0.35, 0.1])
         cols[0].write(f"{row['Chapitre']} ({row['J_Type']})")
-        is_done = cols[1].checkbox("Fait", value=(row['Statut'] == 'Fait'), key=f"grid_chk_{row['ID']}")
+        is_done = cols[1].checkbox("Fait", value=(row['Statut'] == 'Fait'), key=f"grid_chk_{row['ID']}_{idx}")
         if is_done != (row['Statut'] == 'Fait'):
             st.session_state.data.at[idx, 'Statut'] = 'Fait' if is_done else 'À faire'
             st.rerun()
-        note_key = f"grid_note_{row['ID']}"
+        note_key = f"grid_note_{row['ID']}_{idx}"
         notes_in = cols[2].text_input("", value=str(row['Note']), key=note_key, label_visibility="collapsed")
-        if cols[3].button("∑", key=f"grid_calc_{row['ID']}"):
+        if cols[3].button("∑", key=f"grid_calc_{row['ID']}_{idx}"):
             try:
                 nums = [float(x.replace(',', '.')) for x in notes_in.replace(';', ' ').split()]
                 if nums:
@@ -209,6 +206,8 @@ elif page == "Graphiques":
         df_notes['Note_Num'] = pd.to_numeric(df_notes['Note'].astype(str).str.replace(',', '.'), errors='coerce')
         df_notes['Order'] = df_notes['J_Type'].astype(str).str.extract('(\d+)').fillna(0).astype(int)
         df_notes = df_notes.sort_values(by='Order')
-        if not df_notes.empty:
+        if not df_notes.empty and 'Note_Num' in df_notes.columns:
             chart = alt.Chart(df_notes).mark_line(point=True).encode(x='J_Type', y=alt.Y('Note_Num', scale=alt.Scale(domain=[0, 20])))
             st.altair_chart(chart, use_container_width=True)
+        else:
+            st.info("Pas assez de données pour afficher le graphique.")
