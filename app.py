@@ -165,6 +165,7 @@ elif page == "Planning & Saisie":
                 with c1:
                     if st.checkbox(f"{r['Chapitre']} ({r['J_Type']})", value=(r['Statut'] == 'Fait'), key=f"chk_{r['ID']}"):
                         st.session_state.data.loc[st.session_state.data['ID'] == r['ID'], 'Statut'] = 'Fait'
+                        save_all_to_sheet(st.session_state.data, st.session_state.config)
                     else: 
                         if r['Statut'] != 'Traité':
                             st.session_state.data.loc[st.session_state.data['ID'] == r['ID'], 'Statut'] = 'À faire'
@@ -177,33 +178,37 @@ elif page == "Planning & Saisie":
                             save_all_to_sheet(st.session_state.data, st.session_state.config); st.rerun()
                     else: st.text("🔒")
    
-    st.subheader("Saisie Notes (Journée)")
+    st.subheader("🗓️ Grille de Suivi & Saisie (Journée)")
     mask = (st.session_state.data['Date'] == str(dt.date.today())) & (st.session_state.data['Dossier'] == choix_dos)
     indices = st.session_state.data.index[mask]
-   
-    temp_saisies = {}
-   
-    with st.form("Saisie_Notes_Form"):
-        for idx in indices:
-            row = st.session_state.data.loc[idx]
-            col1, col2 = st.columns([0.8, 0.2])
-            temp_saisies[idx] = col1.text_input(f"{row['Chapitre']} ({row['J_Type']})", value=str(row['Note']), key=f"saisie_{idx}")
-            if col2.form_submit_button(f"Calc {row['ID'][:4]}", key=f"calc_{idx}"):
-                raw_notes = temp_saisies[idx].replace(',', '.')
-                try:
-                    notes_list = [float(n) for n in raw_notes.split()]
-                    if notes_list:
-                        moyenne = sum(notes_list) / len(notes_list)
-                        st.session_state.data.at[idx, 'Note'] = round(moyenne, 2)
-                        save_all_to_sheet(st.session_state.data, st.session_state.config)
-                        st.rerun()
-                except: st.error("Erreur")
+    
+    cols_h = st.columns([0.4, 0.15, 0.35, 0.1])
+    cols_h[0].write("**Chapitre & J**")
+    cols_h[1].write("**Fait**")
+    cols_h[2].write("**Saisie Notes**")
+    cols_h[3].write("**Action**")
 
-        if st.form_submit_button("💾 Enregistrer"):
-            for idx, valeur in temp_saisies.items():
-                try: st.session_state.data.at[idx, 'Note'] = float(str(valeur).replace(',', '.'))
-                except: st.session_state.data.at[idx, 'Note'] = 0
-            save_all_to_sheet(st.session_state.data, st.session_state.config); st.rerun()
+    for idx in indices:
+        row = st.session_state.data.loc[idx]
+        cols = st.columns([0.4, 0.15, 0.35, 0.1])
+        cols[0].write(f"{row['Chapitre']} ({row['J_Type']})")
+        
+        is_done = cols[1].checkbox("Fait", value=(row['Statut'] == 'Fait'), key=f"grid_chk_{row['ID']}")
+        if is_done != (row['Statut'] == 'Fait'):
+            st.session_state.data.at[idx, 'Statut'] = 'Fait' if is_done else 'À faire'
+            save_all_to_sheet(st.session_state.data, st.session_state.config)
+            st.rerun()
+            
+        notes_in = cols[2].text_input("", value=str(row['Note']), key=f"grid_note_{row['ID']}", label_visibility="collapsed")
+        
+        if cols[3].button("∑", key=f"grid_calc_{row['ID']}"):
+            try:
+                nums = [float(x.replace(',', '.')) for x in notes_in.replace(';', ' ').split()]
+                if nums:
+                    st.session_state.data.at[idx, 'Note'] = round(sum(nums) / len(nums), 2)
+                    save_all_to_sheet(st.session_state.data, st.session_state.config)
+                    st.rerun()
+            except: cols[3].error("!")
 
 elif page == "Graphiques":
     st.title("📊 Progression")
