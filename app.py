@@ -30,7 +30,7 @@ def save_all_to_sheet(df, config):
     df_to_send['Date'] = df_to_send['Date'].astype(str)
     df_to_send['Note'] = df_to_send['Note'].astype(str)
     payload = {"data": df_to_send.values.tolist(), "config": config}
-    try: 
+    try:
         requests.post(WEB_APP_URL, json=payload, timeout=15)
         time.sleep(0.5)
     except: st.error("Erreur de sauvegarde")
