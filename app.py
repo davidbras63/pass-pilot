@@ -175,20 +175,37 @@ elif page == "Planning & Saisie":
                             save_all_to_sheet(st.session_state.data, st.session_state.config)
                             st.rerun()
    
-    st.write("--- TEST D'AFFICHAGE ---")
-if st.button("BOUTON DE TEST N°1"):
-    st.write("Le bouton 1 fonctionne")
+    st.subheader("🗓️ Grille de Suivi & Saisie (Journée)")
+    mask = (st.session_state.data['Date'] == str(dt.date.today())) & (st.session_state.data['Dossier'] == choix_dos)
 
-st.write("---")
+    for idx, row in st.session_state.data[mask].iterrows():
+        cols = st.columns([0.4, 0.15, 0.35, 0.1])
+        cols[0].write(f"{row['Chapitre']}")
+        
+        is_done = cols[1].checkbox("Fait", value=(row['Statut'] == 'Fait'), key=f"c_{row['ID']}")
+        st.session_state.data.at[idx, 'Statut'] = 'Fait' if is_done else 'À faire'
+        
+        note_in = cols[2].text_input("", value=str(row['Note']), key=f"t_{row['ID']}", label_visibility="collapsed")
+        st.session_state.data.at[idx, 'Note'] = note_in
+        
+        if cols[3].button("∑", key=f"b_{row['ID']}"):
+            try:
+                vals = [float(n.replace(',', '.')) for n in note_in.replace(';', ' ').split() if n.strip()]
+                if vals:
+                    st.session_state.data.at[idx, 'Note'] = round(sum(vals)/len(vals), 2)
+                    st.rerun()
+            except:
+                st.error("!")
 
-if st.button("BOUTON DE TEST N°2"):
-    st.write("Le bouton 2 fonctionne")
+    st.markdown("---")
+    if st.button("💾 ENREGISTRER TOUTES LES NOTES"):
+        save_all_to_sheet(st.session_state.data, st.session_state.config)
+        st.success("Synchronisé !")
+        st.rerun()
 
-
-
-
-elif page == "Graphiques":
-    st.title("📊 Progression")
+# ATTENTION : Il faut impérativement un IF avant le ELIF
+if page == "Graphiques":
+    st.title("Progression")
     matieres = st.session_state.config['dossiers'].get(choix_dos, [])
     sel_mat = st.selectbox("Choisir une matière", matieres)
     df_mat = st.session_state.data[(st.session_state.data['Dossier'] == choix_dos) & (st.session_state.data['Matiere'] == sel_mat)]
