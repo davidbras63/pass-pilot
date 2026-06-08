@@ -203,11 +203,9 @@ elif page == "Planning & Saisie":
         st.success("Synchronisé !")
         st.rerun()
 
-# --- CORRECTION DE LA STRUCTURE ICI ---
-# Tu dois avoir un 'if' ici pour que le 'elif' suivant soit valide
-if page == "Accueil":
-    st.write("Bienvenue sur ton tableau de bord.")
-elif page == "Graphiques":
+# --- BLOC GRAPHIQUE ---
+# On commence par un IF qui ouvre la logique
+if page == "Graphiques":
     st.title("Progression")
     matieres = st.session_state.config['dossiers'].get(choix_dos, [])
     sel_mat = st.selectbox("Choisir une matière", matieres)
