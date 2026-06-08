@@ -175,20 +175,14 @@ elif page == "Planning & Saisie":
                             save_all_to_sheet(st.session_state.data, st.session_state.config)
                             st.rerun()
    
-    st.subheader("🗓️ Grille de Saisie")
+    st.write("--- TEST D'AFFICHAGE ---")
+if st.button("BOUTON DE TEST N°1"):
+    st.write("Le bouton 1 fonctionne")
 
-# On affiche juste une ligne pour tester l'affichage
-mask = (st.session_state.data['Date'] == str(dt.date.today())) & (st.session_state.data['Dossier'] == choix_dos)
-
-for idx, row in st.session_state.data[mask].iterrows():
-    st.write(f"Ligne trouvée : {row['Chapitre']}")
-
-# Bouton de test pur (aucun appel à Google ici)
 st.write("---")
-if st.button("💾 BOUTON DE TEST"):
-    st.success("Le bouton fonctionne !")
 
-st.write("Fin du script")
+if st.button("BOUTON DE TEST N°2"):
+    st.write("Le bouton 2 fonctionne")
 
 
 
