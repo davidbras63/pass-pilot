@@ -177,35 +177,51 @@ elif page == "Planning & Saisie":
    
     st.subheader("🗓️ Grille de Suivi (Journée)")
     
-    # Filtrage strict
+    # 1. Préparation des données (copie isolée)
     mask = (st.session_state.data['Date'] == str(dt.date.today())) & (st.session_state.data['Dossier'] == choix_dos)
     lignes = st.session_state.data[mask]
 
-    # Boucle d'affichage
-    for _, row in lignes.iterrows():
-        rid = row['ID']
-        cols = st.columns([0.6, 0.4])
-        
-        # Saisie de la note
-        note_in = cols[0].text_input(f"Note ({row['Chapitre']})", value=str(row['Note']), key=f"n_{rid}")
-        
-        # Calcul avec bouton dédié
-        if cols[1].button("Calculer Moyenne", key=f"b_{rid}"):
-            try:
-                nums = [float(n.replace(',', '.')) for n in note_in.replace(';', ' ').split() if n.strip()]
-                if nums:
-                    st.session_state[f"n_{rid}"] = str(round(sum(nums) / len(nums), 2))
-                    st.rerun()
-            except:
-                cols[1].error("Err")
-
-    # Enregistrement
-    if st.button("💾 Enregistrer"):
+    # 2. Utilisation d'un conteneur dédié pour éviter les fuites vers le dashboard
+    with st.container():
         for _, row in lignes.iterrows():
             rid = row['ID']
-            st.session_state.data.loc[st.session_state.data['ID'] == rid, 'Note'] = st.session_state[f"n_{rid}"]
-        save_all_to_sheet(st.session_state.data, st.session_state.config)
-        st.success("Enregistré")
+            cols = st.columns([0.4, 0.15, 0.35, 0.1])
+            cols[0].write(f"{row['Chapitre']} ({row['J_Type']})")
+            
+            # Stockage des valeurs dans des clés uniques non liées au DataFrame pour l'instant
+            chk_key = f"c_{rid}"
+            note_key = f"n_{rid}"
+            
+            # Checkbox
+            st.session_state[chk_key] = cols[1].checkbox("Fait", value=(row['Statut'] == 'Fait'), key=chk_key)
+            
+            # Note
+            note_val = cols[2].text_input("", value=str(row['Note']), key=note_key)
+            
+            # Calcul local (Bouton ∑)
+            if cols[3].button("∑", key=f"b_{rid}"):
+                try:
+                    # Traitement des nombres sans modifier le DataFrame
+                    nums = [float(n.replace(',', '.')) for n in note_val.replace(';', ' ').split() if n.strip()]
+                    if nums:
+                        st.session_state[note_key] = str(round(sum(nums) / len(nums), 2))
+                        st.rerun()
+                except:
+                    cols[3].error("!")
+
+    # 3. Bouton unique de validation
+    if st.button("💾 ENREGISTRER"):
+        with st.spinner("Enregistrement..."):
+            # On ne met à jour le DataFrame source qu'ici, en bloc.
+            for _, row in lignes.iterrows():
+                rid = row['ID']
+                st.session_state.data.loc[st.session_state.data['ID'] == rid, 'Statut'] = 'Fait' if st.session_state[f"c_{rid}"] else 'À faire'
+                st.session_state.data.loc[st.session_state.data['ID'] == rid, 'Note'] = st.session_state[f"n_{rid}"]
+            
+            # Envoi vers Sheets
+            save_all_to_sheet(st.session_state.data, st.session_state.config)
+            st.success("Données envoyées !")
+
 
 
 
