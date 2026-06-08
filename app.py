@@ -175,44 +175,38 @@ elif page == "Planning & Saisie":
                             save_all_to_sheet(st.session_state.data, st.session_state.config)
                             st.rerun()
    
-    st.subheader("🗓️ Grille de Suivi & Saisie (Journée)")
-    mask = (st.session_state.data['Date'] == str(dt.date.today())) & (st.session_state.data['Dossier'] == choix_dos)
+    st.subheader("🗓️ Grille de Suivi (Journée)")
     
-    # 1. On travaille sur une copie propre
-    lignes = st.session_state.data[mask].copy()
+    # Filtrage strict
+    mask = (st.session_state.data['Date'] == str(dt.date.today())) & (st.session_state.data['Dossier'] == choix_dos)
+    lignes = st.session_state.data[mask]
 
-    # 2. Boucle de saisie avec des clés statiques
+    # Boucle d'affichage
     for _, row in lignes.iterrows():
-        id_val = row['ID']
-        cols = st.columns([0.4, 0.15, 0.35, 0.1])
-        cols[0].write(f"{row['Chapitre']} ({row['J_Type']})")
+        rid = row['ID']
+        cols = st.columns([0.6, 0.4])
         
-        # Widgets avec clés fixes
-        val_fait = cols[1].checkbox("Fait", value=(row['Statut'] == 'Fait'), key=f"chk_{id_val}")
-        val_note = cols[2].text_input("", value=str(row['Note']), key=f"txt_{id_val}")
+        # Saisie de la note
+        note_in = cols[0].text_input(f"Note ({row['Chapitre']})", value=str(row['Note']), key=f"n_{rid}")
         
-        # 3. Calcul local (ne touche pas au DataFrame)
-        if cols[3].button("∑", key=f"btn_{id_val}"):
+        # Calcul avec bouton dédié
+        if cols[1].button("Calculer Moyenne", key=f"b_{rid}"):
             try:
-                nums = [float(n.replace(',', '.')) for n in val_note.replace(';', ' ').split() if n.strip()]
+                nums = [float(n.replace(',', '.')) for n in note_in.replace(';', ' ').split() if n.strip()]
                 if nums:
-                    # On affiche le résultat en forçant le rerun
-                    st.session_state[f"txt_{id_val}"] = str(round(sum(nums) / len(nums), 2))
+                    st.session_state[f"n_{rid}"] = str(round(sum(nums) / len(nums), 2))
                     st.rerun()
             except:
-                cols[3].error("!")
+                cols[1].error("Err")
 
-    # 4. Bouton de sauvegarde : SEUL moment où on réinjecte les données
-    if st.button("💾 ENREGISTRER TOUT"):
-        with st.spinner("Synchronisation en cours..."):
-            for _, row in lignes.iterrows():
-                id_v = row['ID']
-                # Récupération des valeurs depuis les clés des widgets
-                st.session_state.data.loc[st.session_state.data['ID'] == id_v, 'Statut'] = 'Fait' if st.session_state[f"chk_{id_v}"] else 'À faire'
-                st.session_state.data.loc[st.session_state.data['ID'] == id_v, 'Note'] = st.session_state[f"txt_{id_v}"]
-            
-            save_all_to_sheet(st.session_state.data, st.session_state.config)
-            st.success("Données sauvegardées !")
+    # Enregistrement
+    if st.button("💾 Enregistrer"):
+        for _, row in lignes.iterrows():
+            rid = row['ID']
+            st.session_state.data.loc[st.session_state.data['ID'] == rid, 'Note'] = st.session_state[f"n_{rid}"]
+        save_all_to_sheet(st.session_state.data, st.session_state.config)
+        st.success("Enregistré")
+
 
 
 elif page == "Graphiques":
