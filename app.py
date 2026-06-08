@@ -177,47 +177,43 @@ elif page == "Planning & Saisie":
    
     st.subheader("🗓️ Grille de Suivi (Journée)")
 
-# 1. Filtre les lignes à afficher
+# Filtre les données du jour
 mask = (st.session_state.data['Date'] == str(dt.date.today())) & (st.session_state.data['Dossier'] == choix_dos)
-lignes_a_afficher = st.session_state.data[mask]
+lignes = st.session_state.data[mask]
 
-# 2. Utilisation d'un conteneur pour isoler l'affichage
-with st.container():
-    for i, row in lignes_a_afficher.iterrows():
-        # Utilisation de l'index 'i' comme clé unique immuable
-        cols = st.columns([0.4, 0.15, 0.35, 0.1])
-        cols[0].write(f"{row['Chapitre']} ({row['J_Type']})")
-        
-        # Checkbox sans lien direct au DataFrame (stockée dans session_state)
-        key_chk = f"chk_{i}"
-        if key_chk not in st.session_state: st.session_state[key_chk] = (row['Statut'] == 'Fait')
-        st.session_state[key_chk] = cols[1].checkbox("Fait", key=key_chk)
-        
-        # Note sans lien direct au DataFrame
-        key_note = f"note_{i}"
-        if key_note not in st.session_state: st.session_state[key_note] = str(row['Note'])
-        note_in = cols[2].text_input("", key=key_note, label_visibility="collapsed")
-        
-        # Calcul avec bouton local
-        if cols[3].button("∑", key=f"btn_{i}"):
-            try:
-                nums = [float(n.replace(',', '.')) for n in note_in.replace(';', ' ').split() if n.strip()]
-                if nums:
-                    st.session_state[key_note] = str(round(sum(nums) / len(nums), 2))
-                    st.rerun()
-            except:
-                cols[3].error("!")
+# Boucle d'affichage sécurisée
+for idx, row in lignes.iterrows():
+    cols = st.columns([0.4, 0.15, 0.35, 0.1])
+    cols[0].write(f"{row['Chapitre']} ({row['J_Type']})")
+    
+    # Clés uniques basées sur l'index (idx)
+    # Checkbox
+    chk_state = st.checkbox("Fait", value=(row['Statut'] == 'Fait'), key=f"c_{idx}")
+    # Input Note
+    note_val = st.text_input("", value=str(row['Note']), key=f"n_{idx}")
+    
+    # Placement des widgets dans les colonnes après avoir défini les clés
+    cols[1].checkbox("Fait", value=chk_state, key=f"c_display_{idx}", label_visibility="collapsed")
+    cols[2].text_input("", value=note_val, key=f"n_display_{idx}", label_visibility="collapsed")
+    
+    # Calcul Moyenne
+    if cols[3].button("∑", key=f"b_{idx}"):
+        try:
+            valeurs = [float(n.replace(',', '.')) for n in st.session_state[f"n_display_{idx}"].replace(';', ' ').split() if n.strip()]
+            if valeurs:
+                st.session_state[f"n_display_{idx}"] = str(round(sum(valeurs) / len(valeurs), 2))
+                st.rerun()
+        except:
+            cols[3].error("!")
 
-# 3. Sauvegarde unique au clic
-if st.button("💾 ENREGISTRER"):
-    with st.spinner("Mise à jour..."):
-        for i, row in lignes_a_afficher.iterrows():
-            # Mise à jour une seule fois, ici seulement
-            st.session_state.data.at[i, 'Statut'] = 'Fait' if st.session_state[f"chk_{i}"] else 'À faire'
-            st.session_state.data.at[i, 'Note'] = st.session_state[f"note_{i}"]
-        
-        save_all_to_sheet(st.session_state.data, st.session_state.config)
-        st.success("Données synchronisées !")
+# Bouton d'enregistrement unique
+if st.button("💾 ENREGISTRER TOUT"):
+    for idx, row in lignes.iterrows():
+        st.session_state.data.at[idx, 'Statut'] = 'Fait' if st.session_state[f"c_display_{idx}"] else 'À faire'
+        st.session_state.data.at[idx, 'Note'] = st.session_state[f"n_display_{idx}"]
+    
+    save_all_to_sheet(st.session_state.data, st.session_state.config)
+    st.success("Données synchronisées !")
 
 
 
