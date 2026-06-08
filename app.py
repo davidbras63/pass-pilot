@@ -178,37 +178,39 @@ elif page == "Planning & Saisie":
     st.subheader("🗓️ Grille de Suivi & Saisie (Journée)")
     mask = (st.session_state.data['Date'] == str(dt.date.today())) & (st.session_state.data['Dossier'] == choix_dos)
     
-    # On reste sur le formulaire pour tout grouper
-    with st.form(key="saisie_form"):
-        for idx, row in st.session_state.data[mask].iterrows():
-            cols = st.columns([0.4, 0.15, 0.35, 0.1])
-            cols[0].write(f"{row['Chapitre']} ({row['J_Type']})")
-            
-            # Checkbox
-            is_done = cols[1].checkbox("Fait", value=(row['Statut'] == 'Fait'), key=f"chk_{row['ID']}")
-            if is_done != (row['Statut'] == 'Fait'):
-                st.session_state.data.at[idx, 'Statut'] = 'Fait' if is_done else 'À faire'
-            
-            # Saisie note
-            note_in = cols[2].text_input("", value=str(row['Note']), key=f"txt_{row['ID']}", label_visibility="collapsed")
-            
-            # Bouton Calcul : il NE FAIT PAS de sauvegarde, il modifie juste la valeur en RAM
-            if cols[3].button("∑", key=f"btn_{row['ID']}"):
-                try:
-                    nums = [float(n.replace(',', '.')) for n in note_in.replace(';', ' ').split() if n.strip()]
-                    if nums:
-                        st.session_state.data.at[idx, 'Note'] = round(sum(nums)/len(nums), 2)
-                        # On ne met PAS de st.rerun() ici pour ne pas casser le formulaire
-                except:
-                    st.error("Erreur")
-            
-            # Stockage en RAM
+    # 1. On affiche la liste SANS formulaire pour éviter les blocages
+    for idx, row in st.session_state.data[mask].iterrows():
+        cols = st.columns([0.4, 0.15, 0.35, 0.1])
+        cols[0].write(f"{row['Chapitre']} ({row['J_Type']})")
+        
+        # Checkbox (Statu)
+        is_done = cols[1].checkbox("Fait", value=(row['Statut'] == 'Fait'), key=f"chk_{row['ID']}")
+        if is_done != (row['Statut'] == 'Fait'):
+            st.session_state.data.at[idx, 'Statut'] = 'Fait' if is_done else 'À faire'
+        
+        # Saisie note (Champ texte)
+        note_in = cols[2].text_input("", value=str(row['Note']), key=f"txt_{row['ID']}", label_visibility="collapsed")
+        
+        # Calcul : Le calcul se fait en RAM, sans envoyer à Google
+        if cols[3].button("∑", key=f"btn_{row['ID']}"):
+            try:
+                nums = [float(n.replace(',', '.')) for n in note_in.replace(';', ' ').split() if n.strip()]
+                if nums:
+                    st.session_state.data.at[idx, 'Note'] = round(sum(nums)/len(nums), 2)
+                    st.rerun() # Rafraîchissement pour voir la moyenne calculée
+            except:
+                cols[3].error("!")
+        
+        # Mise à jour en RAM si modification manuelle
+        elif note_in != str(row['Note']):
             st.session_state.data.at[idx, 'Note'] = note_in
 
-        # Bouton unique de validation finale
-        if st.form_submit_button("💾 ENREGISTRER TOUTES LES NOTES"):
-            save_all_to_sheet(st.session_state.data, st.session_state.config)
-            st.rerun()
+    # 2. SEUL ce bouton envoie tout sur Google Sheet
+    if st.button("💾 ENREGISTRER TOUTES LES NOTES"):
+        save_all_to_sheet(st.session_state.data, st.session_state.config)
+        st.success("Synchronisation terminée !")
+        st.rerun()
+
 
 elif page == "Graphiques":
     st.title("📊 Progression")
