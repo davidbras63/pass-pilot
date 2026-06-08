@@ -202,20 +202,3 @@ elif page == "Planning & Saisie":
             st.session_state.data.at[idx, 'Note'] = note_in
             save_all_to_sheet(st.session_state.data, st.session_state.config)
 
-elif page == "Graphiques":
-    st.title("📊 Progression")
-    matieres = st.session_state.config['dossiers'].get(choix_dos, [])
-    sel_mat = st.selectbox("Choisir une matière", matieres)
-    df_mat = st.session_state.data[(st.session_state.data['Dossier'] == choix_dos) & (st.session_state.data['Matiere'] == sel_mat)]
-    chapitres = df_mat['Chapitre'].unique()
-    if len(chapitres) > 0:
-        sel_chap = st.selectbox("Choisir un chapitre", chapitres)
-        df_notes = st.session_state.data[(st.session_state.data['Chapitre'] == sel_chap)].copy()
-        df_notes['Note_Num'] = pd.to_numeric(df_notes['Note'].astype(str).str.replace(',', '.'), errors='coerce')
-        df_notes['Order'] = df_notes['J_Type'].astype(str).str.extract('(\d+)').fillna(0).astype(int)
-        df_notes = df_notes.sort_values(by='Order')
-        if not df_notes.empty and 'Note_Num' in df_notes.columns:
-            chart = alt.Chart(df_notes).mark_line(point=True).encode(x='J_Type', y=alt.Y('Note_Num', scale=alt.Scale(domain=[0, 20])))
-            st.altair_chart(chart, use_container_width=True)
-        else:
-            st.info("Pas assez de données pour afficher le graphique.")
