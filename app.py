@@ -175,34 +175,40 @@ elif page == "Planning & Saisie":
                             save_all_to_sheet(st.session_state.data, st.session_state.config)
                             st.rerun()
    
-    st.subheader("🗓️ Grille de Suivi & Saisie (Journée)")
-    mask = (st.session_state.data['Date'] == str(dt.date.today())) & (st.session_state.data['Dossier'] == choix_dos)
-    for idx, row in st.session_state.data[mask].iterrows():
-        cols = st.columns([0.4, 0.15, 0.35, 0.1])
-        cols[0].write(f"{row['Chapitre']} ({row['J_Type']})")
-       
-        is_done = cols[1].checkbox("Fait", value=(row['Statut'] == 'Fait'), key=f"grid_chk_{row['ID']}")
-        if is_done != (row['Statut'] == 'Fait'):
-            st.session_state.data.at[idx, 'Statut'] = 'Fait' if is_done else 'À faire'
-            save_all_to_sheet(st.session_state.data, st.session_state.config)
-            st.rerun()
-           
-        note_in = cols[2].text_input("", value=str(row['Note']), key=f"grid_note_{row['ID']}", label_visibility="collapsed")
-       
-        if cols[3].button("∑", key=f"grid_calc_{row['ID']}"):
-            try:
-                nums = [float(n.replace(',', '.')) for n in note_in.replace(';', ' ').split() if n.strip()]
-                if nums:
-                    st.session_state.data.at[idx, 'Note'] = round(sum(nums) / len(nums), 2)
-                    save_all_to_sheet(st.session_state.data, st.session_state.config)
-                    st.rerun()
-            except:
-                cols[3].error("!")
-        elif note_in != str(row['Note']):
-            st.session_state.data.at[idx, 'Note'] = note_in
-            save_all_to_sheet(st.session_state.data, st.session_state.config)
+    st.subheader("🗓️ Grille de Saisie")
 
+# 1. Filtre les données
+mask = (st.session_state.data['Date'] == str(dt.date.today())) & (st.session_state.data['Dossier'] == choix_dos)
+lignes = st.session_state.data[mask]
 
+# 2. Affichage propre
+for idx, row in lignes.iterrows():
+    col1, col2, col3 = st.columns([0.5, 0.3, 0.2])
+    col1.write(f"{row['Chapitre']}")
+    
+    # Saisie simple
+    note_val = col3.text_input("Note", value=str(row['Note']), key=f"n_{idx}")
+    
+    # Calcul bouton unique
+    if col3.button("Calculer Moyenne", key=f"b_{idx}"):
+        try:
+            # Nettoyer et calculer
+            nums = [float(n.replace(',', '.')) for n in note_val.replace(';', ' ').split() if n.strip()]
+            if nums:
+                # Stocker dans session_state pour rafraîchissement
+                st.session_state[f"n_{idx}"] = str(round(sum(nums)/len(nums), 2))
+                st.rerun()
+        except:
+            col3.error("!")
+
+# 3. Sauvegarde unique en bas
+if st.button("💾 ENREGISTRER"):
+    # On met à jour le DataFrame avec les valeurs actuelles des widgets
+    for idx, row in lignes.iterrows():
+        st.session_state.data.at[idx, 'Note'] = st.session_state.get(f"n_{idx}", row['Note'])
+    
+    save_all_to_sheet(st.session_state.data, st.session_state.config)
+    st.success("Données sauvegardées !")
 
 
 
