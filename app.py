@@ -176,39 +176,38 @@ elif page == "Planning & Saisie":
                             st.rerun()
    
     st.subheader("🗓️ Grille de Suivi & Saisie (Journée)")
+    # On isole les indices des lignes à modifier
     mask = (st.session_state.data['Date'] == str(dt.date.today())) & (st.session_state.data['Dossier'] == choix_dos)
-    
-    # On crée une copie de travail pour éviter les erreurs d'indexation Pandas
-    data_view = st.session_state.data[mask].copy()
+    indices_a_modifier = st.session_state.data.index[mask].tolist()
 
-    for idx, row in data_view.iterrows():
+    for idx in indices_a_modifier:
+        row = st.session_state.data.loc[idx]
         cols = st.columns([0.4, 0.15, 0.35, 0.1])
         cols[0].write(f"{row['Chapitre']} ({row['J_Type']})")
         
         # Checkbox
-        is_done = cols[1].checkbox("Fait", value=(row['Statut'] == 'Fait'), key=f"grid_chk_{row['ID']}")
+        is_done = cols[1].checkbox("Fait", value=(row['Statut'] == 'Fait'), key=f"grid_chk_{idx}")
         if is_done != (row['Statut'] == 'Fait'):
-            st.session_state.data.loc[st.session_state.data['ID'] == row['ID'], 'Statut'] = 'Fait' if is_done else 'À faire'
+            st.session_state.data.at[idx, 'Statut'] = 'Fait' if is_done else 'À faire'
             
         # Saisie Note
-        note_in = cols[2].text_input("", value=str(row['Note']), key=f"grid_note_{row['ID']}", label_visibility="collapsed")
+        note_in = cols[2].text_input("", value=str(row['Note']), key=f"grid_note_{idx}", label_visibility="collapsed")
         if note_in != str(row['Note']):
-            st.session_state.data.loc[st.session_state.data['ID'] == row['ID'], 'Note'] = note_in
+            st.session_state.data.at[idx, 'Note'] = note_in
         
-        # Calcul Moyenne (Local et immédiat)
-        if cols[3].button("∑", key=f"grid_calc_{row['ID']}"):
+        # Calcul (Local uniquement)
+        if cols[3].button("∑", key=f"grid_calc_{idx}"):
             try:
                 nums = [float(n.replace(',', '.')) for n in note_in.replace(';', ' ').split() if n.strip()]
                 if nums:
-                    valeur_moyenne = round(sum(nums) / len(nums), 2)
-                    st.session_state.data.loc[st.session_state.data['ID'] == row['ID'], 'Note'] = valeur_moyenne
-                    st.rerun() # Rafraîchissement instantané sans sauvegarde réseau
+                    st.session_state.data.at[idx, 'Note'] = round(sum(nums) / len(nums), 2)
+                    st.rerun()
             except:
                 cols[3].error("!")
 
-    # SEUL ENDROIT DE SAUVEGARDE
+    # Bouton unique de synchro
     if st.button("💾 ENREGISTRER TOUT SUR GOOGLE SHEETS"):
-        with st.spinner("Synchronisation en cours..."):
+        with st.spinner("Synchronisation..."):
             save_all_to_sheet(st.session_state.data, st.session_state.config)
             st.success("Données envoyées !")
 
