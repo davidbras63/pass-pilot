@@ -177,39 +177,38 @@ elif page == "Planning & Saisie":
    
     st.subheader("🗓️ Grille de Suivi & Saisie (Journée)")
     mask = (st.session_state.data['Date'] == str(dt.date.today())) & (st.session_state.data['Dossier'] == choix_dos)
-    
-    # 1. On affiche la liste SANS formulaire pour éviter les blocages
+
+    # Création d'une zone dédiée pour éviter les conflits
     for idx, row in st.session_state.data[mask].iterrows():
         cols = st.columns([0.4, 0.15, 0.35, 0.1])
         cols[0].write(f"{row['Chapitre']} ({row['J_Type']})")
         
-        # Checkbox (Statu)
+        # Checkbox
         is_done = cols[1].checkbox("Fait", value=(row['Statut'] == 'Fait'), key=f"chk_{row['ID']}")
         if is_done != (row['Statut'] == 'Fait'):
             st.session_state.data.at[idx, 'Statut'] = 'Fait' if is_done else 'À faire'
         
-        # Saisie note (Champ texte)
+        # Saisie : C'est ici que tu entres tes notes (ex: 12 15 10)
         note_in = cols[2].text_input("", value=str(row['Note']), key=f"txt_{row['ID']}", label_visibility="collapsed")
         
-        # Calcul : Le calcul se fait en RAM, sans envoyer à Google
+        # Calcul : Le calcul se fait en RAM locale uniquement
         if cols[3].button("∑", key=f"btn_{row['ID']}"):
             try:
+                # Sépare les nombres par espace, point-virgule ou virgule
                 nums = [float(n.replace(',', '.')) for n in note_in.replace(';', ' ').split() if n.strip()]
                 if nums:
                     st.session_state.data.at[idx, 'Note'] = round(sum(nums)/len(nums), 2)
-                    st.rerun() # Rafraîchissement pour voir la moyenne calculée
+                    st.rerun() # Rafraîchissement local
             except:
-                cols[3].error("!")
+                st.error("Format invalide")
         
-        # Mise à jour en RAM si modification manuelle
-        elif note_in != str(row['Note']):
-            st.session_state.data.at[idx, 'Note'] = note_in
+        # Mise à jour de la mémoire RAM
+        st.session_state.data.at[idx, 'Note'] = note_in
 
-    # 2. SEUL ce bouton envoie tout sur Google Sheet
+    # Bouton unique de sauvegarde
     if st.button("💾 ENREGISTRER TOUTES LES NOTES"):
         save_all_to_sheet(st.session_state.data, st.session_state.config)
-        st.success("Synchronisation terminée !")
-        st.rerun()
+        st.success("Synchronisé !")
 
 
 elif page == "Graphiques":
