@@ -178,33 +178,39 @@ elif page == "Planning & Saisie":
     st.subheader("🗓️ Grille de Suivi & Saisie (Journée)")
     mask = (st.session_state.data['Date'] == str(dt.date.today())) & (st.session_state.data['Dossier'] == choix_dos)
 
-    # 1. Saisie et calcul local
+    # BOUCLE DE SAISIE
     for idx, row in st.session_state.data[mask].iterrows():
         cols = st.columns([0.4, 0.15, 0.35, 0.1])
         cols[0].write(f"{row['Chapitre']} ({row['J_Type']})")
         
+        # 1. Checkbox "Fait"
         is_done = cols[1].checkbox("Fait", value=(row['Statut'] == 'Fait'), key=f"chk_{row['ID']}")
         if is_done != (row['Statut'] == 'Fait'):
             st.session_state.data.at[idx, 'Statut'] = 'Fait' if is_done else 'À faire'
         
+        # 2. Case Note (Saisie libre)
         note_in = cols[2].text_input("", value=str(row['Note']), key=f"txt_{row['ID']}", label_visibility="collapsed")
-        st.session_state.data.at[idx, 'Note'] = note_in
         
+        # 3. Calcul Somme (Calcul en RAM locale uniquement)
         if cols[3].button("∑", key=f"btn_{row['ID']}"):
             try:
                 nums = [float(n.replace(',', '.')) for n in note_in.replace(';', ' ').split() if n.strip()]
                 if nums:
                     st.session_state.data.at[idx, 'Note'] = round(sum(nums)/len(nums), 2)
-                    st.rerun()
+                    st.rerun() # Rafraîchissement local pour afficher la moyenne
             except:
-                st.error("!")
+                st.error("Format invalide")
+        
+        # Mise à jour de la mémoire RAM
+        st.session_state.data.at[idx, 'Note'] = note_in
 
-    # 2. Bouton d'enregistrement explicite (toujours visible)
-    st.markdown("---") # Ligne de séparation pour isoler le bouton
+    # 4. BOUTON D'ENREGISTREMENT FINAL (Seul point de contact avec Google Sheet)
+    st.markdown("---")
     if st.button("💾 ENREGISTRER TOUTES LES NOTES"):
         save_all_to_sheet(st.session_state.data, st.session_state.config)
-        st.success("Données envoyées avec succès !")
+        st.success("Synchronisation effectuée vers Google Sheets !")
         st.rerun()
+
 
 
 
