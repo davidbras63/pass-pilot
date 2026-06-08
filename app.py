@@ -30,7 +30,7 @@ def save_all_to_sheet(df, config):
     df_to_send['Date'] = df_to_send['Date'].astype(str)
     df_to_send['Note'] = df_to_send['Note'].astype(str)
     payload = {"data": df_to_send.values.tolist(), "config": config}
-    try:
+    try: 
         requests.post(WEB_APP_URL, json=payload, timeout=15)
         time.sleep(0.5)
     except: st.error("Erreur de sauvegarde")
@@ -180,15 +180,15 @@ elif page == "Planning & Saisie":
     for idx, row in st.session_state.data[mask].iterrows():
         cols = st.columns([0.4, 0.15, 0.35, 0.1])
         cols[0].write(f"{row['Chapitre']} ({row['J_Type']})")
-       
+        
         is_done = cols[1].checkbox("Fait", value=(row['Statut'] == 'Fait'), key=f"grid_chk_{row['ID']}")
         if is_done != (row['Statut'] == 'Fait'):
             st.session_state.data.at[idx, 'Statut'] = 'Fait' if is_done else 'À faire'
             save_all_to_sheet(st.session_state.data, st.session_state.config)
             st.rerun()
-           
+            
         note_in = cols[2].text_input("", value=str(row['Note']), key=f"grid_note_{row['ID']}", label_visibility="collapsed")
-       
+        
         if cols[3].button("∑", key=f"grid_calc_{row['ID']}"):
             try:
                 nums = [float(n.replace(',', '.')) for n in note_in.replace(';', ' ').split() if n.strip()]
@@ -198,10 +198,9 @@ elif page == "Planning & Saisie":
                     st.rerun()
             except:
                 cols[3].error("!")
-        if note_in != str(row['Note']):
+        elif note_in != str(row['Note']):
             st.session_state.data.at[idx, 'Note'] = note_in
             save_all_to_sheet(st.session_state.data, st.session_state.config)
-            pass
 
 elif page == "Graphiques":
     st.title("📊 Progression")
