@@ -204,6 +204,8 @@ elif page == "Planning & Saisie":
 
 
 
+
+
 elif page == "Graphiques":
     st.title("📊 Progression")
     matieres = st.session_state.config['dossiers'].get(choix_dos, [])
