@@ -176,51 +176,49 @@ elif page == "Planning & Saisie":
                             st.rerun()
    
     st.subheader("🗓️ Grille de Suivi (Journée)")
-    
-    # 1. Préparation des données (copie isolée)
-    mask = (st.session_state.data['Date'] == str(dt.date.today())) & (st.session_state.data['Dossier'] == choix_dos)
-    lignes = st.session_state.data[mask]
 
-    # 2. Utilisation d'un conteneur dédié pour éviter les fuites vers le dashboard
-    with st.container():
-        for _, row in lignes.iterrows():
-            rid = row['ID']
-            cols = st.columns([0.4, 0.15, 0.35, 0.1])
-            cols[0].write(f"{row['Chapitre']} ({row['J_Type']})")
-            
-            # Stockage des valeurs dans des clés uniques non liées au DataFrame pour l'instant
-            chk_key = f"c_{rid}"
-            note_key = f"n_{rid}"
-            
-            # Checkbox
-            st.session_state[chk_key] = cols[1].checkbox("Fait", value=(row['Statut'] == 'Fait'), key=chk_key)
-            
-            # Note
-            note_val = cols[2].text_input("", value=str(row['Note']), key=note_key)
-            
-            # Calcul local (Bouton ∑)
-            if cols[3].button("∑", key=f"b_{rid}"):
-                try:
-                    # Traitement des nombres sans modifier le DataFrame
-                    nums = [float(n.replace(',', '.')) for n in note_val.replace(';', ' ').split() if n.strip()]
-                    if nums:
-                        st.session_state[note_key] = str(round(sum(nums) / len(nums), 2))
-                        st.rerun()
-                except:
-                    cols[3].error("!")
+# 1. Filtre les lignes à afficher
+mask = (st.session_state.data['Date'] == str(dt.date.today())) & (st.session_state.data['Dossier'] == choix_dos)
+lignes_a_afficher = st.session_state.data[mask]
 
-    # 3. Bouton unique de validation
-    if st.button("💾 ENREGISTRER"):
-        with st.spinner("Enregistrement..."):
-            # On ne met à jour le DataFrame source qu'ici, en bloc.
-            for _, row in lignes.iterrows():
-                rid = row['ID']
-                st.session_state.data.loc[st.session_state.data['ID'] == rid, 'Statut'] = 'Fait' if st.session_state[f"c_{rid}"] else 'À faire'
-                st.session_state.data.loc[st.session_state.data['ID'] == rid, 'Note'] = st.session_state[f"n_{rid}"]
-            
-            # Envoi vers Sheets
-            save_all_to_sheet(st.session_state.data, st.session_state.config)
-            st.success("Données envoyées !")
+# 2. Utilisation d'un conteneur pour isoler l'affichage
+with st.container():
+    for i, row in lignes_a_afficher.iterrows():
+        # Utilisation de l'index 'i' comme clé unique immuable
+        cols = st.columns([0.4, 0.15, 0.35, 0.1])
+        cols[0].write(f"{row['Chapitre']} ({row['J_Type']})")
+        
+        # Checkbox sans lien direct au DataFrame (stockée dans session_state)
+        key_chk = f"chk_{i}"
+        if key_chk not in st.session_state: st.session_state[key_chk] = (row['Statut'] == 'Fait')
+        st.session_state[key_chk] = cols[1].checkbox("Fait", key=key_chk)
+        
+        # Note sans lien direct au DataFrame
+        key_note = f"note_{i}"
+        if key_note not in st.session_state: st.session_state[key_note] = str(row['Note'])
+        note_in = cols[2].text_input("", key=key_note, label_visibility="collapsed")
+        
+        # Calcul avec bouton local
+        if cols[3].button("∑", key=f"btn_{i}"):
+            try:
+                nums = [float(n.replace(',', '.')) for n in note_in.replace(';', ' ').split() if n.strip()]
+                if nums:
+                    st.session_state[key_note] = str(round(sum(nums) / len(nums), 2))
+                    st.rerun()
+            except:
+                cols[3].error("!")
+
+# 3. Sauvegarde unique au clic
+if st.button("💾 ENREGISTRER"):
+    with st.spinner("Mise à jour..."):
+        for i, row in lignes_a_afficher.iterrows():
+            # Mise à jour une seule fois, ici seulement
+            st.session_state.data.at[i, 'Statut'] = 'Fait' if st.session_state[f"chk_{i}"] else 'À faire'
+            st.session_state.data.at[i, 'Note'] = st.session_state[f"note_{i}"]
+        
+        save_all_to_sheet(st.session_state.data, st.session_state.config)
+        st.success("Données synchronisées !")
+
 
 
 
