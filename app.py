@@ -175,42 +175,21 @@ elif page == "Planning & Saisie":
                             save_all_to_sheet(st.session_state.data, st.session_state.config)
                             st.rerun()
    
-    st.subheader("🗓️ Grille de Suivi & Saisie (Journée)")
+    st.subheader("🗓️ Grille de Saisie")
+
+# On affiche juste une ligne pour tester l'affichage
 mask = (st.session_state.data['Date'] == str(dt.date.today())) & (st.session_state.data['Dossier'] == choix_dos)
 
-# 1. Utilisation d'une clé de session dédiée pour la saisie temporaire
-if 'temp_notes' not in st.session_state:
-    st.session_state.temp_notes = {}
-
 for idx, row in st.session_state.data[mask].iterrows():
-    cols = st.columns([0.4, 0.15, 0.35, 0.1])
-    cols[0].write(f"{row['Chapitre']}")
-    
-    # Checkbox
-    is_done = cols[1].checkbox("Fait", value=(row['Statut'] == 'Fait'), key=f"c_{row['ID']}")
-    st.session_state.data.at[idx, 'Statut'] = 'Fait' if is_done else 'À faire'
-    
-    # Champ de saisie : on utilise une clé temporaire pour ne pas écraser la note officielle
-    saisie = cols[2].text_input("Notes", value=st.session_state.temp_notes.get(row['ID'], ""), 
-                                 key=f"t_{row['ID']}", label_visibility="collapsed")
-    st.session_state.temp_notes[row['ID']] = saisie
-    
-    # Bouton Somme
-    if cols[3].button("∑", key=f"b_{row['ID']}"):
-        try:
-            valeurs = [float(n.replace(',', '.')) for n in saisie.replace(';', ' ').split() if n.strip()]
-            if valeurs:
-                st.session_state.data.at[idx, 'Note'] = round(sum(valeurs) / len(valeurs), 2)
-                st.session_state.temp_notes[row['ID']] = "" # On vide la saisie après calcul
-                st.rerun()
-        except:
-            st.error("!")
+    st.write(f"Ligne trouvée : {row['Chapitre']}")
 
-# 2. Bouton d'enregistrement (Placé tout à la fin, après la boucle)
-st.divider()
-if st.button("💾 ENREGISTRER TOUTES LES NOTES"):
-    save_all_to_sheet(st.session_state.data, st.session_state.config)
-    st.success("Synchronisation effectuée !")
+# Bouton de test pur (aucun appel à Google ici)
+st.write("---")
+if st.button("💾 BOUTON DE TEST"):
+    st.success("Le bouton fonctionne !")
+
+st.write("Fin du script")
+
 
 
 
