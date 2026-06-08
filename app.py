@@ -176,45 +176,31 @@ elif page == "Planning & Saisie":
                             st.rerun()
    
     st.subheader("🗓️ Grille de Suivi & Saisie (Journée)")
-
-mask = (st.session_state.data['Date'] == str(dt.date.today())) & (st.session_state.data['Dossier'] == choix_dos)
-lignes = st.session_state.data[mask]
-
-# Affichage du tableau ligne par ligne
-for idx, row in lignes.iterrows():
-    col1, col2, col3, col4 = st.columns([0.4, 0.15, 0.35, 0.1])
-    
-    col1.write(f"{row['Chapitre']} ({row['J_Type']})")
-    
-    # Checkbox
-    chk_key = f"chk_{row['ID']}"
-    if chk_key not in st.session_state: st.session_state[chk_key] = (row['Statut'] == 'Fait')
-    st.session_state[chk_key] = col2.checkbox("Fait", key=chk_key)
-    
-    # Note
-    note_key = f"note_{row['ID']}"
-    if note_key not in st.session_state: st.session_state[note_key] = str(row['Note'])
-    st.session_state[note_key] = col3.text_input("", value=st.session_state[note_key], key=f"inp_{row['ID']}")
-    
-    # Calcul Moyenne
-    if col4.button("∑", key=f"calc_{row['ID']}"):
-        try:
-            nums = [float(n.replace(',', '.')) for n in st.session_state[note_key].replace(';', ' ').split() if n.strip()]
-            if nums:
-                st.session_state[note_key] = str(round(sum(nums) / len(nums), 2))
-                st.rerun()
-        except:
-            col4.error("!")
-
-# Bouton de sauvegarde unique
-if st.button("💾 ENREGISTRER TOUT"):
-    with st.spinner("Synchronisation..."):
-        for _, row in lignes.iterrows():
-            rid = row['ID']
-            st.session_state.data.loc[st.session_state.data['ID'] == rid, 'Statut'] = 'Fait' if st.session_state[f"chk_{rid}"] else 'À faire'
-            st.session_state.data.loc[st.session_state.data['ID'] == rid, 'Note'] = st.session_state[f"note_{rid}"]
-        save_all_to_sheet(st.session_state.data, st.session_state.config)
-        st.success("Sauvegardé")
+    mask = (st.session_state.data['Date'] == str(dt.date.today())) & (st.session_state.data['Dossier'] == choix_dos)
+    for idx, row in st.session_state.data[mask].iterrows():
+        cols = st.columns([0.4, 0.15, 0.35, 0.1])
+        cols[0].write(f"{row['Chapitre']} ({row['J_Type']})")
+       
+        is_done = cols[1].checkbox("Fait", value=(row['Statut'] == 'Fait'), key=f"grid_chk_{row['ID']}")
+        if is_done != (row['Statut'] == 'Fait'):
+            st.session_state.data.at[idx, 'Statut'] = 'Fait' if is_done else 'À faire'
+            save_all_to_sheet(st.session_state.data, st.session_state.config)
+            st.rerun()
+           
+        note_in = cols[2].text_input("", value=str(row['Note']), key=f"grid_note_{row['ID']}", label_visibility="collapsed")
+       
+        if cols[3].button("∑", key=f"grid_calc_{row['ID']}"):
+            try:
+                nums = [float(n.replace(',', '.')) for n in note_in.replace(';', ' ').split() if n.strip()]
+                if nums:
+                    st.session_state.data.at[idx, 'Note'] = round(sum(nums) / len(nums), 2)
+                    save_all_to_sheet(st.session_state.data, st.session_state.config)
+                    st.rerun()
+            except:
+                cols[3].error("!")
+        elif note_in != str(row['Note']):
+            st.session_state.data.at[idx, 'Note'] = note_in
+            save_all_to_sheet(st.session_state.data, st.session_state.config)
 
 
 
