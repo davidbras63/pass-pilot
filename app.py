@@ -177,30 +177,38 @@ elif page == "Planning & Saisie":
    
     st.subheader("🗓️ Grille de Suivi & Saisie (Journée)")
     mask = (st.session_state.data['Date'] == str(dt.date.today())) & (st.session_state.data['Dossier'] == choix_dos)
-    for idx, row in st.session_state.data[mask].iterrows():
-        cols = st.columns([0.4, 0.15, 0.35, 0.1])
-        cols[0].write(f"{row['Chapitre']} ({row['J_Type']})")
-        
-        is_done = cols[1].checkbox("Fait", value=(row['Statut'] == 'Fait'), key=f"grid_chk_{row['ID']}")
-        if is_done != (row['Statut'] == 'Fait'):
-            st.session_state.data.at[idx, 'Statut'] = 'Fait' if is_done else 'À faire'
+    
+    # On encapsule la saisie dans un formulaire pour grouper l'enregistrement
+    with st.form("Saisie_Notes_Form"):
+        for idx, row in st.session_state.data[mask].iterrows():
+            cols = st.columns([0.4, 0.15, 0.35, 0.1])
+            cols[0].write(f"{row['Chapitre']} ({row['J_Type']})")
+            
+            # Checkbox pour le statut (Fait / À faire)
+            is_done = cols[1].checkbox("Fait", value=(row['Statut'] == 'Fait'), key=f"grid_chk_{row['ID']}")
+            if is_done != (row['Statut'] == 'Fait'):
+                st.session_state.data.at[idx, 'Statut'] = 'Fait' if is_done else 'À faire'
+            
+            # Saisie de la note
+            note_in = cols[2].text_input("", value=str(row['Note']), key=f"grid_note_{row['ID']}", label_visibility="collapsed")
+            
+            # Bouton de calcul local (Moyenne dans la RAM)
+            if cols[3].button("∑", key=f"grid_calc_{row['ID']}"):
+                try:
+                    nums = [float(n.replace(',', '.')) for n in note_in.replace(';', ' ').split() if n.strip()]
+                    if nums:
+                        st.session_state.data.at[idx, 'Note'] = round(sum(nums)/len(nums), 2)
+                        st.rerun() # Rafraîchissement nécessaire pour afficher le résultat du calcul
+                except: cols[3].error("!")
+            
+            # Sauvegarde temporaire en RAM si la note a changé manuellement
+            elif note_in != str(row['Note']):
+                st.session_state.data.at[idx, 'Note'] = note_in
+
+        # Bouton unique pour envoyer tout le bloc vers Google Sheets
+        if st.form_submit_button("💾 Enregistrer les notes et les moyennes"):
             save_all_to_sheet(st.session_state.data, st.session_state.config)
             st.rerun()
-            
-        note_in = cols[2].text_input("", value=str(row['Note']), key=f"grid_note_{row['ID']}", label_visibility="collapsed")
-        
-        if cols[3].button("∑", key=f"grid_calc_{row['ID']}"):
-            try:
-                nums = [float(n.replace(',', '.')) for n in note_in.replace(';', ' ').split() if n.strip()]
-                if nums:
-                    st.session_state.data.at[idx, 'Note'] = round(sum(nums) / len(nums), 2)
-                    save_all_to_sheet(st.session_state.data, st.session_state.config)
-                    st.rerun()
-            except:
-                cols[3].error("!")
-        elif note_in != str(row['Note']):
-            st.session_state.data.at[idx, 'Note'] = note_in
-            save_all_to_sheet(st.session_state.data, st.session_state.config)
 
 elif page == "Graphiques":
     st.title("📊 Progression")
