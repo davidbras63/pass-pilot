@@ -176,31 +176,53 @@ elif page == "Planning & Saisie":
                             st.rerun()
    
     st.subheader("🗓️ Grille de Suivi & Saisie (Journée)")
-    mask = (st.session_state.data['Date'] == str(dt.date.today())) & (st.session_state.data['Dossier'] == choix_dos)
-    for idx, row in st.session_state.data[mask].iterrows():
-        cols = st.columns([0.4, 0.15, 0.35, 0.1])
-        cols[0].write(f"{row['Chapitre']} ({row['J_Type']})")
-       
-        is_done = cols[1].checkbox("Fait", value=(row['Statut'] == 'Fait'), key=f"grid_chk_{row['ID']}")
-        if is_done != (row['Statut'] == 'Fait'):
-            st.session_state.data.at[idx, 'Statut'] = 'Fait' if is_done else 'À faire'
-            save_all_to_sheet(st.session_state.data, st.session_state.config)
-            st.rerun()
-           
-        note_in = cols[2].text_input("", value=str(row['Note']), key=f"grid_note_{row['ID']}", label_visibility="collapsed")
-       
-        if cols[3].button("∑", key=f"grid_calc_{row['ID']}"):
-            try:
-                nums = [float(n.replace(',', '.')) for n in note_in.replace(';', ' ').split() if n.strip()]
-                if nums:
-                    st.session_state.data.at[idx, 'Note'] = round(sum(nums) / len(nums), 2)
-                    save_all_to_sheet(st.session_state.data, st.session_state.config)
-                    st.rerun()
-            except:
-                cols[3].error("!")
-        elif note_in != str(row['Note']):
-            st.session_state.data.at[idx, 'Note'] = note_in
-            save_all_to_sheet(st.session_state.data, st.session_state.config)
+
+# 1. Filtre les données (localement, sans latence)
+mask = (st.session_state.data['Date'] == str(dt.date.today())) & (st.session_state.data['Dossier'] == choix_dos)
+lignes = st.session_state.data[mask]
+
+# 2. Boucle d'affichage propre
+for _, row in lignes.iterrows():
+    # Définition des colonnes (même gueule que ton tableau)
+    cols = st.columns([0.4, 0.15, 0.35, 0.1])
+    cols[0].write(f"{row['Chapitre']} ({row['J_Type']})")
+    
+    # Clés uniques basées sur l'ID pour éviter les collisions
+    key_chk = f"chk_{row['ID']}"
+    key_note = f"note_{row['ID']}"
+    
+    # On récupère les valeurs actuelles pour les afficher
+    if key_chk not in st.session_state: st.session_state[key_chk] = (row['Statut'] == 'Fait')
+    if key_note not in st.session_state: st.session_state[key_note] = str(row['Note'])
+    
+    # Checkbox
+    st.session_state[key_chk] = cols[1].checkbox("Fait", key=key_chk)
+    
+    # Note
+    st.session_state[key_note] = cols[2].text_input("", value=st.session_state[key_note], key=key_note, label_visibility="collapsed")
+    
+    # Bouton Calcul ∑ (Local et instantané, ZÉRO latence)
+    if cols[3].button("∑", key=f"calc_{row['ID']}"):
+        try:
+            valeurs = [float(n.replace(',', '.')) for n in st.session_state[key_note].replace(';', ' ').split() if n.strip()]
+            if valeurs:
+                st.session_state[key_note] = str(round(sum(valeurs) / len(valeurs), 2))
+                st.rerun() # Rafraîchit l'affichage local uniquement
+        except:
+            cols[3].error("!")
+
+# 3. Sauvegarde unique (Le seul moment où ça communique avec Google)
+if st.button("💾 ENREGISTRER TOUT"):
+    with st.spinner("Envoi vers Google Sheets..."):
+        # Mise à jour du DataFrame en mémoire
+        for _, row in lignes.iterrows():
+            rid = row['ID']
+            st.session_state.data.loc[st.session_state.data['ID'] == rid, 'Statut'] = 'Fait' if st.session_state[f"chk_{rid}"] else 'À faire'
+            st.session_state.data.loc[st.session_state.data['ID'] == rid, 'Note'] = st.session_state[f"note_{rid}"]
+        
+        # Communication unique
+        save_all_to_sheet(st.session_state.data, st.session_state.config)
+        st.success("Données synchronisées !")
 
 
 
