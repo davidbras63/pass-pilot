@@ -178,38 +178,36 @@ elif page == "Planning & Saisie":
     st.subheader("🗓️ Grille de Suivi & Saisie (Journée)")
 mask = (st.session_state.data['Date'] == str(dt.date.today())) & (st.session_state.data['Dossier'] == choix_dos)
 
-# On utilise une liste temporaire pour les calculs
+# Tableau de saisie simple
 for idx, row in st.session_state.data[mask].iterrows():
-    cols = st.columns([0.4, 0.15, 0.35, 0.1])
-    cols[0].write(f"{row['Chapitre']}")
+    col1, col2, col3, col4 = st.columns([0.4, 0.15, 0.35, 0.1])
+    col1.write(f"{row['Chapitre']}")
     
-    # 1. Checkbox
-    is_done = cols[1].checkbox("Fait", value=(row['Statut'] == 'Fait'), key=f"c_{idx}")
-    st.session_state.data.at[idx, 'Statut'] = 'Fait' if is_done else 'À faire'
+    # Checkbox
+    if col2.checkbox("Fait", value=(row['Statut'] == 'Fait'), key=f"c_{row['ID']}"):
+        st.session_state.data.at[idx, 'Statut'] = 'Fait'
+    else:
+        st.session_state.data.at[idx, 'Statut'] = 'À faire'
+        
+    # Note
+    note_val = col3.text_input("", value=str(row['Note']), key=f"t_{row['ID']}", label_visibility="collapsed")
+    st.session_state.data.at[idx, 'Note'] = note_val
     
-    # 2. Saisie Note
-    note_input = cols[2].text_input("", value=str(row['Note']), key=f"t_{idx}", label_visibility="collapsed")
-    st.session_state.data.at[idx, 'Note'] = note_input
-    
-    # 3. Calcul Somme (Calcul pur RAM)
-    if cols[3].button("∑", key=f"b_{idx}"):
+    # Calcul moyenne local
+    if col4.button("∑", key=f"b_{row['ID']}"):
         try:
-            valeurs = [float(n.replace(',', '.')) for n in note_input.replace(';', ' ').split() if n.strip()]
-            if valeurs:
-                st.session_state.data.at[idx, 'Note'] = sum(valeurs) / len(valeurs)
-                st.rerun() # Rafraîchissement local
+            valeurs = [float(n.replace(',', '.')) for n in note_val.replace(';', ' ').split() if n.strip()]
+            st.session_state.data.at[idx, 'Note'] = sum(valeurs) / len(valeurs)
+            st.rerun() # Refresh uniquement pour afficher le calcul
         except:
-            st.error("Erreur calcul")
+            st.error("!")
 
-# 4. Bouton de sauvegarde unique
-st.divider()
-if st.button("💾 ENREGISTRER TOUTES LES NOTES"):
-    # C'est la SEULE ligne qui communique avec Google
+# LE BOUTON D'ENREGISTREMENT (Sorti de la boucle)
+st.write("---")
+if st.button("💾 ENREGISTRER TOUT (GOOGLE SHEETS)"):
+    # C'est ICI et SEULEMENT ICI que la connexion se fait
     save_all_to_sheet(st.session_state.data, st.session_state.config)
-    st.success("Enregistré !")
-
-
-
+    st.success("Données envoyées !")
 
 
 elif page == "Graphiques":
