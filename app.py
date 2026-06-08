@@ -177,38 +177,32 @@ elif page == "Planning & Saisie":
    
     st.subheader("🗓️ Grille de Suivi & Saisie (Journée)")
     mask = (st.session_state.data['Date'] == str(dt.date.today())) & (st.session_state.data['Dossier'] == choix_dos)
-    
-    # 1. Boucle de saisie (Strictement locale)
+
     for idx, row in st.session_state.data[mask].iterrows():
         cols = st.columns([0.4, 0.15, 0.35, 0.1])
         cols[0].write(f"{row['Chapitre']} ({row['J_Type']})")
         
-        # Checkbox locale
         is_done = cols[1].checkbox("Fait", value=(row['Statut'] == 'Fait'), key=f"grid_chk_{row['ID']}")
         if is_done != (row['Statut'] == 'Fait'):
             st.session_state.data.at[idx, 'Statut'] = 'Fait' if is_done else 'À faire'
             
-        # Saisie note (locale)
         note_in = cols[2].text_input("", value=str(row['Note']), key=f"grid_note_{row['ID']}", label_visibility="collapsed")
         if note_in != str(row['Note']):
             st.session_state.data.at[idx, 'Note'] = note_in
         
-        # Calcul moyenne (locale)
         if cols[3].button("∑", key=f"grid_calc_{row['ID']}"):
             try:
-                # Nettoyage et calcul
                 nums = [float(n.replace(',', '.')) for n in note_in.replace(';', ' ').split() if n.strip()]
                 if nums:
                     st.session_state.data.at[idx, 'Note'] = round(sum(nums) / len(nums), 2)
-                    st.rerun() # Rafraîchissement pour afficher le résultat
+                    st.rerun()
             except:
                 cols[3].error("!")
 
-    # 2. Bouton unique de sauvegarde (C'est le seul qui parle à Google Sheets)
-    if st.button("💾 Enregistrer toutes les notes & statuts"):
-        with st.spinner("Envoi vers Google Sheets..."):
+    if st.button("💾 ENREGISTRER TOUT SUR GOOGLE SHEETS"):
+        with st.spinner("Envoi en cours..."):
             save_all_to_sheet(st.session_state.data, st.session_state.config)
-            st.success("Données sauvegardées !")
+            st.success("Données envoyées avec succès !")
 
 elif page == "Graphiques":
     st.title("📊 Progression")
