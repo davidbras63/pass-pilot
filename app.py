@@ -178,35 +178,47 @@ elif page == "Planning & Saisie":
     st.subheader("🗓️ Grille de Suivi & Saisie (Journée)")
     mask = (st.session_state.data['Date'] == str(dt.date.today())) & (st.session_state.data['Dossier'] == choix_dos)
     
-    # 1. On travaille uniquement sur une copie locale pour l'affichage
-    df_view = st.session_state.data[mask].copy()
+    # 1. On crée une liste de travail, PAS une modification du DataFrame
+    lignes_a_afficher = st.session_state.data[mask].copy()
 
-    for i, row in df_view.iterrows():
+    for _, row in lignes_a_afficher.iterrows():
+        # Utiliser un ID unique pour chaque ligne permet d'éviter les bugs d'indexation
+        idx_val = row['ID']
         cols = st.columns([0.4, 0.15, 0.35, 0.1])
         cols[0].write(f"{row['Chapitre']} ({row['J_Type']})")
         
-        # Widgets isolés sans accès direct au DataFrame
-        is_done = cols[1].checkbox("Fait", value=(row['Statut'] == 'Fait'), key=f"c_{row['ID']}")
-        note_in = cols[2].text_input("", value=str(row['Note']), key=f"n_{row['ID']}")
+        # 2. Utilisation de clés uniques dans le session_state pour stocker les modifs
+        # On ne modifie pas st.session_state.data ici !
+        key_chk = f"c_{idx_val}"
+        key_note = f"n_{idx_val}"
         
-        # Le calcul ∑ est le seul qui a besoin de rafraîchir
-        if cols[3].button("∑", key=f"b_{row['ID']}"):
+        if key_chk not in st.session_state: st.session_state[key_chk] = (row['Statut'] == 'Fait')
+        if key_note not in st.session_state: st.session_state[key_note] = str(row['Note'])
+        
+        # Affichage des widgets
+        st.session_state[key_chk] = cols[1].checkbox("Fait", key=key_chk)
+        st.session_state[key_note] = cols[2].text_input("", key=key_note, label_visibility="collapsed")
+        
+        # 3. Bouton ∑ : Calcul local uniquement
+        if cols[3].button("∑", key=f"b_{idx_val}"):
             try:
-                nums = [float(n.replace(',', '.')) for n in note_in.replace(';', ' ').split() if n.strip()]
+                nums = [float(n.replace(',', '.')) for n in st.session_state[key_note].replace(';', ' ').split() if n.strip()]
                 if nums:
-                    st.session_state.data.loc[st.session_state.data['ID'] == row['ID'], 'Note'] = round(sum(nums) / len(nums), 2)
+                    st.session_state[key_note] = str(round(sum(nums) / len(nums), 2))
                     st.rerun()
             except:
                 cols[3].error("!")
-        
-        # Mise à jour silencieuse des données
-        st.session_state.data.loc[st.session_state.data['ID'] == row['ID'], 'Statut'] = 'Fait' if is_done else 'À faire'
-        st.session_state.data.loc[st.session_state.data['ID'] == row['ID'], 'Note'] = note_in
 
-    # 2. Bouton unique et isolé
-    if st.button("💾 ENREGISTRER TOUT SUR GOOGLE SHEETS"):
-        save_all_to_sheet(st.session_state.data, st.session_state.config)
-        st.success("Synchronisé !")
+    # 4. Sauvegarde manuelle (Le SEUL moment où on touche au DataFrame)
+    if st.button("💾 ENREGISTRER TOUT"):
+        with st.spinner("Synchronisation..."):
+            for _, row in lignes_a_afficher.iterrows():
+                id_v = row['ID']
+                st.session_state.data.loc[st.session_state.data['ID'] == id_v, 'Statut'] = 'Fait' if st.session_state[f"c_{id_v}"] else 'À faire'
+                st.session_state.data.loc[st.session_state.data['ID'] == id_v, 'Note'] = st.session_state[f"n_{id_v}"]
+            
+            save_all_to_sheet(st.session_state.data, st.session_state.config)
+            st.success("Données sauvegardées !")
 
 elif page == "Graphiques":
     st.title("📊 Progression")
