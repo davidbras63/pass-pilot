@@ -178,36 +178,40 @@ elif page == "Planning & Saisie":
     st.subheader("🗓️ Grille de Suivi & Saisie (Journée)")
 mask = (st.session_state.data['Date'] == str(dt.date.today())) & (st.session_state.data['Dossier'] == choix_dos)
 
-# Tableau de saisie simple
+# 1. Utilisation d'une clé de session dédiée pour la saisie temporaire
+if 'temp_notes' not in st.session_state:
+    st.session_state.temp_notes = {}
+
 for idx, row in st.session_state.data[mask].iterrows():
-    col1, col2, col3, col4 = st.columns([0.4, 0.15, 0.35, 0.1])
-    col1.write(f"{row['Chapitre']}")
+    cols = st.columns([0.4, 0.15, 0.35, 0.1])
+    cols[0].write(f"{row['Chapitre']}")
     
     # Checkbox
-    if col2.checkbox("Fait", value=(row['Statut'] == 'Fait'), key=f"c_{row['ID']}"):
-        st.session_state.data.at[idx, 'Statut'] = 'Fait'
-    else:
-        st.session_state.data.at[idx, 'Statut'] = 'À faire'
-        
-    # Note
-    note_val = col3.text_input("", value=str(row['Note']), key=f"t_{row['ID']}", label_visibility="collapsed")
-    st.session_state.data.at[idx, 'Note'] = note_val
+    is_done = cols[1].checkbox("Fait", value=(row['Statut'] == 'Fait'), key=f"c_{row['ID']}")
+    st.session_state.data.at[idx, 'Statut'] = 'Fait' if is_done else 'À faire'
     
-    # Calcul moyenne local
-    if col4.button("∑", key=f"b_{row['ID']}"):
+    # Champ de saisie : on utilise une clé temporaire pour ne pas écraser la note officielle
+    saisie = cols[2].text_input("Notes", value=st.session_state.temp_notes.get(row['ID'], ""), 
+                                 key=f"t_{row['ID']}", label_visibility="collapsed")
+    st.session_state.temp_notes[row['ID']] = saisie
+    
+    # Bouton Somme
+    if cols[3].button("∑", key=f"b_{row['ID']}"):
         try:
-            valeurs = [float(n.replace(',', '.')) for n in note_val.replace(';', ' ').split() if n.strip()]
-            st.session_state.data.at[idx, 'Note'] = sum(valeurs) / len(valeurs)
-            st.rerun() # Refresh uniquement pour afficher le calcul
+            valeurs = [float(n.replace(',', '.')) for n in saisie.replace(';', ' ').split() if n.strip()]
+            if valeurs:
+                st.session_state.data.at[idx, 'Note'] = round(sum(valeurs) / len(valeurs), 2)
+                st.session_state.temp_notes[row['ID']] = "" # On vide la saisie après calcul
+                st.rerun()
         except:
             st.error("!")
 
-# LE BOUTON D'ENREGISTREMENT (Sorti de la boucle)
-st.write("---")
-if st.button("💾 ENREGISTRER TOUT (GOOGLE SHEETS)"):
-    # C'est ICI et SEULEMENT ICI que la connexion se fait
+# 2. Bouton d'enregistrement (Placé tout à la fin, après la boucle)
+st.divider()
+if st.button("💾 ENREGISTRER TOUTES LES NOTES"):
     save_all_to_sheet(st.session_state.data, st.session_state.config)
-    st.success("Données envoyées !")
+    st.success("Synchronisation effectuée !")
+
 
 
 elif page == "Graphiques":
