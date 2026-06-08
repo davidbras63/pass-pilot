@@ -176,40 +176,38 @@ elif page == "Planning & Saisie":
                             st.rerun()
    
     st.subheader("🗓️ Grille de Suivi & Saisie (Journée)")
-    mask = (st.session_state.data['Date'] == str(dt.date.today())) & (st.session_state.data['Dossier'] == choix_dos)
+mask = (st.session_state.data['Date'] == str(dt.date.today())) & (st.session_state.data['Dossier'] == choix_dos)
 
-    # BOUCLE DE SAISIE
-    for idx, row in st.session_state.data[mask].iterrows():
-        cols = st.columns([0.4, 0.15, 0.35, 0.1])
-        cols[0].write(f"{row['Chapitre']} ({row['J_Type']})")
-        
-        # 1. Checkbox "Fait"
-        is_done = cols[1].checkbox("Fait", value=(row['Statut'] == 'Fait'), key=f"chk_{row['ID']}")
-        if is_done != (row['Statut'] == 'Fait'):
-            st.session_state.data.at[idx, 'Statut'] = 'Fait' if is_done else 'À faire'
-        
-        # 2. Case Note (Saisie libre)
-        note_in = cols[2].text_input("", value=str(row['Note']), key=f"txt_{row['ID']}", label_visibility="collapsed")
-        
-        # 3. Calcul Somme (Calcul en RAM locale uniquement)
-        if cols[3].button("∑", key=f"btn_{row['ID']}"):
-            try:
-                nums = [float(n.replace(',', '.')) for n in note_in.replace(';', ' ').split() if n.strip()]
-                if nums:
-                    st.session_state.data.at[idx, 'Note'] = round(sum(nums)/len(nums), 2)
-                    st.rerun() # Rafraîchissement local pour afficher la moyenne
-            except:
-                st.error("Format invalide")
-        
-        # Mise à jour de la mémoire RAM
-        st.session_state.data.at[idx, 'Note'] = note_in
+# On utilise une liste temporaire pour les calculs
+for idx, row in st.session_state.data[mask].iterrows():
+    cols = st.columns([0.4, 0.15, 0.35, 0.1])
+    cols[0].write(f"{row['Chapitre']}")
+    
+    # 1. Checkbox
+    is_done = cols[1].checkbox("Fait", value=(row['Statut'] == 'Fait'), key=f"c_{idx}")
+    st.session_state.data.at[idx, 'Statut'] = 'Fait' if is_done else 'À faire'
+    
+    # 2. Saisie Note
+    note_input = cols[2].text_input("", value=str(row['Note']), key=f"t_{idx}", label_visibility="collapsed")
+    st.session_state.data.at[idx, 'Note'] = note_input
+    
+    # 3. Calcul Somme (Calcul pur RAM)
+    if cols[3].button("∑", key=f"b_{idx}"):
+        try:
+            valeurs = [float(n.replace(',', '.')) for n in note_input.replace(';', ' ').split() if n.strip()]
+            if valeurs:
+                st.session_state.data.at[idx, 'Note'] = sum(valeurs) / len(valeurs)
+                st.rerun() # Rafraîchissement local
+        except:
+            st.error("Erreur calcul")
 
-    # 4. BOUTON D'ENREGISTREMENT FINAL (Seul point de contact avec Google Sheet)
-    st.markdown("---")
-    if st.button("💾 ENREGISTRER TOUTES LES NOTES"):
-        save_all_to_sheet(st.session_state.data, st.session_state.config)
-        st.success("Synchronisation effectuée vers Google Sheets !")
-        st.rerun()
+# 4. Bouton de sauvegarde unique
+st.divider()
+if st.button("💾 ENREGISTRER TOUTES LES NOTES"):
+    # C'est la SEULE ligne qui communique avec Google
+    save_all_to_sheet(st.session_state.data, st.session_state.config)
+    st.success("Enregistré !")
+
 
 
 
