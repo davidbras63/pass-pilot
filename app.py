@@ -177,32 +177,40 @@ elif page == "Planning & Saisie":
    
     st.subheader("🗓️ Grille de Suivi & Saisie (Journée)")
     mask = (st.session_state.data['Date'] == str(dt.date.today())) & (st.session_state.data['Dossier'] == choix_dos)
+    
+    # On crée une copie de travail pour éviter les erreurs d'indexation Pandas
+    data_view = st.session_state.data[mask].copy()
 
-    for idx, row in st.session_state.data[mask].iterrows():
+    for idx, row in data_view.iterrows():
         cols = st.columns([0.4, 0.15, 0.35, 0.1])
         cols[0].write(f"{row['Chapitre']} ({row['J_Type']})")
         
+        # Checkbox
         is_done = cols[1].checkbox("Fait", value=(row['Statut'] == 'Fait'), key=f"grid_chk_{row['ID']}")
         if is_done != (row['Statut'] == 'Fait'):
-            st.session_state.data.at[idx, 'Statut'] = 'Fait' if is_done else 'À faire'
+            st.session_state.data.loc[st.session_state.data['ID'] == row['ID'], 'Statut'] = 'Fait' if is_done else 'À faire'
             
+        # Saisie Note
         note_in = cols[2].text_input("", value=str(row['Note']), key=f"grid_note_{row['ID']}", label_visibility="collapsed")
         if note_in != str(row['Note']):
-            st.session_state.data.at[idx, 'Note'] = note_in
+            st.session_state.data.loc[st.session_state.data['ID'] == row['ID'], 'Note'] = note_in
         
+        # Calcul Moyenne (Local et immédiat)
         if cols[3].button("∑", key=f"grid_calc_{row['ID']}"):
             try:
                 nums = [float(n.replace(',', '.')) for n in note_in.replace(';', ' ').split() if n.strip()]
                 if nums:
-                    st.session_state.data.at[idx, 'Note'] = round(sum(nums) / len(nums), 2)
-                    st.rerun()
+                    valeur_moyenne = round(sum(nums) / len(nums), 2)
+                    st.session_state.data.loc[st.session_state.data['ID'] == row['ID'], 'Note'] = valeur_moyenne
+                    st.rerun() # Rafraîchissement instantané sans sauvegarde réseau
             except:
                 cols[3].error("!")
 
+    # SEUL ENDROIT DE SAUVEGARDE
     if st.button("💾 ENREGISTRER TOUT SUR GOOGLE SHEETS"):
-        with st.spinner("Envoi en cours..."):
+        with st.spinner("Synchronisation en cours..."):
             save_all_to_sheet(st.session_state.data, st.session_state.config)
-            st.success("Données envoyées avec succès !")
+            st.success("Données envoyées !")
 
 elif page == "Graphiques":
     st.title("📊 Progression")
