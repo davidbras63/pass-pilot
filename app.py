@@ -31,8 +31,8 @@ def save_all_to_sheet(df, config):
     if 'start_time' not in st.session_state:
         st.session_state.start_time = time.time()
     if time.time() - st.session_state.start_time < 3:
-        return 
-    
+        return
+   
     # 2. Si le tableau est vide, on refuse de sauvegarder pour protéger Google Sheets
     if df is None or df.empty:
         return
@@ -45,7 +45,7 @@ def save_all_to_sheet(df, config):
     try:
         requests.post(WEB_APP_URL, json=payload, timeout=15)
         time.sleep(0.5)
-    except: 
+    except:
         st.error("Erreur de sauvegarde")
 
 # --- BLINDAGE FERMETURE ---
@@ -214,7 +214,7 @@ elif page == "Planning & Saisie":
         elif note_in != str(row['Note']):
             st.session_state.data.at[idx, 'Note'] = note_in
             #save_all_to_sheet(st.session_state.data, st.session_state.config)
-        
+       
 
 elif page == "Graphiques":
     st.title("📊 Progression")
