@@ -83,19 +83,21 @@ def reset_matiere():
     st.session_state.m_in = ""
 
 st.sidebar.title("⚙️ Pilot Expert")
+
+# BOUTON PRIORITAIRE : Il est en haut de tout, impossible à manquer
+if st.sidebar.button("💾 SAUVEGARDER TOUT"):
+    save_all_to_sheet(st.session_state.data, st.session_state.config)
+    st.sidebar.success("Données synchronisées !")
+    st.rerun()
+
+# Ensuite, tes réglages en dessous
 with st.sidebar.expander("🛠️ Réglages", expanded=False):
     st.session_state.config['cours_max'] = st.number_input("Max cours/jour", 1, 20, int(st.session_state.config.get('cours_max', 5)))
     cad_str = st.text_input("Cadencier (jours)", ",".join(map(str, st.session_state.config['cadencier'])))
-    # Mise à jour immédiate de la mémoire
     st.session_state.config['cadencier'] = [int(x.strip()) for x in cad_str.split(",")]
     
     for j in st.session_state.config['cadencier']:
         st.session_state.config['seuils'][str(j)] = st.slider(f"Seuil Note J{j}", 10, 20, int(st.session_state.config['seuils'].get(str(j), 12)))
-    
-    if st.button("💾 Enregistrer les Réglages"):
-        save_all_to_sheet(st.session_state.data, st.session_state.config)
-        st.success("Réglages synchronisés !")
-        st.rerun()
 
 st.sidebar.text_input("Nouveau Dossier", key="d_in")
 st.sidebar.button("➕ Créer Dossier", on_click=reset_dossier)
