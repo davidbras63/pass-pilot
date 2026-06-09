@@ -87,8 +87,7 @@ st.sidebar.title("⚙️ Pilot Expert")
 # BOUTON PRIORITAIRE : Il est en haut de tout, impossible à manquer
 if st.sidebar.button("💾 SAUVEGARDER TOUT"):
     save_all_to_sheet(st.session_state.data, st.session_state.config)
-    st.sidebar.success("Données synchronisées !")
-    st.rerun()
+    st.sidebar.toast("Données enregistrées !", icon="✅")
 
 # Ensuite, tes réglages en dessous
 with st.sidebar.expander("🛠️ Réglages", expanded=False):
