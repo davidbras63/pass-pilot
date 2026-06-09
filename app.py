@@ -63,18 +63,16 @@ components.html(sync_script, height=0)
 if 'data' not in st.session_state:
     st.session_state.data, st.session_state.config = load_data_from_sheet()
 
-if st.sidebar.button("💾 Enregistrer"):
-    # 1. Sauvegarde vers Sheets
+if st.sidebar.button("💾 Enregistrer et Actualiser"):
+    # 1. Sauvegarde vers Google Sheets
     save_all_to_sheet(st.session_state.data, st.session_state.config)
     
-    # 2. On supprime les variables de calcul pour forcer un recalcul propre
-    if 'data' in st.session_state:
-        del st.session_state.data
-    if 'config' in st.session_state:
-        del st.session_state.config
-        
-    # 3. Rerun simple : le script va redémarrer, voir que data/config sont absents,
-    # et appeler ta fonction de chargement initiale comme au tout premier lancement.
+    # 2. Rechargement complet de la mémoire
+    # C'est ici que ça se joue : on force le rechargement depuis la source
+    # pour que la mémoire (session_state) soit prête AVANT le rerun
+    st.session_state.data, st.session_state.config = load_data_from_sheet()
+    
+    # 3. Rafraîchissement total
     st.rerun()
 
 def reset_dossier():
