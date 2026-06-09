@@ -26,6 +26,18 @@ def load_data_from_sheet():
     st.stop()
 
 def save_all_to_sheet(df, config):
+    # --- VERROU DE SÉCURITÉ ---
+    # 1. Empêche l'exécution automatique pendant les 3 premières secondes du démarrage
+    if 'start_time' not in st.session_state:
+        st.session_state.start_time = time.time()
+    if time.time() - st.session_state.start_time < 3:
+        return 
+    
+    # 2. Si le tableau est vide, on refuse de sauvegarder pour protéger Google Sheets
+    if df is None or df.empty:
+        return
+
+    # --- SAUVEGARDE ---
     df_to_send = df.copy()
     df_to_send['Date'] = df_to_send['Date'].astype(str)
     df_to_send['Note'] = df_to_send['Note'].astype(str)
@@ -33,7 +45,8 @@ def save_all_to_sheet(df, config):
     try:
         requests.post(WEB_APP_URL, json=payload, timeout=15)
         time.sleep(0.5)
-    except: st.error("Erreur de sauvegarde")
+    except: 
+        st.error("Erreur de sauvegarde")
 
 # --- BLINDAGE FERMETURE ---
 sync_script = f"""
@@ -166,13 +179,13 @@ elif page == "Planning & Saisie":
                 with c1:
                     if st.checkbox(f"{r['Chapitre']} ({r['J_Type']})", value=(r['Statut'] == 'Fait'), key=f"chk_{r['ID']}"):
                         st.session_state.data.loc[st.session_state.data['ID'] == r['ID'], 'Statut'] = 'Fait'
-                        save_all_to_sheet(st.session_state.data, st.session_state.config)
+                        #save_all_to_sheet(st.session_state.data, st.session_state.config)
                 with c2:
                     if r['J_Type'] != 'J0':
                         new_date = st.date_input("", value=dt.datetime.strptime(r['Date'], '%Y-%m-%d'), key=f"cal_{r['ID']}", label_visibility="collapsed")
                         if str(new_date) != r['Date']:
                             st.session_state.data.loc[st.session_state.data['ID'] == r['ID'], 'Date'] = str(new_date)
-                            save_all_to_sheet(st.session_state.data, st.session_state.config)
+                            #save_all_to_sheet(st.session_state.data, st.session_state.config)
                             st.rerun()
    
     st.subheader("🗓️ Grille de Suivi & Saisie (Journée)")
@@ -184,7 +197,7 @@ elif page == "Planning & Saisie":
         is_done = cols[1].checkbox("Fait", value=(row['Statut'] == 'Fait'), key=f"grid_chk_{row['ID']}")
         if is_done != (row['Statut'] == 'Fait'):
             st.session_state.data.at[idx, 'Statut'] = 'Fait' if is_done else 'À faire'
-            save_all_to_sheet(st.session_state.data, st.session_state.config)
+            #save_all_to_sheet(st.session_state.data, st.session_state.config)
             st.rerun()
            
         note_in = cols[2].text_input("", value=str(row['Note']), key=f"grid_note_{row['ID']}", label_visibility="collapsed")
@@ -194,13 +207,13 @@ elif page == "Planning & Saisie":
                 nums = [float(n.replace(',', '.')) for n in note_in.replace(';', ' ').split() if n.strip()]
                 if nums:
                     st.session_state.data.at[idx, 'Note'] = round(sum(nums) / len(nums), 2)
-                    save_all_to_sheet(st.session_state.data, st.session_state.config)
+                    #save_all_to_sheet(st.session_state.data, st.session_state.config)
                     st.rerun()
             except:
                 cols[3].error("!")
         elif note_in != str(row['Note']):
             st.session_state.data.at[idx, 'Note'] = note_in
-            save_all_to_sheet(st.session_state.data, st.session_state.config)
+            #save_all_to_sheet(st.session_state.data, st.session_state.config)
 
 elif page == "Graphiques":
     st.title("📊 Progression")
