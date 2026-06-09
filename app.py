@@ -272,21 +272,16 @@ elif page == "Graphiques":
         df_notes['Note_Num'] = pd.to_numeric(df_notes['Note'].astype(str).str.replace(',', '.'), errors='coerce')
         df_notes['Order'] = df_notes['J_Type'].astype(str).str.extract('(\d+)').fillna(0).astype(int)
         df_notes = df_notes.sort_values(by='Order')
-        # Garde ta ligne telle quelle, avec tes conditions spécifiques
-    if not df_notes.empty and 'Note' in df_notes.columns:
-        
-        # --- AJOUT DU TRI ICI ---
-        ordre_j = ['J0', 'J1', 'J3', 'J7', 'J14', 'J30', 'J60', 'J90', 'J120', 'J160']
-        df_notes['J_Type'] = pd.Categorical(df_notes['J_Type'], categories=ordre_j, ordered=True)
-        df_notes = df_notes.sort_values('J_Type')
-        # ------------------------
+        if not df_notes.empty and 'Note_Num' in df_notes.columns:
+            # Tri pour forcer l'ordre chronologique des J
+            # On utilise 'Order' qui existe déjà dans ton code
+            df_notes = df_notes.sort_values(by='Order')
 
-        chart = alt.Chart(df_notes).mark_bar().encode(
-            x='J_Type:O',
-            y='Note:Q',
-            color='J_Type'
-        ).properties(title="Suivi des notes par échéance")
-        
-        st.alta_chart(chart, use_container_width=True)
+            chart = alt.Chart(df_notes).mark_line(point=True).encode(
+                x='J_Type',
+                y=alt.Y('Note_Num', scale=alt.Scale(domain=[0, 20]))
+            ).properties(title="Progression")
+            
+            st.alta_chart(chart, use_container_width=True)
         else:
             st.info("Pas assez de données pour afficher le graphique.")
