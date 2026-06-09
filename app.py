@@ -202,18 +202,23 @@ elif page == "Planning & Saisie":
            
         note_in = cols[2].text_input("", value=str(row['Note']), key=f"grid_note_{row['ID']}", label_visibility="collapsed")
        
+        # Ton bloc actuel de calcul avec le bouton "∑"
         if cols[3].button("∑", key=f"grid_calc_{row['ID']}"):
             try:
-                nums = [float(n.replace(',', '.')) for n in note_in.replace(';', ' ').split() if n.strip()]
+                # 1. On nettoie la saisie brute
+                raw = note_in.replace(',', '.').replace(';', ' ')
+                nums = [float(n) for n in raw.split() if n.strip()]
+                
+                # 2. Si on a des nombres, on calcule
                 if nums:
-                    st.session_state.data.at[idx, 'Note'] = round(sum(nums) / len(nums), 2)
-                    #save_all_to_sheet(st.session_state.data, st.session_state.config)
-                    st.rerun()
-            except:
-                cols[3].error("!")
-        elif note_in != str(row['Note']):
-            st.session_state.data.at[idx, 'Note'] = note_in
-            #save_all_to_sheet(st.session_state.data, st.session_state.config)
+                    moyenne = round(sum(nums) / len(nums), 2)
+                    st.session_state.data.at[idx, 'Note'] = moyenne
+                    # On force le rafraîchissement ici pour que Streamlit affiche la nouvelle valeur immédiatement
+                    st.rerun() 
+            except Exception as e:
+                # Si ça plante, on affiche l'erreur pour comprendre pourquoi
+                cols[3].error(f"Erreur : {e}")
+        
        
 
 elif page == "Graphiques":
