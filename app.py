@@ -63,20 +63,18 @@ components.html(sync_script, height=0)
 if 'data' not in st.session_state:
     st.session_state.data, st.session_state.config = load_data_from_sheet()
 
-# Remplaces ton ancien bloc "Réinitialiser" par celui-ci dans la sidebar
-if st.sidebar.button("💾 Enregistrer et Actualiser"):
-    # 1. Sauvegarde
+if st.sidebar.button("💾 Enregistrer"):
+    # 1. Sauvegarde vers Sheets
     save_all_to_sheet(st.session_state.data, st.session_state.config)
     
-    # 2. On incremente une valeur de contrôle (si elle existe, sinon on la crée)
-    if 'refresh_count' not in st.session_state:
-        st.session_state.refresh_count = 0
-    st.session_state.refresh_count += 1
-    
-    # 3. On force le rechargement immédiat
-    st.session_state.data, st.session_state.config = load_data_from_sheet()
-    
-    # 4. On relance tout
+    # 2. On supprime les variables de calcul pour forcer un recalcul propre
+    if 'data' in st.session_state:
+        del st.session_state.data
+    if 'config' in st.session_state:
+        del st.session_state.config
+        
+    # 3. Rerun simple : le script va redémarrer, voir que data/config sont absents,
+    # et appeler ta fonction de chargement initiale comme au tout premier lancement.
     st.rerun()
 
 def reset_dossier():
