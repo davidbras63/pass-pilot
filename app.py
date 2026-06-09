@@ -68,11 +68,10 @@ if st.sidebar.button("💾 Enregistrer et Actualiser"):
     # 1. On sauvegarde les données
     save_all_to_sheet(st.session_state.data, st.session_state.config)
     
-    # 2. On recharge les données depuis la source pour qu'elles soient à jour en mémoire
-    # Remplace 'load_data()' par le nom exact de ta fonction qui lit ton fichier (c'est le nom de ta fonction en haut de ton script)
-    st.session_state.data = load_data() 
+    # 2. On recharge les données avec la VRAIE fonction et les deux variables
+    st.session_state.data, st.session_state.config = load_data_from_sheet()
     
-    # 3. Notification et rechargement propre
+    # 3. Notification et rafraîchissement
     st.sidebar.success("Données enregistrées !")
     st.rerun()
 
