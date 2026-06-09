@@ -189,24 +189,38 @@ elif page == "Planning & Saisie":
                             st.rerun()
    
     st.subheader("🗓️ Grille de Suivi & Saisie (Journée)")
+    
+    # 1. Protection contre le KeyError
+    # On vérifie si les clés existent, sinon on initialise avec des valeurs par défaut
+    if 'data' not in st.session_state or 'config' not in st.session_state:
+        st.warning("Chargement des données en cours...")
+        st.stop()
+
     mask = (st.session_state.data['Date'] == str(dt.date.today())) & (st.session_state.data['Dossier'] == choix_dos)
     
     for idx, row in st.session_state.data[mask].iterrows():
         cols = st.columns([0.5, 0.2, 0.3])
         
-        # 1. Chapitre
+        # Affichage
         cols[0].write(f"{row['Chapitre']} ({row['J_Type']})")
         
-        # 2. Checkbox (Statut)
-        is_done = cols[1].checkbox("Fait", value=(row['Statut'] == 'Fait'), key=f"grid_chk_{row['ID']}")
-        if is_done != (row['Statut'] == 'Fait'):
-            st.session_state.data.at[idx, 'Statut'] = 'Fait' if is_done else 'À faire'
-            # On ne met pas de rerun ici pour tester la stabilité
+        # Checkbox sécurisée
+        is_done = cols[1].checkbox("Fait", value=(str(row['Statut']) == 'Fait'), key=f"chk_{row['ID']}")
+        st.session_state.data.at[idx, 'Statut'] = 'Fait' if is_done else 'À faire'
             
-        # 3. Saisie de la note (Champ texte pur)
-        note_val = cols[2].text_input("", value=str(row['Note']), key=f"grid_note_{row['ID']}", label_visibility="collapsed")
-        if note_val != str(row['Note']):
-            st.session_state.data.at[idx, 'Note'] = note_val
+        # Saisie de la note (Force la conversion en chaîne pour éviter le TypeError)
+        valeur_actuelle = str(row['Note'])
+        note_input = cols[2].text_input("", value=valeur_actuelle, key=f"note_{row['ID']}", label_visibility="collapsed")
+        
+        # Mise à jour sécurisée
+        if note_input != valeur_actuelle:
+            # On s'assure que Pandas accepte la valeur
+            st.session_state.data.at[idx, 'Note'] = note_input
+
+    # Bouton de sauvegarde unique
+    if st.button("💾 Enregistrer tout"):
+        save_all_to_sheet(st.session_state.data, st.session_state.config)
+        st.success("Données sauvegardées !")
        
 
 elif page == "Graphiques":
