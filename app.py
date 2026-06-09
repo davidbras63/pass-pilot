@@ -65,13 +65,15 @@ if 'data' not in st.session_state:
 
 # Remplaces ton ancien bloc "Réinitialiser" par celui-ci dans la sidebar
 if st.sidebar.button("💾 Enregistrer et Actualiser"):
-    # 1. Sauvegarde vers Google Sheets
+    # 1. On sauvegarde les données
     save_all_to_sheet(st.session_state.data, st.session_state.config)
     
-    # 2. Notification visuelle
-    st.sidebar.success("Données enregistrées !")
+    # 2. On recharge les données depuis la source pour qu'elles soient à jour en mémoire
+    # Remplace 'load_data()' par le nom exact de ta fonction qui lit ton fichier (c'est le nom de ta fonction en haut de ton script)
+    st.session_state.data = load_data() 
     
-    # 3. Rafraîchissement forcé pour mettre à jour les moyennes partout
+    # 3. Notification et rechargement propre
+    st.sidebar.success("Données enregistrées !")
     st.rerun()
 
 def reset_dossier():
