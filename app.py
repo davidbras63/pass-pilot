@@ -202,16 +202,21 @@ elif page == "Planning & Saisie":
            
         note_in = cols[2].text_input("", value=str(row['Note']), key=f"grid_note_{row['ID']}", label_visibility="collapsed")
        
+        # Remplacement du bloc de calcul ∑
         if cols[3].button("∑", key=f"grid_calc_{row['ID']}"):
             try:
-                raw_text = note_in.replace(',', '.').replace(';', ' ')
-                nums = [float(n) for n in raw_text.split() if n.strip()]
-                if nums:
-                    st.session_state.data.at[idx, 'Note'] = round(sum(nums) / len(nums), 2)
-                    save_all_to_sheet(st.session_state.data, st.session_state.config)
-                    st.rerun()
-            except:
-                cols[3].error("!")
+                # Nettoyage strict : on remplace tout ce qui n'est pas chiffre ou point/virgule par un espace
+                valeurs_brutes = note_in.replace(',', '.').replace(';', ' ')
+                # On crée une liste de nombres
+                nombres = [float(n) for n in valeurs_brutes.split()]
+                
+                if nombres:
+                    st.session_state.data.at[idx, 'Note'] = round(sum(nombres) / len(nombres), 2)
+                    st.rerun() # On relance pour afficher la moyenne calculée
+                else:
+                    st.error("Pas de nombre trouvé")
+            except Exception as e:
+                st.error(f"Erreur: {e}") # Ça va t'afficher la vraie raison du bug
         elif note_in != str(row['Note']):
             st.session_state.data.at[idx, 'Note'] = note_in
             #save_all_to_sheet(st.session_state.data, st.session_state.config)
