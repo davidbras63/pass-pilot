@@ -202,8 +202,6 @@ elif page == "Planning & Saisie":
             st.session_state.data.at[idx, 'Note'] = note_in
             save_all_to_sheet(st.session_state.data, st.session_state.config)
 
-
-
 elif page == "Graphiques":
     st.title("📊 Progression")
     matieres = st.session_state.config['dossiers'].get(choix_dos, [])
