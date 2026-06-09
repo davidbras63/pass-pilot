@@ -190,30 +190,36 @@ elif page == "Planning & Saisie":
    
     st.subheader("🗓️ Grille de Suivi & Saisie (Journée)")
     mask = (st.session_state.data['Date'] == str(dt.date.today())) & (st.session_state.data['Dossier'] == choix_dos)
+    
+    # --- BOUCLE DE SAISIE ET CALCUL (FIXE ET SANS SAUVEGARDE AUTO) ---
     for idx, row in st.session_state.data[mask].iterrows():
         cols = st.columns([0.4, 0.15, 0.35, 0.1])
         cols[0].write(f"{row['Chapitre']} ({row['J_Type']})")
        
+        # Checkbox
         is_done = cols[1].checkbox("Fait", value=(row['Statut'] == 'Fait'), key=f"grid_chk_{row['ID']}")
         if is_done != (row['Statut'] == 'Fait'):
             st.session_state.data.at[idx, 'Statut'] = 'Fait' if is_done else 'À faire'
-            #save_all_to_sheet(st.session_state.data, st.session_state.config)
             st.rerun()
            
+        # Saisie de la note
         note_in = cols[2].text_input("", value=str(row['Note']), key=f"grid_note_{row['ID']}", label_visibility="collapsed")
        
+        # Bouton ∑ (Calcul manuel uniquement)
         if cols[3].button("∑", key=f"grid_calc_{row['ID']}"):
             try:
+                # Nettoyage et calcul
                 nums = [float(n.replace(',', '.')) for n in note_in.replace(';', ' ').split() if n.strip()]
                 if nums:
                     st.session_state.data.at[idx, 'Note'] = round(sum(nums) / len(nums), 2)
-                    #save_all_to_sheet(st.session_state.data, st.session_state.config)
                     st.rerun()
             except:
                 cols[3].error("!")
-        elif note_in != str(row['Note']):
-            st.session_state.data.at[idx, 'Note'] = note_in
-            #save_all_to_sheet(st.session_state.data, st.session_state.config)
+
+    # --- BOUTON DE SAUVEGARDE UNIQUE ---
+    if st.button("💾 Enregistrer tout sur Google Sheet"):
+        save_all_to_sheet(st.session_state.data, st.session_state.config)
+        st.success("Données enregistrées !")
         
 
 elif page == "Graphiques":
