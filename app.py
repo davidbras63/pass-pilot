@@ -268,20 +268,21 @@ elif page == "Graphiques":
     chapitres = df_mat['Chapitre'].unique()
     if len(chapitres) > 0:
         sel_chap = st.selectbox("Choisir un chapitre", chapitres)
-        df_notes = st.session_state.data[(st.session_state.data['Chapitre'] == sel_chap)].copy()
+        df_notes = st.session_state.data[st.session_state.data['Chapitre'] == sel_chap].copy()
+        
+        # Préparation des données
         df_notes['Note_Num'] = pd.to_numeric(df_notes['Note'].astype(str).str.replace(',', '.'), errors='coerce')
         df_notes['Order'] = df_notes['J_Type'].astype(str).str.extract('(\d+)').fillna(0).astype(int)
         df_notes = df_notes.sort_values(by='Order')
-        if not df_notes.empty and 'Note_Num' in df_notes.columns:
-            # Tri pour forcer l'ordre chronologique des J
-            # On utilise 'Order' qui existe déjà dans ton code
-            df_notes = df_notes.sort_values(by='Order')
 
+        # Affichage du graphique
+        if not df_notes.empty and 'Note_Num' in df_notes.columns:
             chart = alt.Chart(df_notes).mark_line(point=True).encode(
                 x='J_Type',
                 y=alt.Y('Note_Num', scale=alt.Scale(domain=[0, 20]))
             ).properties(title="Progression")
             
-            st.alta_chart(chart, use_container_width=True)
+            # Correction ici : altair_chart (avec un 'r')
+            st.altair_chart(chart, use_container_width=True)
         else:
             st.info("Pas assez de données pour afficher le graphique.")
