@@ -166,13 +166,13 @@ elif page == "Planning & Saisie":
                 with c1:
                     if st.checkbox(f"{r['Chapitre']} ({r['J_Type']})", value=(r['Statut'] == 'Fait'), key=f"chk_{r['ID']}"):
                         st.session_state.data.loc[st.session_state.data['ID'] == r['ID'], 'Statut'] = 'Fait'
-                        save_all_to_sheet(st.session_state.data, st.session_state.config)
+                        #save_all_to_sheet(st.session_state.data, st.session_state.config)
                 with c2:
                     if r['J_Type'] != 'J0':
                         new_date = st.date_input("", value=dt.datetime.strptime(r['Date'], '%Y-%m-%d'), key=f"cal_{r['ID']}", label_visibility="collapsed")
                         if str(new_date) != r['Date']:
                             st.session_state.data.loc[st.session_state.data['ID'] == r['ID'], 'Date'] = str(new_date)
-                            save_all_to_sheet(st.session_state.data, st.session_state.config)
+                            #save_all_to_sheet(st.session_state.data, st.session_state.config)
                             st.rerun()
    
     st.subheader("🗓️ Grille de Suivi & Saisie (Journée)")
@@ -184,7 +184,7 @@ elif page == "Planning & Saisie":
         is_done = cols[1].checkbox("Fait", value=(row['Statut'] == 'Fait'), key=f"grid_chk_{row['ID']}")
         if is_done != (row['Statut'] == 'Fait'):
             st.session_state.data.at[idx, 'Statut'] = 'Fait' if is_done else 'À faire'
-            save_all_to_sheet(st.session_state.data, st.session_state.config)
+            #save_all_to_sheet(st.session_state.data, st.session_state.config)
             st.rerun()
            
         note_in = cols[2].text_input("", value=str(row['Note']), key=f"grid_note_{row['ID']}", label_visibility="collapsed")
@@ -194,13 +194,13 @@ elif page == "Planning & Saisie":
                 nums = [float(n.replace(',', '.')) for n in note_in.replace(';', ' ').split() if n.strip()]
                 if nums:
                     st.session_state.data.at[idx, 'Note'] = round(sum(nums) / len(nums), 2)
-                    save_all_to_sheet(st.session_state.data, st.session_state.config)
+                    #save_all_to_sheet(st.session_state.data, st.session_state.config)
                     st.rerun()
             except:
                 cols[3].error("!")
         elif note_in != str(row['Note']):
             st.session_state.data.at[idx, 'Note'] = note_in
-            save_all_to_sheet(st.session_state.data, st.session_state.config)
+            #save_all_to_sheet(st.session_state.data, st.session_state.config)
 
 
 
