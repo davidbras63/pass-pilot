@@ -63,28 +63,25 @@ components.html(sync_script, height=0)
 if 'data' not in st.session_state:
     st.session_state.data, st.session_state.config = load_data_from_sheet()
 
-import time # Assure-toi que cette ligne est bien en haut de ton fichier
+import time
 
 if st.sidebar.button("💾 Enregistrer"):
-    # 1. On envoie les données
+    # 1. On envoie tout sur Sheets
     save_all_to_sheet(st.session_state.data, st.session_state.config)
     
-    # 2. On affiche un message d'attente
-    with st.sidebar.status("Enregistrement en cours...", expanded=True) as status:
-        st.write("Envoi vers Google Sheets...")
-        time.sleep(2) # Temps pour l'écriture
-        
-        st.write("Synchronisation avec le serveur...")
-        time.sleep(3) # Temps pour la mise à jour côté Google
-        
-        st.write("Rechargement des données...")
-        
-        # 3. On recharge les variables depuis la source
-        st.session_state.data, st.session_state.config = load_data_from_sheet()
-        
-        status.update(label="Terminé !", state="complete", expanded=False)
+    # 2. On vide la RAM pour être sûr de repartir de zéro
+    if 'data' in st.session_state: del st.session_state.data
+    if 'config' in st.session_state: del st.session_state.config
     
-    # 4. On rafraîchit la page une fois qu'on est sûrs que tout est chargé
+    # 3. On demande à recharger les données sources
+    # On force le chargement AVANT le rerun pour que la RAM soit remplie
+    st.session_state.data, st.session_state.config = load_data_from_sheet()
+    
+    # 4. Tempo pour être absolument sûr que Google Sheets a tout digéré
+    # avant que l'affichage ne reprenne la main
+    time.sleep(5) 
+    
+    # 5. On lance le rerun final pour rafraîchir l'affichage
     st.rerun()
 
 
