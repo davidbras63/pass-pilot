@@ -226,7 +226,7 @@ elif page == "Planning & Saisie":
                 # Si le calcul échoue, on ne fait rien pour éviter le plantage
                 pass
         elif note_in != str(row['Note']):
-            st.session_state.data.at[idx, 'Note'] = note_in
+            #st.session_state.data.at[idx, 'Note'] = note_in
             #save_all_to_sheet(st.session_state.data, st.session_state.config)
 
 elif page == "Graphiques":
