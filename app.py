@@ -204,10 +204,11 @@ elif page == "Planning & Saisie":
        
         if cols[3].button("∑", key=f"grid_calc_{row['ID']}"):
             try:
-                nums = [float(n.replace(',', '.')) for n in note_in.replace(';', ' ').split() if n.strip()]
+                raw_text = note_in.replace(',', '.').replace(';', ' ')
+                nums = [float(n) for n in raw_text.split() if n.strip()]
                 if nums:
                     st.session_state.data.at[idx, 'Note'] = round(sum(nums) / len(nums), 2)
-                    #save_all_to_sheet(st.session_state.data, st.session_state.config)
+                    save_all_to_sheet(st.session_state.data, st.session_state.config)
                     st.rerun()
             except:
                 cols[3].error("!")
