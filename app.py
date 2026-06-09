@@ -270,18 +270,22 @@ elif page == "Graphiques":
         sel_chap = st.selectbox("Choisir un chapitre", chapitres)
         df_notes = st.session_state.data[st.session_state.data['Chapitre'] == sel_chap].copy()
        
-        # Préparation des données
+        # 1. Nettoyage et préparation
         df_notes['Note_Num'] = pd.to_numeric(df_notes['Note'].astype(str).str.replace(',', '.'), errors='coerce')
-        # On ne garde que les lignes où une note est saisie pour ne pas afficher de colonnes vides inutiles
         df_notes = df_notes.dropna(subset=['Note_Num']) 
         
-        # Définition de l'ordre fixe pour le graphique
-        ordre_j = ['J0', 'J1', 'J3', 'J7', 'J14', 'J30', 'J60', 'J90', 'J120', 'J160']
+        # 2. TRI INTELLIGENT (automatique)
+        # On extrait tous les chiffres du nom (J14 -> 14, J1R -> 1). 
+        # Ça règle le problème des 'R' tout seul.
+        df_notes['Sort_Val'] = df_notes['J_Type'].astype(str).str.extract('(\d+)').fillna(0).astype(int)
+        
+        # On trie par ce nombre, plus besoin de liste manuelle
+        df_notes = df_notes.sort_values('Sort_Val')
 
         if not df_notes.empty:
+            # 3. Graphique : on utilise l'ordre déjà trié
             chart = alt.Chart(df_notes).mark_line(point=True).encode(
-                # On force l'ordre ici : c'est ça qui va bloquer J14 après J7
-                x=alt.X('J_Type', sort=ordre_j),
+                x=alt.X('J_Type', sort=None), # 'None' car c'est déjà trié par Sort_Val
                 y=alt.Y('Note_Num', scale=alt.Scale(domain=[0, 20]))
             ).properties(title="Progression")
             
