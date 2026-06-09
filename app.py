@@ -63,17 +63,30 @@ components.html(sync_script, height=0)
 if 'data' not in st.session_state:
     st.session_state.data, st.session_state.config = load_data_from_sheet()
 
-if st.sidebar.button("💾 Enregistrer et Actualiser"):
-    # 1. Sauvegarde vers Google Sheets
+import time # Assure-toi que cette ligne est bien en haut de ton fichier
+
+if st.sidebar.button("💾 Enregistrer"):
+    # 1. On envoie les données
     save_all_to_sheet(st.session_state.data, st.session_state.config)
     
-    # 2. Rechargement complet de la mémoire
-    # C'est ici que ça se joue : on force le rechargement depuis la source
-    # pour que la mémoire (session_state) soit prête AVANT le rerun
-    st.session_state.data, st.session_state.config = load_data_from_sheet()
+    # 2. On affiche un message d'attente
+    with st.sidebar.status("Enregistrement en cours...", expanded=True) as status:
+        st.write("Envoi vers Google Sheets...")
+        time.sleep(2) # Temps pour l'écriture
+        
+        st.write("Synchronisation avec le serveur...")
+        time.sleep(3) # Temps pour la mise à jour côté Google
+        
+        st.write("Rechargement des données...")
+        
+        # 3. On recharge les variables depuis la source
+        st.session_state.data, st.session_state.config = load_data_from_sheet()
+        
+        status.update(label="Terminé !", state="complete", expanded=False)
     
-    # 3. Rafraîchissement total
+    # 4. On rafraîchit la page une fois qu'on est sûrs que tout est chargé
     st.rerun()
+
 
 def reset_dossier():
     nom = st.session_state.d_in
