@@ -66,22 +66,20 @@ if 'data' not in st.session_state:
 import time
 
 if st.sidebar.button("💾 Enregistrer"):
-    # 1. On envoie tout sur Sheets
+    # 1. Sauvegarde vers Google Sheets (tes données réelles)
     save_all_to_sheet(st.session_state.data, st.session_state.config)
     
-    # 2. On vide la RAM pour être sûr de repartir de zéro
-    if 'data' in st.session_state: del st.session_state.data
-    if 'config' in st.session_state: del st.session_state.config
+    # 2. On vide la session pour forcer une reconstruction totale
+    # comme si l'appli venait de s'ouvrir.
+    for key in list(st.session_state.keys()):
+        del st.session_state[key]
     
-    # 3. On demande à recharger les données sources
-    # On force le chargement AVANT le rerun pour que la RAM soit remplie
-    st.session_state.data, st.session_state.config = load_data_from_sheet()
+    # 3. Tempo pour laisser Google Sheets enregistrer physiquement les modifs
+    time.sleep(5)
     
-    # 4. Tempo pour être absolument sûr que Google Sheets a tout digéré
-    # avant que l'affichage ne reprenne la main
-    time.sleep(5) 
-    
-    # 5. On lance le rerun final pour rafraîchir l'affichage
+    # 4. On relance l'application. 
+    # Comme la session est vide, ton script va repasser par ton bloc d'initialisation 
+    # du début (lignes 6-7), donc il va recharger tes vraies données depuis Sheets.
     st.rerun()
 
 
