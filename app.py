@@ -269,20 +269,22 @@ elif page == "Graphiques":
     if len(chapitres) > 0:
         sel_chap = st.selectbox("Choisir un chapitre", chapitres)
         df_notes = st.session_state.data[st.session_state.data['Chapitre'] == sel_chap].copy()
-        
+       
         # Préparation des données
         df_notes['Note_Num'] = pd.to_numeric(df_notes['Note'].astype(str).str.replace(',', '.'), errors='coerce')
-        df_notes['Order'] = df_notes['J_Type'].astype(str).str.extract('(\d+)').fillna(0).astype(int)
-        df_notes = df_notes.sort_values(by='Order')
+        # On ne garde que les lignes où une note est saisie pour ne pas afficher de colonnes vides inutiles
+        df_notes = df_notes.dropna(subset=['Note_Num']) 
+        
+        # Définition de l'ordre fixe pour le graphique
+        ordre_j = ['J0', 'J1', 'J3', 'J7', 'J14', 'J30', 'J60', 'J90', 'J120', 'J160']
 
-        # Affichage du graphique
-        if not df_notes.empty and 'Note_Num' in df_notes.columns:
+        if not df_notes.empty:
             chart = alt.Chart(df_notes).mark_line(point=True).encode(
-                x='J_Type',
+                # On force l'ordre ici : c'est ça qui va bloquer J14 après J7
+                x=alt.X('J_Type', sort=ordre_j),
                 y=alt.Y('Note_Num', scale=alt.Scale(domain=[0, 20]))
             ).properties(title="Progression")
             
-            # Correction ici : altair_chart (avec un 'r')
             st.altair_chart(chart, use_container_width=True)
         else:
-            st.info("Pas assez de données pour afficher le graphique.")
+            st.info("Pas encore de notes saisies pour ce chapitre.")
