@@ -202,24 +202,15 @@ elif page == "Planning & Saisie":
            
         note_in = cols[2].text_input("", value=str(row['Note']), key=f"grid_note_{row['ID']}", label_visibility="collapsed")
        
-         if cols[3].button("∑", key=f"grid_calc_{row['ID']}"):
+        if cols[3].button("∑", key=f"grid_calc_{row['ID']}"):
             try:
-                # Nettoyage amélioré : remplace les espaces, virgules et points virgules
-                # On récupère tout ce qui ressemble à un nombre
-                raw_text = note_in.replace(',', '.').replace(';', ' ')
-                nums = [float(n) for n in raw_text.split() if n.strip()]
-                
+                nums = [float(n.replace(',', '.')) for n in note_in.replace(';', ' ').split() if n.strip()]
                 if nums:
                     st.session_state.data.at[idx, 'Note'] = round(sum(nums) / len(nums), 2)
-                    # Sauvegarde manuelle ou automatique ici selon ton choix
-                    # Tu peux laisser la sauvegarde ici car le nouveau verrou 
-                    # de 3 secondes l'empêchera de planter au démarrage !
-                    save_all_to_sheet(st.session_state.data, st.session_state.config)
+                    #save_all_to_sheet(st.session_state.data, st.session_state.config)
                     st.rerun()
-                else:
-                    cols[3].warning("Aucun nombre")
-            except Exception as e:
-                cols[3].error("Erreur format")
+            except:
+                cols[3].error("!")
         elif note_in != str(row['Note']):
             st.session_state.data.at[idx, 'Note'] = note_in
             #save_all_to_sheet(st.session_state.data, st.session_state.config)
