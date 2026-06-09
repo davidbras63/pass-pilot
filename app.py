@@ -63,11 +63,7 @@ components.html(sync_script, height=0)
 if 'data' not in st.session_state:
     st.session_state.data, st.session_state.config = load_data_from_sheet()
 
-# Remplaces ton ancien bloc "Réinitialiser" par celui-ci dans la sidebar
-if st.sidebar.button("💾 Enregistrer et Actualiser"):
-    # 1. Sauvegarde vers Google Sheets
-    save_all_to_sheet(st.session_state.data, st.session_state.config)
-    
+   
     # 2. Notification visuelle
     st.sidebar.success("Données enregistrées !")
     
@@ -90,11 +86,15 @@ st.sidebar.title("⚙️ Pilot Expert")
 with st.sidebar.expander("🛠️ Réglages", expanded=False):
     st.session_state.config['cours_max'] = st.number_input("Max cours/jour", 1, 20, int(st.session_state.config.get('cours_max', 5)))
     cad_str = st.text_input("Cadencier (jours)", ",".join(map(str, st.session_state.config['cadencier'])))
+    # Mise à jour immédiate de la mémoire
     st.session_state.config['cadencier'] = [int(x.strip()) for x in cad_str.split(",")]
+    
     for j in st.session_state.config['cadencier']:
         st.session_state.config['seuils'][str(j)] = st.slider(f"Seuil Note J{j}", 10, 20, int(st.session_state.config['seuils'].get(str(j), 12)))
-    if st.button("💾 Enregistrer"):
+    
+    if st.button("💾 Enregistrer les Réglages"):
         save_all_to_sheet(st.session_state.data, st.session_state.config)
+        st.success("Réglages synchronisés !")
         st.rerun()
 
 st.sidebar.text_input("Nouveau Dossier", key="d_in")
@@ -177,11 +177,27 @@ elif page == "Planning & Saisie":
             dex_date = st.date_input("Date Examen", value=None)
             submitted = st.form_submit_button("Générer Planning")
         if submitted and chap and dex_date:
+            # On crée le J0
             new_rows = [{'ID': str(uuid.uuid4()), 'Dossier': choix_dos, 'Matiere': mat, 'Chapitre': chap, 'J_Type': 'J0', 'Date': str(d0_date), 'Note': 0, 'Statut': 'À faire'}]
+            
+            # On boucle sur la config DYNAMIQUE (ce que tu as dans la sidebar)
             for j in st.session_state.config['cadencier']:
                 d_j = d0_date + dt.timedelta(days=j)
-                if d_j <= dex_date: new_rows.append({'ID': str(uuid.uuid4()), 'Dossier': choix_dos, 'Matiere': mat, 'Chapitre': chap, 'J_Type': f'J{j}', 'Date': str(d_j), 'Note': 0, 'Statut': 'À faire'})
+                if d_j <= dex_date:
+                    new_rows.append({
+                        'ID': str(uuid.uuid4()), 
+                        'Dossier': choix_dos, 
+                        'Matiere': mat, 
+                        'Chapitre': chap, 
+                        'J_Type': f'J{j}', 
+                        'Date': str(d_j), 
+                        'Note': 0, 
+                        'Statut': 'À faire'
+                    })
+            
+            # Mise à jour des données et sauvegarde
             st.session_state.data = pd.concat([st.session_state.data, pd.DataFrame(new_rows)]).drop_duplicates(subset=['Dossier', 'Chapitre', 'J_Type', 'Date'])
+            save_all_to_sheet(st.session_state.data, st.session_state.config)
             st.rerun()
 
     st.subheader("🗓️ Planning Hebdomadaire")
