@@ -200,17 +200,31 @@ elif page == "Planning & Saisie":
             #save_all_to_sheet(st.session_state.data, st.session_state.config)
             st.rerun()
            
-        note_in = cols[2].text_input("", value=str(row['Note']), key=f"grid_note_{row['ID']}", label_visibility="collapsed")
-       
-        if cols[3].button("∑", key=f"grid_calc_{row['ID']}"):
+        # --- ZONE DE SAISIE ET BOUTON DE CALCUL ---
+        # 1. Zone de saisie (accepte des notes séparées par des espaces, virgules ou points-virgules)
+        note_in = cols[2].text_input("", value=str(row['Note']), key=f"grid_note_{row['ID']}")
+        
+        # 2. Bouton de calcul (transforme le texte en nombres et calcule la moyenne)
+        if cols[3].button("∑", key=f"btn_{row['ID']}"):
             try:
-                nums = [float(n.replace(',', '.')) for n in note_in.replace(';', ' ').split() if n.strip()]
+                # Nettoyage : remplace les virgules et points-virgules par des espaces
+                raw = note_in.replace(',', '.').replace(';', ' ')
+                
+                # Conversion : transforme chaque morceau en nombre réel (float)
+                nums = [float(n) for n in raw.split() if n.strip()]
+                
+                # Calcul : si on a des nombres, on fait la moyenne
                 if nums:
-                    st.session_state.data.at[idx, 'Note'] = round(sum(nums) / len(nums), 2)
-                    #save_all_to_sheet(st.session_state.data, st.session_state.config)
+                    moyenne = round(sum(nums) / len(nums), 2)
+                    
+                    # Mise à jour de la donnée en mémoire
+                    st.session_state.data.at[idx, 'Note'] = moyenne
+                    
+                    # Rafraîchissement pour voir le résultat instantanément
                     st.rerun()
             except:
-                cols[3].error("!")
+                # Si le calcul échoue, on ne fait rien pour éviter le plantage
+                pass
         elif note_in != str(row['Note']):
             st.session_state.data.at[idx, 'Note'] = note_in
             #save_all_to_sheet(st.session_state.data, st.session_state.config)
