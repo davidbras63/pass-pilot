@@ -200,12 +200,9 @@ elif page == "Planning & Saisie":
             #save_all_to_sheet(st.session_state.data, st.session_state.config)
             st.rerun()
            
-        # --- BLOC COMPLET : SAISIE, CALCUL ET SAUVEGARDE ---
-        
-        # 1. Zone de saisie
+        # --- BLOC COMPLET : SAISIE ET CALCUL (DANS LA BOUCLE) ---
         note_in = cols[2].text_input("", value=str(row['Note']), key=f"grid_note_{row['ID']}")
         
-        # 2. Bouton de calcul local
         if cols[3].button("∑", key=f"btn_{row['ID']}"):
             try:
                 raw = note_in.replace(',', '.').replace(';', ' ')
@@ -215,15 +212,16 @@ elif page == "Planning & Saisie":
                     st.rerun()
             except:
                 pass
-        
-        # 3. Bouton d'enregistrement global (Placé ici, il apparaîtra proprement)
-        if st.button("💾 Enregistrer tout sur Google Sheet", key=f"save_all_{idx}"):
-            try:
-                # Vérifie ici que 'conn' est bien le nom de ta connexion (sinon remplace par ton nom)
-                conn.update(worksheet="Feuille1", data=st.session_state.data)
-                st.success("Données sauvegardées !")
-            except Exception as e:
-                st.error(f"Erreur : {e}")
+
+    # --- BOUTON DE SAUVEGARDE (HORS DE LA BOUCLE) ---
+    # Place ce bloc juste après la fermeture de ta boucle for
+    if st.button("💾 Enregistrer tout sur Google Sheet"):
+        try:
+            # Vérifie bien que 'conn' est le nom défini en haut de ton fichier
+            conn.update(worksheet="Feuille1", data=st.session_state.data)
+            st.success("Toutes les notes ont été enregistrées !")
+        except Exception as e:
+            st.error(f"Erreur de sauvegarde : {e}")
         
 
 elif page == "Graphiques":
