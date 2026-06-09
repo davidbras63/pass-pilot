@@ -188,30 +188,16 @@ elif page == "Planning & Saisie":
             st.rerun()
            
         note_in = cols[2].text_input("", value=str(row['Note']), key=f"grid_note_{row['ID']}", label_visibility="collapsed")
-
-    if cols[3].button("Σ", key=f"grid_calc_{row['ID']}"):
-        try:
-            # Nettoyage et conversion sécurisée
-            valeurs = note_in.replace(';', ' ').replace(',', '.')
-            nums = [float(n) for n in valeurs.split() if n.strip()]
-            
-            if nums:
-                moyenne = round(sum(nums) / len(nums), 2)
-                st.session_state.data.at[idx, 'Note'] = moyenne
-                # On force le rafraîchissement uniquement après une modification valide
-                st.rerun()
-        except:
-            cols[3].error("!")
-
-    # On ne fait la mise à jour automatique que si la saisie est un nombre pur
-    elif note_in != str(row['Note']):
-        try:
-            # Vérifie si c'est un nombre valide avant d'écrire
-            val_test = float(note_in.replace(',', '.'))
-            st.session_state.data.at[idx, 'Note'] = note_in
-        except:
-            # Si c'est du texte, on ne fait rien pour ne pas planter
-            pass
+       
+        if cols[3].button("∑", key=f"grid_calc_{row['ID']}"):
+            try:
+                nums = [float(n.replace(',', '.')) for n in note_in.replace(';', ' ').split() if n.strip()]
+                if nums:
+                    st.session_state.data.at[idx, 'Note'] = round(sum(nums) / len(nums), 2)
+                    save_all_to_sheet(st.session_state.data, st.session_state.config)
+                    st.rerun()
+            except:
+                cols[3].error("!")
         elif note_in != str(row['Note']):
             st.session_state.data.at[idx, 'Note'] = note_in
             save_all_to_sheet(st.session_state.data, st.session_state.config)
