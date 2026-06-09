@@ -196,35 +196,29 @@ elif page == "Planning & Saisie":
 # --- COPIE CE BLOC ENTIER ---
 
 for idx, row in st.session_state.data[mask].iterrows():
-    cols = st.columns([1, 2, 2, 1])
-    
-    # Affichage des infos
-    cols[0].write(row['ID'])
-    cols[1].write(row['Nom'])
-    
-    # Saisie des notes
-    note_input = cols[2].text_input("", value=str(row['Note']), key=f"note_{row['ID']}")
-    
-    # Calcul automatique
-    if note_input != str(row['Note']):
-        try:
-            nettoyage = note_input.replace(',', ' ').replace(';', ' ')
-            nombres = [float(n) for n in nettoyage.split() if n.strip()]
-            if nombres:
-                st.session_state.data.at[idx, 'Note'] = round(sum(nombres) / len(nombres), 2)
-                st.rerun()
-        except:
-            pass
-
-# --- BOUTON DE SAUVEGARDE (HORS DE LA BOUCLE) ---
-# Ce bouton doit être collé JUSTE APRÈS le for, aligné avec le mot "for"
-if st.button("💾 Enregistrer tout sur Google Sheet"):
-    try:
-        # Utilisation de ta fonction définie en haut de ton fichier
-        save_all_to_sheet(st.session_state.data, st.session_state.config)
-        st.success("Toutes les notes ont été enregistrées !")
-    except Exception as e:
-        st.error(f"Erreur : {e}")
+        cols = st.columns([0.4, 0.15, 0.35, 0.1])
+        cols[0].write(f"{row['Chapitre']} ({row['J_Type']})")
+       
+        is_done = cols[1].checkbox("Fait", value=(row['Statut'] == 'Fait'), key=f"grid_chk_{row['ID']}")
+        if is_done != (row['Statut'] == 'Fait'):
+            st.session_state.data.at[idx, 'Statut'] = 'Fait' if is_done else 'À faire'
+            #save_all_to_sheet(st.session_state.data, st.session_state.config)
+            st.rerun()
+           
+        note_in = cols[2].text_input("", value=str(row['Note']), key=f"grid_note_{row['ID']}", label_visibility="collapsed")
+       
+        if cols[3].button("∑", key=f"grid_calc_{row['ID']}"):
+            try:
+                nums = [float(n.replace(',', '.')) for n in note_in.replace(';', ' ').split() if n.strip()]
+                if nums:
+                    st.session_state.data.at[idx, 'Note'] = round(sum(nums) / len(nums), 2)
+                    #save_all_to_sheet(st.session_state.data, st.session_state.config)
+                    st.rerun()
+            except:
+                cols[3].error("!")
+        elif note_in != str(row['Note']):
+            st.session_state.data.at[idx, 'Note'] = note_in
+            #save_all_to_sheet(st.session_state.data, st.session_state.config)
         
 
 elif page == "Graphiques":
