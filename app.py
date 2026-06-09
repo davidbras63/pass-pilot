@@ -26,6 +26,7 @@ def load_data_from_sheet():
     st.stop()
 
 def save_all_to_sheet(df, config):
+    return # <--- AJOUTEZ CETTE LIGNE ICI POUR BLOQUER TOUTE SAUVEGARDE
     df_to_send = df.copy()
     df_to_send['Date'] = df_to_send['Date'].astype(str)
     df_to_send['Note'] = df_to_send['Note'].astype(str)
