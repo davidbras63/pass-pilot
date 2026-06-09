@@ -189,6 +189,9 @@ elif page == "Planning & Saisie":
                             st.rerun()
    
     st.subheader("🗓️ Grille de Suivi & Saisie (Journée)")
+    
+    # AJOUTE JUSTE CETTE LIGNE ICI :
+    st.session_state.data['Note'] = st.session_state.data['Note'].astype(float)
     mask = (st.session_state.data['Date'] == str(dt.date.today())) & (st.session_state.data['Dossier'] == choix_dos)
     for idx, row in st.session_state.data[mask].iterrows():
         cols = st.columns([0.4, 0.15, 0.35, 0.1])
