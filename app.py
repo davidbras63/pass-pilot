@@ -191,31 +191,37 @@ elif page == "Planning & Saisie":
     st.subheader("🗓️ Grille de Suivi & Saisie (Journée)")
     mask = (st.session_state.data['Date'] == str(dt.date.today())) & (st.session_state.data['Dossier'] == choix_dos)
     # --- BOUCLE FOR (DANS TON TABLEAU) ---
+# --- CODE COMPLET ET FINAL ---
+# Assure-toi que ce bloc remplace TOUT ce qui est dans ta boucle for
+# --- COPIE CE BLOC ENTIER ---
+
 for idx, row in st.session_state.data[mask].iterrows():
     cols = st.columns([1, 2, 2, 1])
-    # ... (ton code pour afficher l'ID, le nom, etc.) ...
     
-    # SAISIE ET CALCUL (Uniquement)
-    note_in = cols[2].text_input("", value=str(row['Note']), key=f"grid_note_{row['ID']}")
-    if cols[3].button("∑", key=f"btn_{row['ID']}"):
+    # Affichage des infos
+    cols[0].write(row['ID'])
+    cols[1].write(row['Nom'])
+    
+    # Saisie des notes
+    note_input = cols[2].text_input("", value=str(row['Note']), key=f"note_{row['ID']}")
+    
+    # Calcul automatique
+    if note_input != str(row['Note']):
         try:
-            raw = note_in.replace(',', '.').replace(';', ' ')
-            nums = [float(n) for n in raw.split() if n.strip()]
-            if nums:
-                st.session_state.data.at[idx, 'Note'] = round(sum(nums) / len(nums), 2)
+            nettoyage = note_input.replace(',', ' ').replace(';', ' ')
+            nombres = [float(n) for n in nettoyage.split() if n.strip()]
+            if nombres:
+                st.session_state.data.at[idx, 'Note'] = round(sum(nombres) / len(nombres), 2)
                 st.rerun()
         except:
             pass
 
-# --- ICI : LA BOUCLE EST TERMINÉE (TU REVIENS AU BORD DE LA MARGE) ---
-
-# --- BOUTON ENREGISTRER (À L'EXTÉRIEUR) ---
-# Il n'apparaîtra qu'une seule fois, tout en bas.
+# --- BOUTON DE SAUVEGARDE (HORS DE LA BOUCLE) ---
+# Ce bouton doit être collé JUSTE APRÈS le for, aligné avec le mot "for"
 if st.button("💾 Enregistrer tout sur Google Sheet"):
-    # Remplace 'conn' par le nom de ta connexion (ex: sheet, client...)
-    # Si tu ne connais pas le nom, regarde en haut de ton fichier (st.connection)
     try:
-        conn.update(worksheet="Feuille1", data=st.session_state.data)
+        # Utilisation de ta fonction définie en haut de ton fichier
+        save_all_to_sheet(st.session_state.data, st.session_state.config)
         st.success("Toutes les notes ont été enregistrées !")
     except Exception as e:
         st.error(f"Erreur : {e}")
