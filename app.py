@@ -65,14 +65,26 @@ if 'data' not in st.session_state:
 
 # Remplaces ton ancien bloc "Réinitialiser" par celui-ci dans la sidebar
 if st.sidebar.button("💾 Enregistrer et Actualiser"):
-    # 1. Sauvegarde vers Google Sheets
+    # 1. Enregistrement des données actuelles dans Google Sheets
     save_all_to_sheet(st.session_state.data, st.session_state.config)
     
-    # 2. Notification visuelle
-    st.sidebar.success("Données enregistrées !")
-    
-    # 3. Rafraîchissement forcé pour mettre à jour les moyennes partout
-    st.rerun()
+    # 2. Rechargement des données fraîches depuis Google Sheets
+    # On utilise un bloc try/except pour que, si ça échoue, ça ne fasse pas planter toute l'appli
+    try:
+        st.session_state.data, st.session_state.config = load_data_from_sheet()
+        
+        # 3. Vérification que la donnée n'est pas vide
+        if st.session_state.data is not None:
+            st.sidebar.success("Données enregistrées et synchronisées !")
+            st.rerun()
+        else:
+            # Cas où la fonction renvoie rien
+            st.sidebar.error("Erreur : Chargement vide depuis Sheets.")
+            
+    except Exception as e:
+        # Cas où une erreur technique survient (connexion, etc.)
+        st.sidebar.error(f"Erreur chargement : {e}")
+        st.sidebar.warning("Note : Tes données sont bien envoyées, mais le rafraîchissement auto a échoué. Va sur le Dashboard pour relancer.")
 
 def reset_dossier():
     nom = st.session_state.d_in
