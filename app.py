@@ -189,14 +189,19 @@ elif page == "Planning & Saisie":
            
         note_in = cols[2].text_input("", value=str(row['Note']), key=f"grid_note_{row['ID']}", label_visibility="collapsed")
        
-        if cols[3].button("∑", key=f"grid_calc_{row['ID']}"):
+        if cols[3].button("Σ", key=f"grid_calc_{row['ID']}"):
             try:
-                nums = [float(n.replace(',', '.')) for n in note_in.replace(';', ' ').split() if n.strip()]
+                # Nettoyage
+                valeurs = note_in.replace(';', ' ').replace(',', '.')
+                nums = [float(n) for n in valeurs.split() if n.strip()]
+                
                 if nums:
-                    st.session_state.data.at[idx, 'Note'] = round(sum(nums) / len(nums), 2)
-                    #save_all_to_sheet(st.session_state.data, st.session_state.config)
-                    #st.rerun()
-            except:
+                    # Mise à jour directe
+                    moyenne = round(sum(nums) / len(nums), 2)
+                    st.session_state.data.at[idx, 'Note'] = moyenne
+                    # Force l'affichage immédiat sans tout recharger
+                    st.rerun() 
+            except Exception as e:
                 cols[3].error("!")
         elif note_in != str(row['Note']):
             st.session_state.data.at[idx, 'Note'] = note_in
