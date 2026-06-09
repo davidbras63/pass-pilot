@@ -219,14 +219,15 @@ elif page == "Planning & Saisie":
                     # On force le rafraîchissement ici pour que Streamlit affiche la nouvelle valeur immédiatement
                     st.rerun() 
             except Exception as e:
-                cols[3].error(f"Erreur : {e}")
-
-    # Bouton d'enregistrement final (à copier après la fermeture de la boucle for)
-    st.markdown("---")
-    if st.button("💾 Enregistrer et Actualiser"):
-        save_all_to_sheet(st.session_state.data, st.session_state.config)
-        st.success("Données enregistrées !")
-        st.rerun()
+                                        # Le 'cols[3]' est décalé par rapport au 'except'
+                                         cols[3].error(f"Erreur : {e}")
+    
+          # Le bouton est aligné avec le 'for' (donc à gauche, même niveau que 'mask =' )
+          st.markdown("---")
+          if st.button("💾 Enregistrer et Actualiser"):
+                   save_all_to_sheet(st.session_state.data, st.session_state.config)
+                   st.success("Données enregistrées !")
+                   st.rerun()
         
        
 
