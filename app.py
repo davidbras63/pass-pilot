@@ -190,12 +190,7 @@ elif page == "Planning & Saisie":
    
     st.subheader("🗓️ Grille de Suivi & Saisie (Journée)")
     mask = (st.session_state.data['Date'] == str(dt.date.today())) & (st.session_state.data['Dossier'] == choix_dos)
-    # --- BOUCLE FOR (DANS TON TABLEAU) ---
-# --- CODE COMPLET ET FINAL ---
-# Assure-toi que ce bloc remplace TOUT ce qui est dans ta boucle for
-# --- COPIE CE BLOC ENTIER ---
-
-for idx, row in st.session_state.data[mask].iterrows():
+    for idx, row in st.session_state.data[mask].iterrows():
         cols = st.columns([0.4, 0.15, 0.35, 0.1])
         cols[0].write(f"{row['Chapitre']} ({row['J_Type']})")
        
