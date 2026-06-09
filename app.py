@@ -63,25 +63,16 @@ components.html(sync_script, height=0)
 if 'data' not in st.session_state:
     st.session_state.data, st.session_state.config = load_data_from_sheet()
 
-import time
-
-if st.sidebar.button("💾 Enregistrer"):
-    # 1. Sauvegarde vers Google Sheets (tes données réelles)
+# Remplaces ton ancien bloc "Réinitialiser" par celui-ci dans la sidebar
+if st.sidebar.button("💾 Enregistrer et Actualiser"):
+    # 1. Sauvegarde vers Google Sheets
     save_all_to_sheet(st.session_state.data, st.session_state.config)
     
-    # 2. On vide la session pour forcer une reconstruction totale
-    # comme si l'appli venait de s'ouvrir.
-    for key in list(st.session_state.keys()):
-        del st.session_state[key]
+    # 2. Notification visuelle
+    st.sidebar.success("Données enregistrées !")
     
-    # 3. Tempo pour laisser Google Sheets enregistrer physiquement les modifs
-    time.sleep(5)
-    
-    # 4. On relance l'application. 
-    # Comme la session est vide, ton script va repasser par ton bloc d'initialisation 
-    # du début (lignes 6-7), donc il va recharger tes vraies données depuis Sheets.
+    # 3. Rafraîchissement forcé pour mettre à jour les moyennes partout
     st.rerun()
-
 
 def reset_dossier():
     nom = st.session_state.d_in
