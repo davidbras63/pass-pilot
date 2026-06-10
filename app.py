@@ -19,11 +19,13 @@ def load_data_from_sheet():
             data = response.json()
             df = pd.DataFrame(data.get('data', []), columns=['Dossier', 'Matiere', 'Chapitre', 'J_Type', 'Date', 'Note', 'Statut', 'ID'])
             df['Date'] = df['Date'].astype(str).apply(lambda x: x[:10])
-            config = data.get('config', {'cours_max': 5, 'cadencier': [1, 3, 7, 14, 30], 'seuils': {'1': 12, '3': 12, '7': 14, '14': 14, '30': 16}, 'dossiers': {"PASS": []}})
-            return df, config
-    except: pass
-    st.error("❌ ERREUR : Impossible de contacter Google Sheets.")
-    st.stop()
+            # On récupère la config, sans valeur par défaut forcée qui bloque tout
+            config = data.get('config')
+    
+            # Si la config est vide, on arrête tout pour ne pas corrompre tes données avec des chiffres faux
+            if config is None:
+               st.error("Erreur : La configuration n'a pas pu être chargée depuis le Sheet.")
+               st.stop()
 
 def save_all_to_sheet(df, config):
     # --- VERROU DE SÉCURITÉ ---
