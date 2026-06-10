@@ -267,44 +267,79 @@ elif page == "Planning & Saisie":
 
 elif page == "Graphiques":
     st.title("📊 Analyse Graphique de tes Notes")
+    
     if "data" in st.session_state and not st.session_state.data.empty:
         df_graphes = st.session_state.data.copy()
-        df_graphes['Note_Num'] = pd.to_numeric(df_graphes['Note'].astype(str).str.replace(',', '.'), errors='coerce')
-        df_graphes = df_graphes.dropna(subset=['Note_Num'])
-        if not df_graphes.empty:
-            st.subheader("📈 Évolution de la moyenne générale")
-            df_graphes['Sort_Val'] = df_graphes['J_Type'].astype(str).str.extract('(\d+)').fillna(0).astype(float)
-            df_graphes.loc[df_graphes['J_Type'].astype(str).str.contains('R', case=False, na=False), 'Sort_Val'] += 0.5
-            df_moy_regroupee = df_graphes.groupby(['J_Type', 'Sort_Val'])['Note_Num'].mean().reset_index()
-            df_moy_regroupee = df_moy_regroupee.sort_values('Sort_Val')
-            chart_moyenne = alt.Chart(df_moy_regroupee).mark_line(point=True, color='blue').encode(
-                x=alt.X('J_Type', sort=alt.EncodingSortField(field='Sort_Val', order='ascending'), title='Échéance'),
-                y=alt.Y('Note_Num', scale=alt.Scale(domain=[0, 20]), title='Note Moyenne')
-            ).properties(height=220)
-            st.altair_chart(chart_moyenne, use_container_width=True)
-            st.write("---")
-            st.subheader("📋 Comparaison individuelle des grands thèmes")
-            df_graphes['Theme'] = df_graphes['Chapitre'].astype(str).str.replace(r'^\d+[\s-]*', '', regex=True).str.strip()
-            liste_themes = sorted(df_graphes['Theme'].unique())
-            themes_selectionnes = st.multiselect("Sélectionne jusqu'à 3 thèmes à afficher :", options=liste_themes, default=[liste_themes[0]] if liste_themes else None, max_selections=3)
-            if themes_selectionnes:
-                cols = st.columns(len(themes_selectionnes))
-                for i, nom_theme in enumerate(themes_selectionnes):
-                    with cols[i]:
-                        st.markdown(f"**Thème : {nom_theme}**")
-                        df_un_theme = df_graphes[df_graphes['Theme'] == nom_theme].copy()
-                        if not df_un_theme.empty:
-                            df_theme_regroupe = df_un_theme.groupby(['J_Type', 'Sort_Val'])['Note_Num'].mean().reset_index()
-                            df_theme_regroupe = df_theme_regroupe.sort_values('Sort_Val')
-                            chart_chapitre = alt.Chart(df_theme_regroupe).mark_line(point=True, color='orange').encode(
-                                x=alt.X('J_Type', sort=alt.EncodingSortField(field='Sort_Val', order='ascending'), title='Échéance'),
-                                y=alt.Y('Note_Num', scale=alt.Scale(domain=[0, 20]), title='Note Moyenne')
-                            ).properties(height=180, title="Progression globale")
-                            st.altair_chart(chart_chapitre, use_container_width=True)
-                        else:
-                            st.caption("Aucune note.")
+        
+        # Détection automatique de la colonne Matière
+        liste_matieres = sorted(df_graphes['Matière'].unique()) if 'Matière' in df_graphes.columns else []
+        if not liste_matieres and 'Matiere' in df_graphes.columns:
+            liste_matieres = sorted(df_graphes['Matiere'].unique())
+            
+        if liste_matieres:
+            # Menu déroulant pour verrouiller une seule matière
+            sel_mat_graph = st.selectbox("📚 Choisis la matière à analyser :", options=liste_matieres)
+            
+            # Filtrage étanche sur la matière choisie
+            col_mat = 'Matière' if 'Matière' in df_graphes.columns else 'Matiere'
+            df_mat_graph = df_graphes[df_graphes[col_mat] == sel_mat_graph].copy()
+            
+            # Nettoyage local des notes (virgules en points)
+            df_mat_graph['Note_Num'] = pd.to_numeric(df_mat_graph['Note'].astype(str).str.replace(',', '.'), errors='coerce')
+            df_mat_graph = df_mat_graph.dropna(subset=['Note_Num'])
+            
+            if not df_mat_graph.empty:
+                # --- 1. GRAPHIQUE MOYENNE GÉNÉRALE DE LA MATIÈRE ---
+                st.subheader(f"📈 Évolution de la moyenne ({sel_mat_graph})")
+                df_mat_graph['Sort_Val'] = df_mat_graph['J_Type'].astype(str).str.extract('(\d+)').fillna(0).astype(float)
+                df_mat_graph.loc[df_mat_graph['J_Type'].astype(str).str.contains('R', case=False, na=False), 'Sort_Val'] += 0.5
+                
+                df_moy_regroupee = df_mat_graph.groupby(['J_Type', 'Sort_Val'])['Note_Num'].mean().reset_index()
+                df_moy_regroupee = df_moy_regroupee.sort_values('Sort_Val')
+                
+                chart_moyenne = alt.Chart(df_moy_regroupee).mark_line(point=True, color='blue').encode(
+                    x=alt.X('J_Type', sort=alt.EncodingSortField(field='Sort_Val', order='ascending'), title='Échéance'),
+                    y=alt.Y('Note_Num', scale=alt.Scale(domain=[0, 20]), title='Note Moyenne')
+                ).properties(height=220)
+                st.altair_chart(chart_moyenne, use_container_width=True)
+                
+                st.write("---")
+                
+                # --- 2. GRAPHES CÔTE À CÔTE FILTRÉS SUR LES THÈMES DE CETTE MATIÈRE ---
+                st.subheader("📋 Comparaison individuelle des grands thèmes")
+                df_mat_graph['Theme'] = df_mat_graph['Chapitre'].astype(str).str.replace(r'^\d+[\s-]*', '', regex=True).str.strip()
+                liste_themes = sorted(df_mat_graph['Theme'].unique())
+                
+                themes_selectionnes = st.multiselect(
+                    f"Sélectionne jusqu'à 3 thèmes de {sel_mat_graph} :", 
+                    options=liste_themes, 
+                    default=[liste_themes[0]] if liste_themes else None, 
+                    max_selections=3
+                )
+                
+                if themes_selectionnes:
+                    cols = st.columns(len(themes_selectionnes))
+                    for i, nom_theme in enumerate(themes_selectionnes):
+                        with cols[i]:
+                            st.markdown(f"**Thème : {nom_theme}**")
+                            df_un_theme = df_mat_graph[df_mat_graph['Theme'] == nom_theme].copy()
+                            if not df_un_theme.empty:
+                                df_theme_regroupe = df_un_theme.groupby(['J_Type', 'Sort_Val'])['Note_Num'].mean().reset_index()
+                                df_theme_regroupe = df_theme_regroupe.sort_values('Sort_Val')
+                                chart_chapitre = alt.Chart(df_theme_regroupe).mark_line(point=True, color='orange').encode(
+                                    x=alt.X('J_Type', sort=alt.EncodingSortField(field='Sort_Val', order='ascending'), title='Échéance'),
+                                    y=alt.Y('Note_Num', scale=alt.Scale(domain=[0, 20]), title='Note Moyenne')
+                                ).properties(height=180, title="Progression globale")
+                                st.altair_chart(chart_chapitre, use_container_width=True)
+                            else:
+                                st.caption("Aucune note.")
+                else:
+                    st.info("Sélectionne au moins un thème.")
+            else:
+                st.info(f"Aucune note numérique valide pour {sel_mat_graph}.")
         else:
-            st.info("Aucune note numérique valide pour générer les graphiques.")
+            st.info("Aucune matière trouvée dans le fichier.")
     else:
         st.info("Pas de données disponibles.")
+
 
