@@ -232,7 +232,7 @@ elif page == "Planning & Saisie":
     st.subheader("🗓️ Grille de Suivi & Saisie (Journée)")
     
     # AJOUTE JUSTE CETTE LIGNE ICI :
-    st.session_state.data['Note'] = st.session_state.data['Note'].astype(float)
+    st.session_state.data['Note'] = pd.to_numeric(st.session_state.data['Note'].astype(str).str.replace(',', '.'), errors='coerce')
     mask = (st.session_state.data['Date'] == str(dt.date.today())) & (st.session_state.data['Dossier'] == choix_dos)
     for idx, row in st.session_state.data[mask].iterrows():
         cols = st.columns([0.4, 0.15, 0.35, 0.1])
@@ -266,5 +266,61 @@ elif page == "Planning & Saisie":
        
 
 elif page == "Graphiques":
- st.title("📊 Analyse Graphique")
- st.info("Section graphique en cours de maintenance.")
+ st.title("📊 Analyse Graphique de tes Notes")
+ 
+ # On récupère les données et on nettoie les notes (virgules en points)
+ if not st.session_state.data.empty:
+  df_graphes = st.session_state.data.copy()
+  df_graphes['Note_Num'] = pd.to_numeric(df_graphes['Note'].astype(str).str.replace(',', '.'), errors='coerce')
+  df_graphes = df_graphes.dropna(subset=['Note_Num'])
+  
+  if not df_graphes.empty:
+# --- 1. GRAPHIQUE MOYENNE GÉNÉRALE (EN HAUT) ---
+   st.subheader(f"📈 Évolution de la moyenne générale")
+   df_graphes['Sort_Val'] = df_graphes['J_Type'].astype(str).str.extract('(\d+)').fillna(0).astype(float)
+   df_graphes.loc[df_graphes['J_Type'].astype(str).str.contains('R', case=False, na=False), 'Sort_Val'] += 0.5
+   
+   df_moy_regroupee = df_graphes.groupby(['J_Type', 'Sort_Val'])['Note_Num'].mean().reset_index()
+   df_moy_regroupee = df_moy_regroupee.sort_values('Sort_Val')
+   
+   chart_moyenne = alt.Chart(df_moy_regroupee).mark_line(point=True, color='blue').encode(
+    x=alt.X('J_Type', sort=alt.EncodingSortField(field='Sort_Val', order='ascending'), title='Échéance'),
+    y=alt.Y('Note_Num', scale=alt.Scale(domain=[0, 20]), title='Note Moyenne'),
+    tooltip=['J_Type', 'Note_Num']
+   ).properties(height=220)
+   st.altair_chart(chart_moyenne, use_container_width=True)
+   
+   st.write("---")
+   
+# --- 2. GRAPHES PAR THÈME CÔTE À CÔTE (EN DESSOUS) ---
+   st.subheader("📋 Comparaison individuelle des grands thèmes")
+   df_graphes['Theme'] = df_graphes['Chapitre'].astype(str).str.replace(r'^\d+[\s-]*', '', regex=True).str.strip()
+   liste_themes = sorted(df_graphes['Theme'].unique())
+   
+   themes_selectionnes = st.multiselect("Sélectionne jusqu'à 3 thèmes à afficher :", options=liste_themes, default=[liste_themes[0]] if liste_themes else None, max_selections=3)
+   
+   if themes_selectionnes:
+    cols = st.columns(len(themes_selectionnes))
+    for i, nom_theme in enumerate(themes_selectionnes):
+     with cols[i]:
+      st.markdown(f"**Thème : {nom_theme}**")
+      df_un_theme = df_graphes[df_graphes['Theme'] == nom_theme].copy()
+      
+      if not df_un_theme.empty:
+       df_theme_regroupe = df_un_theme.groupby(['J_Type', 'Sort_Val'])['Note_Num'].mean().reset_index()
+       df_theme_regroupe = df_theme_regroupe.sort_values('Sort_Val')
+       
+       chart_chapitre = alt.Chart(df_theme_regroupe).mark_line(point=True, color='orange').encode(
+        x=alt.X('J_Type', sort=alt.EncodingSortField(field='Sort_Val', order='ascending'), title='Échéance'),
+        y=alt.Y('Note_Num', scale=alt.Scale(domain=[0, 20]), title='Note Moyenne'),
+        tooltip=['J_Type', 'Note_Num']
+       ).properties(height=180, title="Progression globale")
+       st.altair_chart(chart_chapitre, use_container_width=True)
+      else:
+       st.caption("Aucune note pour ce thème.")
+   else:
+    st.info("Sélectionne au moins un thème.")
+  else:
+   st.info("Aucune note valide pour générer les graphiques.")
+ else:
+  st.info("Pas encore de données disponibles.")
