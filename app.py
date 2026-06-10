@@ -287,76 +287,13 @@ elif page == "Graphiques":
         # On trie par ce nombre, plus besoin de liste manuelle
         df_notes = df_notes.sort_values('Sort_Val')
 
-        # --- NOUVELLE LOGIQUE : GRAPHES SÉPARÉS (MOYENNE EN HAUT, 3 CHAPITRES EN DESSOUS) ---
-
-if not df_mat.empty:
-    st.subheader(f"📈 Moyenne globale de la matière : {sel_mat}")
-    
-    # 1. Préparation des données de toute la matière pour la courbe du haut
-    df_m_courbe = df_mat.copy()
-    df_m_courbe['Note_Num'] = pd.to_numeric(df_m_courbe['Note'].astype(str).str.replace(',', '.'), errors='coerce')
-    df_m_courbe = df_m_courbe.dropna(subset=['Note_Num'])
-    
-    if not df_m_courbe.empty:
-        # Tri numérique des J_Type pour la matière
-        df_m_courbe['Sort_Val'] = df_m_courbe['J_Type'].astype(str).str.extract('(\d+)').fillna(0).astype(int)
-        
-        # On calcule la moyenne par J_Type
-        df_moy_regroupee = df_m_courbe.groupby(['J_Type', 'Sort_Val'])['Note_Num'].mean().reset_index()
-        df_moy_regroupee = df_moy_regroupee.sort_values('Sort_Val')
-        
-        # Tracé du graphique de la moyenne globale
-        chart_moyenne = alt.Chart(df_moy_regroupee).mark_line(point=True, color='blue').encode(
-            x=alt.X('J_Type', sort=alt.EncodingSortField(field='Sort_Val', order='ascending'), title='Échéance'),
-            y=alt.Y('Note_Num', scale=alt.Scale(domain=[0, 20]), title='Note Moyenne'),
-            tooltip=['J_Type', 'Note_Num']
-        ).properties(height=250, title="Évolution de la moyenne générale")
-        
-        st.altair_chart(chart_moyenne, use_container_width=True)
-    else:
-        st.info("Pas assez de notes pour calculer la moyenne globale.")
-
-st.write("---") # Ligne de séparation visuelle
-
-# 2. Sélecteur et graphiques individuels pour 3 chapitres au choix (En dessous)
-st.subheader("📋 Comparaison individuelle des chapitres")
-
-if len(chapitres) > 0:
-    chapitres_selectionnes = st.multiselect(
-        "Sélectionne jusqu'à 3 chapitres à afficher en dessous :",
-        options=chapitres,
-        default=[sel_chap] if sel_chap in chapitres else [chapitres[0]],
-        max_selections=3
-    )
-    
-    if chapitres_selectionnes:
-        # On crée dynamiquement le nombre de colonnes nécessaires (maximum 3)
-        cols = st.columns(len(chapitres_selectionnes))
-        
-        for i, nom_chapitre in enumerate(chapitres_selectionnes):
-            with cols[i]:
-                st.markdown(f"**{nom_chapitre}**")
-                
-                # Filtrage et préparation pour CE chapitre unique (Bien aligné sous le with)
-                df_un_chap = df_mat[df_mat['Chapitre'] == nom_chapitre].copy()
-                df_un_chap['Note_Num'] = pd.to_numeric(df_un_chap['Note'].astype(str).str.replace(',', '.'), errors='coerce')
-                df_un_chap = df_un_chap.dropna(subset=['Note_Num'])
-                
-                if not df_un_chap.empty:
-                    df_un_chap['Sort_Val'] = df_un_chap['J_Type'].astype(str).str.extract('(\d+)').fillna(0).astype(int)
-                    df_un_chap = df_un_chap.sort_values('Sort_Val')
-                    
-                    # Tracé du petit graphique individuel
-                    chart_chapitre = alt.Chart(df_un_chap).mark_line(point=True, color='orange').encode(
-                        x=alt.X('J_Type', sort=alt.EncodingSortField(field='Sort_Val', order='ascending'), title='Échéance'),
-                        y=alt.Y('Note_Num', scale=alt.Scale(domain=[0, 20]), title='Note'),
-                        tooltip=['J_Type', 'Note_Num']
-                    ).properties(height=200, title="Progression")
-                    
-                    st.altair_chart(chart_chapitre, use_container_width=True)
-                else:
-                    st.caption("Aucune note saisie pour ce chapitre.")
-    else:
-        st.info("Sélectionne un chapitre pour afficher sa courbe.")
-else:
-    st.info("Aucun chapitre disponible.")
+        if not df_notes.empty:
+            # 3. Graphique : on utilise l'ordre déjà trié
+            chart = alt.Chart(df_notes).mark_line(point=True).encode(
+                x=alt.X('J_Type', sort=None), # 'None' car c'est déjà trié par Sort_Val
+                y=alt.Y('Note_Num', scale=alt.Scale(domain=[0, 20]))
+            ).properties(title="Progression")
+            
+            st.altair_chart(chart, use_container_width=True)
+        else:
+            st.info("Pas encore de notes saisies pour ce chapitre.")
