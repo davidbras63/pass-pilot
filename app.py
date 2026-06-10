@@ -19,13 +19,16 @@ def load_data_from_sheet():
             data = response.json()
             df = pd.DataFrame(data.get('data', []), columns=['Dossier', 'Matiere', 'Chapitre', 'J_Type', 'Date', 'Note', 'Statut', 'ID'])
             df['Date'] = df['Date'].astype(str).apply(lambda x: x[:10])
-            # On récupère la config, sans valeur par défaut forcée qui bloque tout
             config = data.get('config')
-    
-            # Si la config est vide, on arrête tout pour ne pas corrompre tes données avec des chiffres faux
             if config is None:
-               st.error("Erreur : La configuration n'a pas pu être chargée depuis le Sheet.")
-               st.stop()
+                st.error("Configuration absente.")
+                st.stop()
+            return df, config
+    except Exception as e:
+        st.error(f"Erreur : {e}")
+        st.stop()
+    st.error("Erreur de connexion.")
+    st.stop()
 
 def save_all_to_sheet(df, config):
     # --- VERROU DE SÉCURITÉ ---
