@@ -266,51 +266,5 @@ elif page == "Planning & Saisie":
        
 
 elif page == "Graphiques":
- st.title("📊 Analyse Graphique de tes Notes")
- if not df_notes.empty:
-# --- 1. GRAPHIQUE MOYENNE GENERALE (EN HAUT) ---
-  if not df_mat.empty:
-   st.subheader(f"📈 Moyenne globale de la matière : {sel_mat}")
-   df_m_courbe = df_mat.copy()
-   df_m_courbe['Note_Num'] = pd.to_numeric(df_m_courbe['Note'].astype(str).str.replace(',', '.'), errors='coerce')
-   df_m_courbe = df_m_courbe.dropna(subset=['Note_Num'])
-   if not df_m_courbe.empty:
-    df_m_courbe['Sort_Val'] = df_m_courbe['J_Type'].astype(str).str.extract('(\d+)').fillna(0).astype(float)
-    df_m_courbe.loc[df_m_courbe['J_Type'].astype(str).str.contains('R', case=False, na=False), 'Sort_Val'] += 0.5
-    df_moy_regroupee = df_m_courbe.groupby(['J_Type', 'Sort_Val'])['Note_Num'].mean().reset_index()
-    df_moy_regroupee = df_moy_regroupee.sort_values('Sort_Val')
-    chart_moyenne = alt.Chart(df_moy_regroupee).mark_line(point=True, color='blue').encode(x=alt.X('J_Type', sort=alt.EncodingSortField(field='Sort_Val', order='ascending'), title='Échéance'), y=alt.Y('Note_Num', scale=alt.Scale(domain=[0, 20]), title='Note Moyenne'), tooltip=['J_Type', 'Note_Num']).properties(height=220, title="Évolution de la moyenne générale")
-    st.altair_chart(chart_moyenne, use_container_width=True)
-   else:
-    st.info("Pas assez de notes pour calculer la moyenne globale.")
-  st.write("---")
-# --- 2. MULTI-SELECTION ET GRAPHES PAR THEME (EN DESSOUS) ---
-  st.subheader("📋 Comparaison individuelle des grands thèmes")
-  if not df_mat.empty:
-   df_themes = df_mat.copy()
-   df_themes['Theme'] = df_themes['Chapitre'].astype(str).str.replace(r'^\d+[\s-]*', '', regex=True).str.strip()
-   liste_themes = sorted(df_themes['Theme'].unique())
-   themes_selectionnes = st.multiselect("Sélectionne jusqu'à 3 thèmes à afficher côte à côte :", options=liste_themes, default=[liste_themes[0]] if liste_themes else None, max_selections=3)
-   if themes_selectionnes:
-    cols = st.columns(len(themes_selectionnes))
-    for i, nom_theme in enumerate(themes_selectionnes):
-     with cols[i]:
-      st.markdown(f"**Thème : {nom_theme}**")
-      df_un_theme = df_themes[df_themes['Theme'] == nom_theme].copy()
-      df_un_theme['Note_Num'] = pd.to_numeric(df_un_theme['Note'].astype(str).str.replace(',', '.'), errors='coerce')
-      df_un_theme = df_un_theme.dropna(subset=['Note_Num'])
-      if not df_un_theme.empty:
-       df_un_theme['Sort_Val'] = df_un_theme['J_Type'].astype(str).str.extract('(\d+)').fillna(0).astype(float)
-       df_un_theme.loc[df_un_theme['J_Type'].astype(str).str.contains('R', case=False, na=False), 'Sort_Val'] += 0.5
-       df_theme_regroupe = df_un_theme.groupby(['J_Type', 'Sort_Val'])['Note_Num'].mean().reset_index()
-       df_theme_regroupe = df_theme_regroupe.sort_values('Sort_Val')
-       chart_chapitre = alt.Chart(df_theme_regroupe).mark_line(point=True, color='orange').encode(x=alt.X('J_Type', sort=alt.EncodingSortField(field='Sort_Val', order='ascending'), title='Échéance'), y=alt.Y('Note_Num', scale=alt.Scale(domain=[0, 20]), title='Note Moyenne'), tooltip=['J_Type', 'Note_Num']).properties(height=180, title=f"Progression globale")
-       st.altair_chart(chart_chapitre, use_container_width=True)
-      else:
-       st.caption("Aucune note.")
-   else:
-    st.info("Sélectionne au moins un thème.")
-  else:
-   st.info("Aucune donnée disponible.")
- else:
-  st.info("Pas encore de notes saisies au total.")
+ st.title("📊 Analyse Graphique")
+ st.info("Section graphique en cours de maintenance.")
