@@ -269,19 +269,35 @@ elif page == "Graphiques":
     st.title("📊 Analyse Graphique de tes Notes")
     
     if "data" in st.session_state and not st.session_state.data.empty:
-        df_graphes = st.session_state.data.copy()
+        # IMPORTATION DE SÉCURITÉ POUR ISOLER LA MÉMOIRE
+        import pickle
         
-        # Détection automatique de la colonne Matière
-        liste_matieres = sorted(df_graphes['Matière'].unique()) if 'Matière' in df_graphes.columns else []
-        if not liste_matieres and 'Matiere' in df_graphes.columns:
-            liste_matieres = sorted(df_graphes['Matiere'].unique())
+        # On crée un clone 100% étanche et indépendant pour que le graphique ne bave pas sur la sauvegarde
+        df_graphes = pickle.loads(pickle.dumps(st.session_state.data))
+        
+        # FILTRE PAR DOSSIER : On récupère le dossier sélectionné dans ton appli
+        # (On teste les noms de variables probables pour s'adapter à ton code)
+        dossier_actuel = None
+        if "choix_dos" in st.session_state:
+            dossier_actuel = st.session_state.choix_dos
+        elif "choix_dossier" in st.session_state:
+            dossier_actuel = st.session_state.choix_dossier
+            
+        # Si on trouve la colonne Dossier et un dossier sélectionné, on filtre direct
+        col_dossier = next((c for c in df_graphes.columns if c.lower() in ['dossier', 'dossiers']), None)
+        if col_dossier and dossier_actuel:
+            df_graphes = df_graphes[df_graphes[col_dossier] == dossier_actuel].copy()
+            st.caption(f"📍 Données filtrées pour le dossier : **{dossier_actuel}**")
+        
+        # Détection de la colonne Matière (uniquement dans ce dossier)
+        col_mat = 'Matière' if 'Matière' in df_graphes.columns else 'Matiere'
+        liste_matieres = sorted(df_graphes[col_mat].unique()) if col_mat in df_graphes.columns else []
             
         if liste_matieres:
-            # Menu déroulant pour verrouiller une seule matière
+            # Menu déroulant : uniquement les matières du dossier actuel
             sel_mat_graph = st.selectbox("📚 Choisis la matière à analyser :", options=liste_matieres)
             
-            # Filtrage étanche sur la matière choisie
-            col_mat = 'Matière' if 'Matière' in df_graphes.columns else 'Matiere'
+            # Filtrage sur la matière choisie
             df_mat_graph = df_graphes[df_graphes[col_mat] == sel_mat_graph].copy()
             
             # Nettoyage local des notes (virgules en points)
@@ -289,7 +305,7 @@ elif page == "Graphiques":
             df_mat_graph = df_mat_graph.dropna(subset=['Note_Num'])
             
             if not df_mat_graph.empty:
-                # --- 1. GRAPHIQUE MOYENNE GÉNÉRALE DE LA MATIÈRE ---
+                # --- 1. GRAPHIQUE MOYENNE GÉNÉRALE ---
                 st.subheader(f"📈 Évolution de la moyenne ({sel_mat_graph})")
                 df_mat_graph['Sort_Val'] = df_mat_graph['J_Type'].astype(str).str.extract('(\d+)').fillna(0).astype(float)
                 df_mat_graph.loc[df_mat_graph['J_Type'].astype(str).str.contains('R', case=False, na=False), 'Sort_Val'] += 0.5
@@ -338,8 +354,7 @@ elif page == "Graphiques":
             else:
                 st.info(f"Aucune note numérique valide pour {sel_mat_graph}.")
         else:
-            st.info("Aucune matière trouvée dans le fichier.")
+            st.info("Aucune matière trouvée pour ce dossier.")
     else:
         st.info("Pas de données disponibles.")
-
 
