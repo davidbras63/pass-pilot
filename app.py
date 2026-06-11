@@ -145,7 +145,7 @@ if page == "Dashboard":
                     if col_pb.button("🗑️", key=f"del_chap_{choix_dos}_{m}_{c}"):
                         st.session_state.data = st.session_state.data[
                             ~((st.session_state.data['Dossier'] == choix_dos) & 
-                              (st.session_state.data['Matière'] == m) & 
+                              (st.session_state.data['Matiere'] == m) & 
                               (st.session_state.data['Chapitre'] == c))
                         ]
                         st.success(f"Chapitre '{c}' supprimé !")
