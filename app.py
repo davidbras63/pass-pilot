@@ -137,7 +137,19 @@ if page == "Dashboard":
                 st.session_state.data = st.session_state.data[(st.session_state.data['Dossier'] != choix_dos) | (st.session_state.data['Matiere'] != m)]
                 st.rerun()
             chapitres_matiere = st.session_state.data[(st.session_state.data['Dossier'] == choix_dos) & (st.session_state.data['Matiere'] == m)]['Chapitre'].unique()
-            if len(chapitres_matiere) > 0: st.write("**Chapitres :**", ", ".join(chapitres_matiere))
+            if len(chapitres_matiere) > 0:
+                st.write("**Chapitres :**")
+                for c in chapitres_matiere:
+                    col_ch, col_pb = st.columns([0.8, 0.2])
+                    col_ch.write(f"- {c}")
+                    if col_pb.button("🗑️", key=f"del_chap_{choix_dos}_{m}_{c}"):
+                        st.session_state.data = st.session_state.data[
+                            ~((st.session_state.data['Dossier'] == choix_dos) & 
+                              (st.session_state.data['Matière'] == m) & 
+                              (st.session_state.data['Chapitre'] == c))
+                        ]
+                        st.success(f"Chapitre '{c}' supprimé !")
+                        st.rerun()
            
     st.subheader("⚠️ Rattrapages à traiter")
     df_dos = st.session_state.data[st.session_state.data['Dossier'] == choix_dos].copy()
