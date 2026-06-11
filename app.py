@@ -269,7 +269,7 @@ elif page == "Graphiques":
     st.title("📊 Analyse Graphique de tes Notes")
     
     if "data" in st.session_state and not st.session_state.data.empty:
-        df_graphes = st.session_state.data.copy()
+        df_graphes = st.session_state.data[st.session_state.data['Dossier'] == choix_dos].copy()
         
         # Détection automatique de la colonne Matière
         liste_matieres = sorted(df_graphes['Matière'].unique()) if 'Matière' in df_graphes.columns else []
