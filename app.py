@@ -240,7 +240,7 @@ elif page == "Planning & Saisie":
        
         is_done = cols[1].checkbox("Fait", value=(row['Statut'] == 'Fait'), key=f"grid_chk_{row['ID']}")
         if is_done != (row['Statut'] == 'Fait'):
-            st.session_state.data.at[idx, 'Statut'] = 'Fait' if is_done else 'À faire'
+            st.session_state.data.loc[st.session_state.data['ID'] == row['ID'], 'Statut'] = 'Fait' if is_done else 'À faire'
             #save_all_to_sheet(st.session_state.data, st.session_state.config)
             st.rerun()
            
