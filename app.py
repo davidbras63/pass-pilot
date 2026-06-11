@@ -220,8 +220,23 @@ elif page == "Planning & Saisie":
 
     st.subheader("🗓️ Planning Hebdomadaire")
     cols = st.columns(7)
+    if 'semaine_decalage' not in st.session_state:
+        st.session_state.semaine_decalage = 0
+
+    col_g, col_c, col_d = st.columns([1, 1.5, 1])
+    if col_g.button("⬅️", key="prev_week"):
+        st.session_state.semaine_decalage -= 7
+        st.rerun()
+    if col_c.button("Aujourd'hui", key="today_week"):
+        st.session_state.semaine_decalage = 0
+        st.rerun()
+    if col_d.button("➡️", key="next_week"):
+        st.session_state.semaine_decalage += 7
+        st.rerun()
+
     today = dt.date.today()
-    start = today - dt.timedelta(days=today.weekday())
+    start = today - dt.timedelta(days=today.weekday()) + dt.timedelta(days=st.session_state.semaine_decalage)
+
     for i, col in enumerate(cols):
         day_str = (start + dt.timedelta(days=i)).strftime('%Y-%m-%d')
         with col:
