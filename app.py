@@ -256,7 +256,7 @@ elif page == "Planning & Saisie":
                 # 2. Si on a des nombres, on calcule
                 if nums:
                     moyenne = round(sum(nums) / len(nums), 2)
-                    st.session_state.data.at[idx, 'Note'] = moyenne
+                    st.session_state.data.loc[st.session_state.data['ID'] == row['ID'], 'Note'] = moyenne
                     # On force le rafraîchissement ici pour que Streamlit affiche la nouvelle valeur immédiatement
                     st.rerun() 
             except Exception as e:
