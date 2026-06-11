@@ -174,182 +174,6 @@ if page == "Dashboard":
                 st.session_state.data.loc[st.session_state.data['ID'] == row['ID'], 'Statut'] = 'Traité'
                 st.rerun()
 
-import streamlit as st
-import pandas as pd
-import datetime as dt
-import uuid
-import requests
-import json
-import time
-import altair as alt
-import streamlit.components.v1 as components
-
-st.set_page_config(layout="wide")
-
-WEB_APP_URL = "https://script.google.com/macros/s/AKfycbwA7ZGCqHcDgw_Ia2PDjuvLqGDx1smoqR75VOo5IytV-QgMIw2_6xnZtXI1sFensDDwfw/exec"
-
-def load_data_from_sheet():
-    try:
-        response = requests.get(WEB_APP_URL, timeout=15)
-        if response.status_code == 200:
-            data = response.json()
-            df = pd.DataFrame(data.get('data', []), columns=['Dossier', 'Matiere', 'Chapitre', 'J_Type', 'Date', 'Note', 'Statut', 'ID'])
-            df['Date'] = df['Date'].astype(str).apply(lambda x: x[:10])
-            config = data.get('config')
-            if config is None:
-                st.error("Configuration absente.")
-                st.stop()
-            return df, config
-    except Exception as e:
-        st.error(f"Erreur : {e}")
-        st.stop()
-    st.error("Erreur de connexion.")
-    st.stop()
-
-def save_all_to_sheet(df, config):
-    # --- VERROU DE SÉCURITÉ ---
-    # 1. Empêche l'exécution automatique pendant les 3 premières secondes du démarrage
-    if 'start_time' not in st.session_state:
-        st.session_state.start_time = time.time()
-    if time.time() - st.session_state.start_time < 3:
-        return
-   
-    # 2. Si le tableau est vide, on refuse de sauvegarder pour protéger Google Sheets
-    if df is None or df.empty:
-        return
-
-    # --- SAUVEGARDE ---
-    df_to_send = df.copy()
-    df_to_send['Date'] = df_to_send['Date'].astype(str)
-    df_to_send['Note'] = df_to_send['Note'].astype(str)
-    payload = {"data": df_to_send.values.tolist(), "config": config}
-    try:
-        requests.post(WEB_APP_URL, json=payload, timeout=15)
-        time.sleep(0.5)
-    except:
-        st.error("Erreur de sauvegarde")
-
-# --- BLINDAGE FERMETURE ---
-sync_script = f"""
-    <script>
-        window.addEventListener('beforeunload', function (e) {{
-            const data_payload = {json.dumps(st.session_state.data.values.tolist() if 'data' in st.session_state else [])};
-            const config_payload = {json.dumps(st.session_state.config if 'config' in st.session_state else {})};
-            navigator.sendBeacon('{WEB_APP_URL}', JSON.stringify({{"data": data_payload, "config": config_payload}}));
-        }});
-    </script>
-"""
-components.html(sync_script, height=0)
-
-if 'data' not in st.session_state:
-    st.session_state.data, st.session_state.config = load_data_from_sheet()
-
-   
-    # 2. Notification visuelle
-    st.sidebar.success("Données enregistrées !")
-   
-    # 3. Rafraîchissement forcé pour mettre à jour les moyennes partout
-    st.rerun()
-
-def reset_dossier():
-    nom = st.session_state.d_in
-    if nom and nom not in st.session_state.config['dossiers']:
-        st.session_state.config['dossiers'][nom] = []
-    st.session_state.d_in = ""
-
-def reset_matiere():
-    nom = st.session_state.m_in
-    if nom and nom not in st.session_state.config['dossiers'][choix_dos]:
-        st.session_state.config['dossiers'][choix_dos].append(nom)
-    st.session_state.m_in = ""
-
-st.sidebar.title("⚙️ Pilot Expert")
-
-# BOUTON PRIORITAIRE : Il est en haut de tout, impossible à manquer
-if st.sidebar.button("💾 SAUVEGARDER TOUT"):
-    save_all_to_sheet(st.session_state.data, st.session_state.config)
-    st.sidebar.success("Enregistré !")
-
-# Ensuite, tes réglages en dessous
-with st.sidebar.expander("🛠️ Réglages", expanded=False):
-    st.session_state.config['cours_max'] = st.number_input("Max cours/jour", 1, 20, int(st.session_state.config.get('cours_max', 5)))
-    cad_str = st.text_input("Cadencier (jours)", ",".join(map(str, st.session_state.config['cadencier'])))
-    st.session_state.config['cadencier'] = [int(x.strip()) for x in cad_str.split(",")]
-   
-    for j in st.session_state.config['cadencier']:
-        st.session_state.config['seuils'][str(j)] = st.slider(f"Seuil Note J{j}", 10, 20, int(st.session_state.config['seuils'].get(str(j), 12)))
-
-st.sidebar.text_input("Nouveau Dossier", key="d_in")
-st.sidebar.button("➕ Créer Dossier", on_click=reset_dossier)
-choix_dos = st.sidebar.selectbox("Dossier", list(st.session_state.config['dossiers'].keys()))
-st.sidebar.text_input("Nom Matière", key="m_in")
-st.sidebar.button("➕ Ajouter Matière", on_click=reset_matiere)
-# Initialisation de l'état de la page si inexistant
-if "page" not in st.session_state:
-    st.session_state.page = "Dashboard"
-
-# Création du menu radio qui utilise la valeur mémorisée
-page = st.sidebar.radio(
-    "Navigation",
-    ["Dashboard", "Planning & Saisie", "Graphiques"],
-    index=["Dashboard", "Planning & Saisie", "Graphiques"].index(st.session_state.page)
-)
-
-# Mise à jour de la valeur mémorisée après chaque clic
-st.session_state.page = page
-
-if page == "Dashboard":
-    st.title(f"🎯 Dashboard : {choix_dos}")
-    if st.button("❌ Supprimer ce Dossier"):
-        del st.session_state.config['dossiers'][choix_dos]
-        st.session_state.data = st.session_state.data[st.session_state.data['Dossier'] != choix_dos]
-        st.rerun()
-   
-    for m in st.session_state.config['dossiers'].get(choix_dos, []):
-        with st.expander(f"📚 {m}"):
-            c1, c2 = st.columns([4, 1])
-            if c2.button("🗑️ Supprimer", key=f"del_{m}"):
-                st.session_state.config['dossiers'][choix_dos].remove(m)
-                st.session_state.data = st.session_state.data[(st.session_state.data['Dossier'] != choix_dos) | (st.session_state.data['Matiere'] != m)]
-                st.rerun()
-            chapitres_matiere = st.session_state.data[(st.session_state.data['Dossier'] == choix_dos) & (st.session_state.data['Matiere'] == m)]['Chapitre'].unique()
-            if len(chapitres_matiere) > 0: st.write("**Chapitres :**", ", ".join(chapitres_matiere))
-           
-    st.subheader("⚠️ Rattrapages à traiter")
-    df_dos = st.session_state.data[st.session_state.data['Dossier'] == choix_dos].copy()
-    def est_en_rattrapage(row):
-        try: note = float(str(row['Note']).replace(',', '.'))
-        except: note = 0
-        j_str = str(row['J_Type']).replace('J', '').replace('R', '')
-        seuil = int(st.session_state.config['seuils'].get(j_str, 12))
-        return note > 0 and note < seuil and row['Statut'] != 'Traité'
-    rattrapages = df_dos[df_dos.apply(est_en_rattrapage, axis=1)]
-    if not rattrapages.empty:
-        for _, row in rattrapages.iterrows():
-            c1, c2, c3 = st.columns([0.6, 0.2, 0.2])
-            c1.write(f"{row['Matiere']} | {row['Chapitre']} ({row['J_Type']}) | Note: {row['Note']}")
-            if c2.button("Réintégrer", key=f"btn_{row['ID']}"):
-                date_debut = dt.datetime.strptime(row['Date'], '%Y-%m-%d')
-                all_dates = sorted(st.session_state.data[(st.session_state.data['Chapitre'] == row['Chapitre']) & (st.session_state.data['Dossier'] == choix_dos)]['Date'].unique())
-                next_date_str = all_dates[all_dates.index(row['Date']) + 1] if (all_dates.index(row['Date']) + 1) < len(all_dates) else (date_debut + dt.timedelta(days=365)).strftime('%Y-%m-%d')
-                date_limite = dt.datetime.strptime(next_date_str, '%Y-%m-%d')
-                place_trouvee = False
-                for delta in range(1, 60):
-                    test_date = (date_debut + dt.timedelta(days=delta)).strftime('%Y-%m-%d')
-                    if dt.datetime.strptime(test_date, '%Y-%m-%d') >= date_limite: break
-                    if test_date not in st.session_state.data[(st.session_state.data['Chapitre'] == row['Chapitre']) & (st.session_state.data['Dossier'] == choix_dos)]['Date'].values:
-                        new_row = row.copy()
-                        new_row['ID'], new_row['J_Type'], new_row['Date'] = str(uuid.uuid4()), f"{row['J_Type'].replace('R','')}R", test_date
-                        new_row['Note'], new_row['Statut'] = 0, 'À faire'
-                        st.session_state.data = pd.concat([st.session_state.data, pd.DataFrame([new_row])], ignore_index=True)
-                        st.session_state.data.loc[st.session_state.data['ID'] == row['ID'], 'Statut'] = 'Traité'
-                        place_trouvee = True; break
-                if place_trouvee: st.rerun()
-                else: st.error("❌ Aucune place disponible pour réintégrer.")
-            if c3.button("🗑️ Supprimer", key=f"trash_{row['ID']}"):
-                st.session_state.data.loc[st.session_state.data['ID'] == row['ID'], 'Statut'] = 'Traité'
-                st.rerun()
-
 elif page == "Planning & Saisie":
     with st.expander("✍️ Ajouter Chapitre", expanded=True):
         with st.form("Add_Form", clear_on_submit=True):
@@ -361,22 +185,22 @@ elif page == "Planning & Saisie":
         if submitted and chap and dex_date:
             # On crée le J0
             new_rows = [{'ID': str(uuid.uuid4()), 'Dossier': choix_dos, 'Matiere': mat, 'Chapitre': chap, 'J_Type': 'J0', 'Date': str(d0_date), 'Note': 0, 'Statut': 'À faire'}]
-           
+            
             # On boucle sur la config DYNAMIQUE (ce que tu as dans la sidebar)
             for j in st.session_state.config['cadencier']:
                 d_j = d0_date + dt.timedelta(days=j)
                 if d_j <= dex_date:
                     new_rows.append({
-                        'ID': str(uuid.uuid4()),
-                        'Dossier': choix_dos,
-                        'Matiere': mat,
-                        'Chapitre': chap,
-                        'J_Type': f'J{j}',
-                        'Date': str(d_j),
-                        'Note': 0,
+                        'ID': str(uuid.uuid4()), 
+                        'Dossier': choix_dos, 
+                        'Matiere': mat, 
+                        'Chapitre': chap, 
+                        'J_Type': f'J{j}', 
+                        'Date': str(d_j), 
+                        'Note': 0, 
                         'Statut': 'À faire'
                     })
-           
+            
             # Mise à jour des données et sauvegarde
             st.session_state.data = pd.concat([st.session_state.data, pd.DataFrame(new_rows)]).drop_duplicates(subset=['Dossier', 'Chapitre', 'J_Type', 'Date'])
             save_all_to_sheet(st.session_state.data, st.session_state.config)
@@ -406,7 +230,7 @@ elif page == "Planning & Saisie":
                             st.rerun()
    
     st.subheader("🗓️ Grille de Suivi & Saisie (Journée)")
-   
+    
     # AJOUTE JUSTE CETTE LIGNE ICI :
     st.session_state.data['Note'] = pd.to_numeric(st.session_state.data['Note'].astype(str).str.replace(',', '.'), errors='coerce')
     mask = (st.session_state.data['Date'] == str(dt.date.today())) & (st.session_state.data['Dossier'] == choix_dos)
@@ -428,87 +252,71 @@ elif page == "Planning & Saisie":
                 # 1. On nettoie la saisie brute
                 raw = note_in.replace(',', '.').replace(';', ' ')
                 nums = [float(n) for n in raw.split() if n.strip()]
-               
+                
                 # 2. Si on a des nombres, on calcule
                 if nums:
                     moyenne = round(sum(nums) / len(nums), 2)
                     st.session_state.data.at[idx, 'Note'] = moyenne
                     # On force le rafraîchissement ici pour que Streamlit affiche la nouvelle valeur immédiatement
-                    st.rerun()
+                    st.rerun() 
             except Exception as e:
                 # Si ça plante, on affiche l'erreur pour comprendre pourquoi
                 cols[3].error(f"Erreur : {e}")
-       
+        
        
 
 elif page == "Graphiques":
     st.title("📊 Analyse Graphique de tes Notes")
-   
+    
     if "data" in st.session_state and not st.session_state.data.empty:
-        # IMPORTATION DE SÉCURITÉ POUR ISOLER LA MÉMOIRE
-        import pickle
-       
-        # On crée un clone 100% étanche et indépendant pour que le graphique ne bave pas sur la sauvegarde
-        df_graphes = pickle.loads(pickle.dumps(st.session_state.data))
-       
-        # FILTRE PAR DOSSIER : On récupère le dossier sélectionné dans ton appli
-        # (On teste les noms de variables probables pour s'adapter à ton code)
-        dossier_actuel = None
-        if "choix_dos" in st.session_state:
-            dossier_actuel = st.session_state.choix_dos
-        elif "choix_dossier" in st.session_state:
-            dossier_actuel = st.session_state.choix_dossier
-           
-        # Si on trouve la colonne Dossier et un dossier sélectionné, on filtre direct
-        col_dossier = next((c for c in df_graphes.columns if c.lower() in ['dossier', 'dossiers']), None)
-        if col_dossier and dossier_actuel:
-            df_graphes = df_graphes[df_graphes[col_dossier] == dossier_actuel].copy()
-            st.caption(f"📍 Données filtrées pour le dossier : **{dossier_actuel}**")
-       
-        # Détection de la colonne Matière (uniquement dans ce dossier)
-        col_mat = 'Matière' if 'Matière' in df_graphes.columns else 'Matiere'
-        liste_matieres = sorted(df_graphes[col_mat].unique()) if col_mat in df_graphes.columns else []
-           
+        df_graphes = st.session_state.data.copy()
+        
+        # Détection automatique de la colonne Matière
+        liste_matieres = sorted(df_graphes['Matière'].unique()) if 'Matière' in df_graphes.columns else []
+        if not liste_matieres and 'Matiere' in df_graphes.columns:
+            liste_matieres = sorted(df_graphes['Matiere'].unique())
+            
         if liste_matieres:
-            # Menu déroulant : uniquement les matières du dossier actuel
+            # Menu déroulant pour verrouiller une seule matière
             sel_mat_graph = st.selectbox("📚 Choisis la matière à analyser :", options=liste_matieres)
-           
-            # Filtrage sur la matière choisie
+            
+            # Filtrage étanche sur la matière choisie
+            col_mat = 'Matière' if 'Matière' in df_graphes.columns else 'Matiere'
             df_mat_graph = df_graphes[df_graphes[col_mat] == sel_mat_graph].copy()
-           
+            
             # Nettoyage local des notes (virgules en points)
             df_mat_graph['Note_Num'] = pd.to_numeric(df_mat_graph['Note'].astype(str).str.replace(',', '.'), errors='coerce')
             df_mat_graph = df_mat_graph.dropna(subset=['Note_Num'])
-           
+            
             if not df_mat_graph.empty:
-                # --- 1. GRAPHIQUE MOYENNE GÉNÉRALE ---
+                # --- 1. GRAPHIQUE MOYENNE GÉNÉRALE DE LA MATIÈRE ---
                 st.subheader(f"📈 Évolution de la moyenne ({sel_mat_graph})")
                 df_mat_graph['Sort_Val'] = df_mat_graph['J_Type'].astype(str).str.extract('(\d+)').fillna(0).astype(float)
                 df_mat_graph.loc[df_mat_graph['J_Type'].astype(str).str.contains('R', case=False, na=False), 'Sort_Val'] += 0.5
-               
+                
                 df_moy_regroupee = df_mat_graph.groupby(['J_Type', 'Sort_Val'])['Note_Num'].mean().reset_index()
                 df_moy_regroupee = df_moy_regroupee.sort_values('Sort_Val')
-               
+                
                 chart_moyenne = alt.Chart(df_moy_regroupee).mark_line(point=True, color='blue').encode(
                     x=alt.X('J_Type', sort=alt.EncodingSortField(field='Sort_Val', order='ascending'), title='Échéance'),
                     y=alt.Y('Note_Num', scale=alt.Scale(domain=[0, 20]), title='Note Moyenne')
                 ).properties(height=220)
                 st.altair_chart(chart_moyenne, use_container_width=True)
-               
+                
                 st.write("---")
-               
+                
                 # --- 2. GRAPHES CÔTE À CÔTE FILTRÉS SUR LES THÈMES DE CETTE MATIÈRE ---
                 st.subheader("📋 Comparaison individuelle des grands thèmes")
                 df_mat_graph['Theme'] = df_mat_graph['Chapitre'].astype(str).str.replace(r'^\d+[\s-]*', '', regex=True).str.strip()
                 liste_themes = sorted(df_mat_graph['Theme'].unique())
-               
+                
                 themes_selectionnes = st.multiselect(
-                    f"Sélectionne jusqu'à 3 thèmes de {sel_mat_graph} :",
-                    options=liste_themes,
-                    default=[liste_themes[0]] if liste_themes else None,
+                    f"Sélectionne jusqu'à 3 thèmes de {sel_mat_graph} :", 
+                    options=liste_themes, 
+                    default=[liste_themes[0]] if liste_themes else None, 
                     max_selections=3
                 )
-               
+                
                 if themes_selectionnes:
                     cols = st.columns(len(themes_selectionnes))
                     for i, nom_theme in enumerate(themes_selectionnes):
@@ -530,7 +338,6 @@ elif page == "Graphiques":
             else:
                 st.info(f"Aucune note numérique valide pour {sel_mat_graph}.")
         else:
-            st.info("Aucune matière trouvée pour ce dossier.")
+            st.info("Aucune matière trouvée dans le fichier.")
     else:
         st.info("Pas de données disponibles.")
-
