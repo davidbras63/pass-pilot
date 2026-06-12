@@ -118,6 +118,38 @@ page = st.sidebar.radio(
     ["Dashboard", "Planning & Saisie", "Graphiques"], 
     index=["Dashboard", "Planning & Saisie", "Graphiques"].index(st.session_state.page)
 )
+st.sidebar.markdown("---") # Ligne de séparation
+st.sidebar.subheader("🔗 Raccourcis")
+
+# --- 1. BOUTON BIOMÉDAL ---
+if 'url_biomedal' not in st.session_state.config:
+    st.session_state.config['url_biomedal'] = ""
+
+url_bio = st.session_state.config['url_biomedal']
+
+if url_bio:
+    st.sidebar.link_button("🏥 Biomédal", url_bio, use_container_width=True)
+else:
+    with st.sidebar.popover("⚙️ Configurer Biomédal", use_container_width=True):
+        lien_bio = st.text_input("Colle le lien Biomédal ici :", key="input_bio")
+            if st.button("Enregistrer Biomédal", key="btn_bio"):
+                st.session_state.config['url_biomedal'] = lien_bio
+                st.rerun()
+
+# --- 2. BOUTON FAC ---
+if 'url_fac' not in st.session_state.config:
+    st.session_state.config['url_fac'] = ""
+
+url_fac = st.session_state.config['url_fac']
+
+if url_fac:
+    st.sidebar.link_button("🎓 Fac", url_fac, use_container_width=True)
+else:
+    with st.sidebar.popover("⚙️ Configurer la Fac", use_container_width=True):
+        lien_fac = st.text_input("Colle le lien de la Fac ici :", key="input_fac")
+            if st.button("Enregistrer la Fac", key="btn_fac"):
+                st.session_state.config['url_fac'] = lien_fac
+                st.rerun()
 
 # Mise à jour de la valeur mémorisée après chaque clic
 st.session_state.page = page
