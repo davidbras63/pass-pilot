@@ -147,9 +147,9 @@ if page == "Dashboard":
                 for c in chapitres_matiere:
                     col_ch, col_pb = st.columns([0.8, 0.2])
                     col_ch.write(f"- {c}")
-                        with col_pb.popover("🗑️", key=f"pop_chap_{choix_dos}_{m}_{c}"):
+                    with col_pb.popover("🗑️", key=f"pop_chap_{choix_dos}_{m}_{c}"):
                         st.error(f"Supprimer le chapitre {c} ?")
-                            if st.button("Confirmer", key=f"del_chap_{choix_dos}_{m}_{c}"):
+                        if st.button("Confirmer", key=f"del_chap_{choix_dos}_{m}_{c}"):
                             st.session_state.data = st.session_state.data[
                                 ~((st.session_state.data['Dossier'] == choix_dos) & 
                                 (st.session_state.data['Matiere'] == m) & 
