@@ -88,6 +88,8 @@ def reset_matiere():
     st.session_state.m_in = ""
 
 st.sidebar.title("⚙️ Pilot Expert")
+choix_dos = st.sidebar.selectbox("Dossier", list(st.session_state.config['dossiers'].keys()))
+
 
 # BOUTON PRIORITAIRE : Il est en haut de tout, impossible à manquer
 if st.sidebar.button("💾 SAUVEGARDER TOUT"):
@@ -105,7 +107,6 @@ with st.sidebar.expander("🛠️ Réglages", expanded=False):
 
 st.sidebar.text_input("Nouveau Dossier", key="d_in")
 st.sidebar.button("➕ Créer Dossier", on_click=reset_dossier)
-choix_dos = st.sidebar.selectbox("Dossier", list(st.session_state.config['dossiers'].keys()))
 st.sidebar.text_input("Nom Matière", key="m_in")
 st.sidebar.button("➕ Ajouter Matière", on_click=reset_matiere)
 # Initialisation de l'état de la page si inexistant
@@ -118,6 +119,7 @@ page = st.sidebar.radio(
     ["Dashboard", "Planning & Saisie", "Graphiques"], 
     index=["Dashboard", "Planning & Saisie", "Graphiques"].index(st.session_state.page)
 )
+
 
 # Mise à jour de la valeur mémorisée après chaque clic
 st.session_state.page = page
