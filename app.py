@@ -124,32 +124,39 @@ st.session_state.page = page
 
 if page == "Dashboard":
     st.title(f"🎯 Dashboard : {choix_dos}")
-    if st.button("❌ Supprimer ce Dossier"):
-        del st.session_state.config['dossiers'][choix_dos]
-        st.session_state.data = st.session_state.data[st.session_state.data['Dossier'] != choix_dos]
-        st.rerun()
+    with st.popover("🚨 Supprimer le dossier ?"):
+        st.error("⚠️ ATTENTION : Tu vas supprimer TOUT le dossier de suivi. Cette action est irréversible !")
+        if st.button("Confirmer la suppression du dossier"):
+            # ... METS ICI ton code de suppression (décalé vers la droite avec TAB) ...
+            del st.session_state.config['dossiers'][choix_dos]
+            st.session_state.data = st.session_state.data[st.session_state.data['Dossier'] != choix_dos]
+            st.rerun()
    
     for m in st.session_state.config['dossiers'].get(choix_dos, []):
         with st.expander(f"📚 {m}"):
             c1, c2 = st.columns([4, 1])
-            if c2.button("🗑️ Supprimer", key=f"del_{m}"):
-                st.session_state.config['dossiers'][choix_dos].remove(m)
-                st.session_state.data = st.session_state.data[(st.session_state.data['Dossier'] != choix_dos) | (st.session_state.data['Matiere'] != m)]
-                st.rerun()
+            with c2.popover("🗑️ Supprimer", key=f"pop_{m}"):
+                st.error(f"🚨 Confirmer la suppression de {m} ?")
+                if st.button("Oui, supprimer définitivement", key=f"del_{m}"):
+                    st.session_state.config['dossiers'][choix_dos].remove(m)
+                    st.session_state.data = st.session_state.data[(st.session_state.data['Dossier'] != choix_dos) | (st.session_state.data['Matiere'] != m)]
+                    st.rerun()
             chapitres_matiere = st.session_state.data[(st.session_state.data['Dossier'] == choix_dos) & (st.session_state.data['Matiere'] == m)]['Chapitre'].unique()
             if len(chapitres_matiere) > 0:
                 st.write("**Chapitres :**")
                 for c in chapitres_matiere:
                     col_ch, col_pb = st.columns([0.8, 0.2])
                     col_ch.write(f"- {c}")
-                    if col_pb.button("🗑️", key=f"del_chap_{choix_dos}_{m}_{c}"):
-                        st.session_state.data = st.session_state.data[
-                            ~((st.session_state.data['Dossier'] == choix_dos) & 
-                              (st.session_state.data['Matiere'] == m) & 
-                              (st.session_state.data['Chapitre'] == c))
-                        ]
-                        st.success(f"Chapitre '{c}' supprimé !")
-                        st.rerun()
+                        with col_pb.popover("🗑️", key=f"pop_chap_{choix_dos}_{m}_{c}"):
+                        st.error(f"Supprimer le chapitre {c} ?")
+                            if st.button("Confirmer", key=f"del_chap_{choix_dos}_{m}_{c}"):
+                            st.session_state.data = st.session_state.data[
+                                ~((st.session_state.data['Dossier'] == choix_dos) & 
+                                (st.session_state.data['Matiere'] == m) & 
+                                (st.session_state.data['Chapitre'] == c))
+                            ]
+                            st.success(f"Chapitre '{c}' supprimé !")
+                            st.rerun()
            
     st.subheader("⚠️ Rattrapages à traiter")
     df_dos = st.session_state.data[st.session_state.data['Dossier'] == choix_dos].copy()
