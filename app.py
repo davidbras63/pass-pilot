@@ -295,39 +295,73 @@ elif page == "Planning & Saisie":
                             #save_all_to_sheet(st.session_state.data, st.session_state.config)
                             st.rerun()
    
-    st.subheader("🗓️ Grille de Suivi & Saisie (Journée)")
-    
-    # AJOUTE JUSTE CETTE LIGNE ICI :
+    st.write("---")
+    st.subheader("🗓️ Grille de Saisie des Notes (Aujourd'hui)")
+   
+    # Conversion propre locale des notes pour éviter les conflits
     st.session_state.data['Note'] = pd.to_numeric(st.session_state.data['Note'].astype(str).str.replace(',', '.'), errors='coerce')
+    
+    # Masque strict sur la journée en cours et le dossier actif
     mask = (st.session_state.data['Date'] == str(dt.date.today())) & (st.session_state.data['Dossier'] == choix_dos)
-    for idx, row in st.session_state.data[mask].iterrows():
-        cols = st.columns([0.4, 0.15, 0.35, 0.1])
-        cols[0].write(f"{row['Chapitre']} ({row['J_Type']})")
-       
-        is_done = cols[1].checkbox("Fait", value=(row['Statut'] == 'Fait'), key=f"grid_chk_{row['ID']}")
-        if is_done != (row['Statut'] == 'Fait'):
-            st.session_state.data.loc[st.session_state.data['ID'] == row['ID'], 'Statut'] = 'Fait' if is_done else 'À faire'
-            #save_all_to_sheet(st.session_state.data, st.session_state.config)
-            st.rerun()
-           
-        note_in = cols[2].text_input("", value=str(row['Note']), key=f"grid_note_{row['ID']}", label_visibility="collapsed")
-       
-        # Ton bloc actuel de calcul avec le bouton "∑"
-        if cols[3].button("∑", key=f"grid_calc_{row['ID']}"):
-            try:
-                # 1. On nettoie la saisie brute
-                raw = note_in.replace(',', '.').replace(';', ' ')
-                nums = [float(n) for n in raw.split() if n.strip()]
-                
-                # 2. Si on a des nombres, on calcule
-                if nums:
-                    moyenne = round(sum(nums) / len(nums), 2)
-                    st.session_state.data.loc[st.session_state.data['ID'] == row['ID'], 'Note'] = moyenne
-                    # On force le rafraîchissement ici pour que Streamlit affiche la nouvelle valeur immédiatement
-                    st.rerun() 
-            except Exception as e:
-                # Si ça plante, on affiche l'erreur pour comprendre pourquoi
-                cols[3].error(f"Erreur : {e}")
+    df_saisie = st.session_state.data[mask].copy()
+
+    if not df_saisie.empty:
+        # Sécurisation des données pour l'éditeur sans toucher à la base globale
+        df_saisie['Note'] = df_saisie['Note'].fillna('').astype(str).replace('nan', '')
+        if 'Statut' not in df_saisie.columns:
+            df_saisie['Statut'] = 'À faire'
+        else:
+            df_saisie['Statut'] = df_saisie['Statut'].fillna('À faire').astype(str)
+
+        # Configuration visuelle pour le déplacement par la touche TAB
+        config_cols = {
+            "Chapitre": st.column_config.TextColumn("📚 Chapitre", disabled=True),
+            "J_Type": st.column_config.TextColumn("⏳ Échéance", disabled=True),
+            "Statut": st.column_config.SelectboxColumn("🔄 Statut", options=["À faire", "Fait"], required=True),
+            "Note": st.column_config.TextColumn("✍️ Saisie Notes (Ex: 12 14.5 11)", help="Notes séparées par un espace, puis TAB pour descendre.")
+        }
+
+        # Affichage du tableau interactif
+        edited_df = st.data_editor(
+            df_saisie[['Chapitre', 'J_Type', 'Statut', 'Note']],
+            column_config=config_cols,
+            use_container_width=True,
+            hide_index=True,
+            key="grille_saisie_clavier_fluide"
+        )
+
+        # Bouton unique d'enregistrement sous la grille
+        st.write("")
+        if st.button("💾 Enregistrer et Calculer les Moyennes", use_container_width=True, type="primary"):
+            if edited_df is not None:
+                try:
+                    for idx_edit, row in edited_df.iterrows():
+                        real_idx = df_saisie.index[idx_edit]
+                        
+                        # 1. Mise à jour du Statut
+                        st.session_state.data.at[real_idx, 'Statut'] = row['Statut']
+                        
+                        # 2. Extraction et calcul de la moyenne
+                        raw_notes = str(row['Note']).strip().replace(',', '.')
+                        if raw_notes and raw_notes != "nan" and raw_notes != "":
+                            try:
+                                list_nums = [float(n) for n in raw_notes.split() if n.replace('.', '', 1).isdigit()]
+                                if list_nums:
+                                    st.session_state.data.at[real_idx, 'Note'] = round(sum(list_nums) / len(list_nums), 2)
+                            except:
+                                pass
+                        else:
+                            st.session_state.data.at[real_idx, 'Note'] = 0.0
+
+                    # Sauvegarde globale via ta fonction existante et rafraîchissement
+                    save_all_to_sheet(st.session_state.data, st.session_state.config)
+                    st.success("Toutes les moyennes ont été calculées et sauvegardées ! 🎉")
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"Erreur d'enregistrement : {e}")
+    else:
+        st.info("Aucun cours ou exercice prévu pour aujourd'hui dans ce dossier.")
+
         
        
 
