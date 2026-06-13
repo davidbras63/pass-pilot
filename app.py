@@ -347,7 +347,9 @@ elif page == "Planning & Saisie":
                             try:
                                 list_nums = [float(n) for n in raw_notes.split() if n.replace('.', '', 1).isdigit()]
                                 if list_nums:
-                                    st.session_state.data.at[real_idx, 'Note'] = round(sum(list_nums) / len(list_nums), 2)
+                                    moyenne = round(sum(list_nums) / len(list_nums), 2)
+                                    # ON UTILISE L'INDEX UNIQUE DE LA LIGNE POUR NE PAS MÉLANGER
+                                    st.session_state.data.at[real_idx, 'Note'] = moyenne
                                 else:
                                     st.session_state.data.at[real_idx, 'Note'] = 0.0
                             except:
