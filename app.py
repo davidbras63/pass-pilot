@@ -301,55 +301,61 @@ elif page == "Planning & Saisie":
     st.session_state.data['Note'] = pd.to_numeric(st.session_state.data['Note'].astype(str).str.replace(',', '.'), errors='coerce')
     mask = (st.session_state.data['Date'] == str(dt.date.today())) & (st.session_state.data['Dossier'] == choix_dos)
 
-    # On enferme TOUT dans un formulaire pour bloquer les boucles de chargement
-    with st.form(key="formulaire_saisie_notes"):
+    # Préparation des données pour l'affichage dans la grille style Excel
+    df_saisie = st.session_state.data[mask].copy()
+
+    if not df_saisie.empty:
+        st.write("💡 *Double-cliquez sur une case. Utilisez **Entrée** ou **Tab** pour descendre à la ligne suivante.*")
         
-        # On boucle sur les lignes filtrées
-        for idx, row in st.session_state.data[mask].reset_index().iterrows():
-            with st.container():
-                cols = st.columns([0.45, 0.15, 0.40])
-                
-                # 1. Affichage du Chapitre / Cours
-                cols[0].write(f"({row['Chapitre']}) ({row['J_Type']})")
-                
-                # 2. Case à cocher "Fait"
-                is_done = cols[1].checkbox("Fait", value=(row['Statut'] == 'Fait'), key=f"grid_chk_{idx}")
-                
-                # 3. Saisie de la Note
-                valeur_actuelle = str(row['Note']) if row['Note'] not in [0.0, "0.0", "", None] else ""
-                note_in = cols[2].text_input("Notes", value=valeur_actuelle, key=f"grid_note_{idx}", label_visibility="collapsed")
+        # Affichage de la grille interactive (zéro blocage, saut de ligne fluide)
+        edited_df = st.data_editor(
+            df_saisie[['Chapitre', 'Statut', 'Note']],
+            column_config={
+                "Chapitre": st.column_config.TextColumn("Chapitre / Cours", disabled=True),
+                "Statut": st.column_config.SelectboxColumn("Statut", options=["À faire", "Fait"]),
+                "Note": st.column_config.TextColumn("Notes (Ex: 12 14)")
+            },
+            hide_index=True,
+            use_container_width=True,
+            key="grille_saisie_clavier_fluide"
+        )
 
-        # --- LE BOUTON D'ENREGISTREMENT (Obligatoire dans un formulaire) ---
-        st.write("---")
-        bouton_soumettre = st.form_submit_button("💾 Calculer les moyennes et Enregistrer dans Google Sheets", use_container_width=True)
+        # Sauvegarde des modifications temporaires dans l'état de l'application
+        for idx_edit, row in edited_df.iterrows():
+            real_idx = df_saisie.index[idx_edit]
+            st.session_state.data.loc[real_idx, 'Statut'] = row['Statut']
+            # On stocke temporairement ce que tu as tapé (chiffres ou texte)
+            st.session_state.data.loc[real_idx, 'Note'] = row['Note']
+    else:
+        st.info("Aucune donnée à saisir pour aujourd'hui.")
 
-    # Une fois le bouton cliqué, on traite toutes les données d'un seul coup
-    if bouton_soumettre:
+    # --- LE BOUTON ENREGISTRER (CALCUL + SHEET) ---
+    st.write("---")
+    if st.button("💾 Enregistrer et Calculer les Moyennes", use_container_width=True):
         try:
-            # On ré-analyse les données du formulaire pour mettre à jour le tableau
-            for idx, row in st.session_state.data[mask].reset_index().iterrows():
-                # Récupération de la case à cocher
-                statut_form = 'Fait' if st.session_state[f"grid_chk_{idx}"] else 'À faire'
-                st.session_state.data.loc[st.session_state.data['ID'] == row['ID'], 'Statut'] = statut_form
+            # C'est ICI, au moment du clic, qu'on calcule toutes les moyennes d'un coup
+            for idx_edit, row in edited_df.iterrows():
+                real_idx = df_saisie.index[idx_edit]
+                note_saisie = str(row['Note']).strip() if row['Note'] not in [None, "", 0.0, "0.0"] else ""
                 
-                # Récupération et calcul de la note
-                note_form = st.session_state[f"grid_note_{idx}"]
-                if note_form != valeur_actuelle:
-                    raw = note_form.replace(',', '.').replace(';', ' ')
+                if note_saisie:
+                    raw = note_saisie.replace(',', '.').replace(';', ' ')
                     nums = [float(n) for n in raw.split() if n.replace('.', '', 1).isdigit()]
                     if nums:
-                        st.session_state.data.loc[st.session_state.data['ID'] == row['ID'], 'Note'] = round(sum(nums) / len(nums), 2)
+                        # On remplace la saisie par la vraie moyenne calculée
+                        st.session_state.data.loc[real_idx, 'Note'] = round(sum(nums) / len(nums), 2)
                     else:
-                        st.session_state.data.loc[st.session_state.data['ID'] == row['ID'], 'Note'] = 0.0
+                        st.session_state.data.loc[real_idx, 'Note'] = 0.0
 
-            # Sauvegarde finale et unique dans le Sheets
+            # Envoi direct vers Google Sheets
             save_all_to_sheet(st.session_state.data, st.session_state.config)
-            st.success("Toutes les notes ont bien été calculées et sauvegardées ! 🎉")
+            
+            # Message de succès et rafraîchissement unique de l'écran pour afficher les moyennes
+            st.success("Toutes les moyennes ont été calculées et sauvegardées avec succès ! 🎉")
             st.rerun()
             
         except Exception as e:
             st.error(f"Erreur d'enregistrement : {e}")
-
 
 elif page == "Graphiques":
     st.title("📊 Analyse Graphique de tes Notes")
