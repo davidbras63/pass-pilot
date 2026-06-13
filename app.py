@@ -335,10 +335,10 @@ elif page == "Planning & Saisie":
         if st.button("💾 Enregistrer et Calculer les Moyennes", use_container_width=True, type="primary"):
             if edited_df is not None:
                 try:
-                    for idx_edit, row in edited_df.iterrows():
-                        real_idx = df_saisie.index[idx_edit]
+                    # LA LIGNE CORRIGÉE : On boucle directement sur les vrais index (real_idx)
+                    for real_idx, row in edited_df.iterrows():
                         
-                        # 1. Mise à jour du Statut
+                        # 1. Mise à jour du Statut (Fait / À faire)
                         st.session_state.data.at[real_idx, 'Statut'] = row['Statut']
                         
                         # 2. Extraction et calcul de la moyenne
@@ -353,16 +353,12 @@ elif page == "Planning & Saisie":
                         else:
                             st.session_state.data.at[real_idx, 'Note'] = 0.0
 
-                    # Sauvegarde globale via ta fonction existante et rafraîchissement
+                    # Sauvegarde globale et rafraîchissement
                     save_all_to_sheet(st.session_state.data, st.session_state.config)
                     st.success("Toutes les moyennes ont été calculées et sauvegardées ! 🎉")
                     st.rerun()
                 except Exception as e:
-                    st.error(f"Erreur d'enregistrement : {e}")
-    else:
-        st.info("Aucun cours ou exercice prévu pour aujourd'hui dans ce dossier.")
-
-        
+                    st.error(f"Erreur d'enregistrement : {e}")   
        
 
 elif page == "Graphiques":
