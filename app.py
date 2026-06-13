@@ -295,58 +295,55 @@ elif page == "Planning & Saisie":
                             #save_all_to_sheet(st.session_state.data, st.session_state.config)
                             st.rerun()
    
-    st.subheader("🗓️ Grille de Suivi & Saisie (Journée)")
-    
-    # AJOUTE JUSTE CETTE LIGNE ICI :
+    # --- GRILLE DE SUIVI ET SAISIE ---
+    st.subheader("📊 Grille de Suivi & Saisie (Journée)")
+
     st.session_state.data['Note'] = pd.to_numeric(st.session_state.data['Note'].astype(str).str.replace(',', '.'), errors='coerce')
     mask = (st.session_state.data['Date'] == str(dt.date.today())) & (st.session_state.data['Dossier'] == choix_dos)
-    for idx, row in st.session_state.data[mask].iterrows():
-        cols = st.columns([0.4, 0.15, 0.35, 0.11])
 
-        for idx, row in st.session_state.data[mask].iterrows():
-            # 1. Affichage du Chapitre / Cours
-            cols[0].write(f"({row['Chapitre']}) ({row['J_Type']})")
-            
-            # 2. Case à cocher "Fait" (Sécurisée avec idx pour éviter l'erreur de doublon)
-            is_done = cols[1].checkbox("Fait", value=(row['Statut'] == 'Fait'), key=f"grid_chk_{idx}")
-            if is_done != (row['Statut'] == 'Fait'):
-                st.session_state.data.loc[st.session_state.data['ID'] == row['ID'], 'Statut'] = 'Fait' if is_done else 'À faire'
-                save_all_to_sheet(st.session_state.data, st.session_state.config)
-                st.rerun()
-            
-            # 3. Sécurité anti "0.0"
-            valeur_actuelle = str(row['Note']) if row['Note'] not in [0.0, "0.0", "", None] else ""
-            
-            # 4. Saisie de la Note (Sécurisée avec idx également)
-            note_in = cols[2].text_input("", value=valeur_actuelle, key=f"grid_note_{idx}", label_visibility="collapsed")
-            
-            # 5. Calcul automatique si la note change
-            if note_in != valeur_actuelle:
-                try:
-                    raw = note_in.replace(',', '.').replace(';', ' ')
-                    nums = [float(n) for n in raw.split() if n.is_num()]
-                    
-                    if nums:
-                        moyenne = round(sum(nums) / len(nums), 2)
-                        st.session_state.data.loc[st.session_state.data['ID'] == row['ID'], 'Note'] = moyenne
-                    else:
-                        st.session_state.data.loc[st.session_state.data['ID'] == row['ID'], 'Note'] = 0.0
-                    
-                    st.rerun()
-                except Exception as e:
-                    pass
+    cols = st.columns([0.4, 0.15, 0.35, 0.11])
 
-        # --- LE GROS BOUTON ENREGISTRER (Aligné sous le for) ---
-        st.write("---")
-        if st.button("💾 Enregistrer toutes les notes dans Google Sheets", use_container_width=True):
+    for idx, row in st.session_state.data[mask].reset_index().iterrows():
+        # 1. Affichage du Chapitre / Cours
+        cols[0].write(f"({row['Chapitre']}) ({row['J_Type']})")
+        
+        # 2. Case à cocher "Fait"
+        is_done = cols[1].checkbox("Fait", value=(row['Statut'] == 'Fait'), key=f"grid_chk_{idx}")
+        if is_done != (row['Statut'] == 'Fait'):
+            st.session_state.data.loc[st.session_state.data['ID'] == row['ID'], 'Statut'] = 'Fait' if is_done else 'À faire'
+            save_all_to_sheet(st.session_state.data, st.session_state.config)
+            st.rerun()
+        
+        # 3. Sécurité anti "0.0"
+        valeur_actuelle = str(row['Note']) if row['Note'] not in [0.0, "0.0", "", None] else ""
+        
+        # 4. Saisie de la Note
+        note_in = cols[2].text_input("", value=valeur_actuelle, key=f"grid_note_{idx}", label_visibility="collapsed")
+        
+        # 5. Calcul de la moyenne en cas de changement
+        if note_in != valeur_actuelle:
             try:
-                save_all_to_sheet(st.session_state.data, st.session_state.config)
-                st.success("Toutes les notes ont bien été sauvegardées ! 🎉")
+                raw = note_in.replace(',', '.').replace(';', ' ')
+                nums = [float(n) for n in raw.split() if n.replace('.', '', 1).isdigit()]
+                
+                if nums:
+                    moyenne = round(sum(nums) / len(nums), 2)
+                    st.session_state.data.loc[st.session_state.data['ID'] == row['ID'], 'Note'] = moyenne
+                else:
+                    st.session_state.data.loc[st.session_state.data['ID'] == row['ID'], 'Note'] = 0.0
+                
+                st.rerun()
             except Exception as e:
-                st.error(f"Erreur d'enregistrement : {e}")
+                pass
 
-
-      
+    # --- LE BOUTON ENREGISTRER ---
+    st.write("---")
+    if st.button("💾 Enregistrer toutes les notes dans Google Sheets", use_container_width=True):
+        try:
+            save_all_to_sheet(st.session_state.data, st.session_state.config)
+            st.success("Toutes les notes ont bien été sauvegardées ! 🎉")
+        except Exception as e:
+            st.error(f"Erreur d'enregistrement : {e}")
        
 
 elif page == "Graphiques":
