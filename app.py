@@ -311,8 +311,6 @@ elif page == "Planning & Saisie":
         is_done = cols[1].checkbox("Fait", value=(row['Statut'] == 'Fait'), key=f"grid_chk_{idx}")
         if is_done != (row['Statut'] == 'Fait'):
             st.session_state.data.loc[st.session_state.data['ID'] == row['ID'], 'Statut'] = 'Fait' if is_done else 'À faire'
-            save_all_to_sheet(st.session_state.data, st.session_state.config)
-            st.rerun()
         
         # 3. Sécurité anti "0.0"
         valeur_actuelle = str(row['Note']) if row['Note'] not in [0.0, "0.0", "", None] else ""
@@ -331,8 +329,6 @@ elif page == "Planning & Saisie":
                     st.session_state.data.loc[st.session_state.data['ID'] == row['ID'], 'Note'] = moyenne
                 else:
                     st.session_state.data.loc[st.session_state.data['ID'] == row['ID'], 'Note'] = 0.0
-                
-                st.rerun()
             except Exception as e:
                 pass
 
@@ -342,6 +338,7 @@ elif page == "Planning & Saisie":
         try:
             save_all_to_sheet(st.session_state.data, st.session_state.config)
             st.success("Toutes les notes ont bien été sauvegardées ! 🎉")
+            st.rerun()
         except Exception as e:
             st.error(f"Erreur d'enregistrement : {e}")
        
