@@ -301,7 +301,8 @@ elif page == "Planning & Saisie":
     st.session_state.data['Note'] = pd.to_numeric(st.session_state.data['Note'].astype(str).str.replace(',', '.'), errors='coerce')
     mask = (st.session_state.data['Date'] == str(dt.date.today())) & (st.session_state.data['Dossier'] == choix_dos)
 
-    cols = st.columns([0.4, 0.15, 0.35, 0.11])
+    # REGLAGE DES COLONNES : Aligné proprement avec les cases de saisie
+    cols = st.columns([0.4, 0.15, 0.20, 0.25])
 
     for idx, row in st.session_state.data[mask].reset_index().iterrows():
         # 1. Affichage du Chapitre / Cours
@@ -311,14 +312,16 @@ elif page == "Planning & Saisie":
         is_done = cols[1].checkbox("Fait", value=(row['Statut'] == 'Fait'), key=f"grid_chk_{idx}")
         if is_done != (row['Statut'] == 'Fait'):
             st.session_state.data.loc[st.session_state.data['ID'] == row['ID'], 'Statut'] = 'Fait' if is_done else 'À faire'
+            save_all_to_sheet(st.session_state.data, st.session_state.config)
+            st.rerun()
         
         # 3. Sécurité anti "0.0"
         valeur_actuelle = str(row['Note']) if row['Note'] not in [0.0, "0.0", "", None] else ""
         
-        # 4. Saisie de la Note
+        # 4. Saisie de la Note (Ajusté dans la colonne)
         note_in = cols[2].text_input("", value=valeur_actuelle, key=f"grid_note_{idx}", label_visibility="collapsed")
         
-        # 5. Calcul de la moyenne en cas de changement
+        # 5. Calcul immédiat de la moyenne si tu changes de case (sans changer de page)
         if note_in != valeur_actuelle:
             try:
                 raw = note_in.replace(',', '.').replace(';', ' ')
@@ -329,6 +332,7 @@ elif page == "Planning & Saisie":
                     st.session_state.data.loc[st.session_state.data['ID'] == row['ID'], 'Note'] = moyenne
                 else:
                     st.session_state.data.loc[st.session_state.data['ID'] == row['ID'], 'Note'] = 0.0
+                st.rerun() # Force l'affichage du calcul immédiatement à l'écran !
             except Exception as e:
                 pass
 
@@ -338,7 +342,8 @@ elif page == "Planning & Saisie":
         try:
             save_all_to_sheet(st.session_state.data, st.session_state.config)
             st.success("Toutes les notes ont bien été sauvegardées ! 🎉")
-            st.rerun()
+            # Un petit st.toast pour être sûr que l'utilisateur voit la confirmation flasher
+            st.toast("Sauvegarde réussie !", icon="✅")
         except Exception as e:
             st.error(f"Erreur d'enregistrement : {e}")
        
