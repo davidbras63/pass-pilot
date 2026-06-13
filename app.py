@@ -282,7 +282,7 @@ elif page == "Planning & Saisie":
             st.markdown(f"**{day_str[8:]}/{day_str[5:7]}**")
             temp = st.session_state.data[(st.session_state.data['Date'] == day_str) & (st.session_state.data['Dossier'] == choix_dos)]
             for _, r in temp.iterrows():
-                c1, c2 = st.columns([0.7, 0.3])
+                c1, c2 = st.columns([0.7, 0.22)
                 with c1:
                     if st.checkbox(f"{r['Chapitre']} ({r['J_Type']})", value=(r['Statut'] == 'Fait'), key=f"chk_{r['ID']}"):
                         st.session_state.data.loc[st.session_state.data['ID'] == r['ID'], 'Statut'] = 'Fait'
