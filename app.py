@@ -297,12 +297,12 @@ elif page == "Planning & Saisie":
    
     # --- GRILLE DE SAISIE INTERACTIVE (VERSION STABLE) ---
     st.write("---")
-    st.subheader("📝 Grille de Saisie Rapide")
+    st.subheader("📝 Grille de Saisie des Notes")
 
-    # 1. Sécurisation et préparation des données
+    # 1. On prépare les données réelles issues de ton fichier
     df_saisie = st.session_state.data.copy()
     
-    # On s'assure que les colonnes indispensables sont bien au format texte
+    # Sécurisation des formats pour l'éditeur
     if 'Note' in df_saisie.columns:
         df_saisie['Note'] = df_saisie['Note'].fillna('').astype(str)
     else:
@@ -313,34 +313,24 @@ elif page == "Planning & Saisie":
     else:
         df_saisie['Statut'] = df_saisie['Statut'].fillna('À faire').astype(str)
 
-    # Sécurité pour forcer l'affichage du nom du chapitre
-    if 'Chapitre_Complet' in df_saisie.columns:
-        df_saisie['Chapitre_Complet'] = df_saisie['Chapitre_Complet'].fillna('Sans nom').astype(str)
-
-    # 2. Configuration visuelle du tableau style Excel
+    # 2. Configuration visuelle dans l'ordre exact de ton message
     config_colonnes = {
         "Chapitre_Complet": st.column_config.TextColumn("📚 Chapitre", disabled=True), 
-        "Statut": st.column_config.SelectboxColumn(
-            "🔄 Statut",
-            options=["À faire", "Fait"],
-            required=True
-        ),
-        "Note": st.column_config.TextColumn(
-            "✍️ Saisie Notes (Ex: 12 14.5 11)",
-            help="Double-cliquez, tapez vos notes séparées par un espace, puis appuyez sur TAB pour descendre."
-        )
+        "Type": st.column_config.TextColumn("⏳ Échéance (J)", disabled=True),
+        "Statut": st.column_config.SelectboxColumn("🔄 Statut", options=["À faire", "Fait"], required=True),
+        "Note": st.column_config.TextColumn("✍️ Saisie Notes (Ex: 12 14.5 11)", help="Tapez vos notes séparées par un espace, puis TAB.")
     }
 
-    # 3. Affichage du tableau avec le nom du chapitre bien visible à gauche
+    # 3. Affichage du tableau interactif avec les 4 colonnes
     edited_df = st.data_editor(
-        df_saisie[['Chapitre_Complet', 'Statut', 'Note']],
+        df_saisie[['Chapitre_Complet', 'Type', 'Statut', 'Note']],
         column_config=config_colonnes,
         use_container_width=True,
         hide_index=True,
         key="grille_saisie_clavier_fluide"
     )
 
-    # 4. LE BOUTON ENREGISTRER (CALCUL + SHEET)
+    # 4. Le bouton final sous le tableau qui enregistre tout et calcule
     st.write("")
     if st.button("💾 Enregistrer et Calculer les Moyennes", use_container_width=True, type="primary"):
         if edited_df is not None:
@@ -348,30 +338,24 @@ elif page == "Planning & Saisie":
                 for idx_edit, row in edited_df.iterrows():
                     real_idx = df_saisie.index[idx_edit]
                     
-                    # Mise à jour du Statut
+                    # Sauvegarde du choix Fait / À faire
                     st.session_state.data.at[real_idx, 'Statut'] = row['Statut']
                     
-                    # Calcul de la moyenne s'il y a des notes saisies
+                    # Découpage et calcul de la moyenne des notes
                     chaine_notes = str(row['Note']).strip()
-                    
-                    # Si l'utilisateur a tapé une série de notes avec des espaces (ex: "12 15 11")
-                    if chaine_notes and chaine_notes != "nan" and not chaine_notes.replace('.', '', 1).isdigit():
-                        try:
-                            liste_chiffres = [float(x) for x in chaine_notes.split() if x.replace('.', '', 1).isdigit()]
-                            if liste_chiffres:
-                                st.session_state.data.at[real_idx, 'Note'] = round(sum(liste_chiffres) / len(liste_chiffres), 1)
-                                st.session_state.data.at[real_idx, 'Nbre_QCM'] = len(liste_chiffres)
-                        except Exception:
-                            pass
-                    # Si c'est un chiffre unique direct
-                    elif chaine_notes.replace('.', '', 1).isdigit():
-                        st.session_state.data.at[real_idx, 'Note'] = float(chaine_notes)
+                    if chaine_notes and chaine_notes != "nan":
+                        if not chaine_notes.replace('.', '', 1).isdigit():
+                            try:
+                                liste_chiffres = [float(x) for x in chaine_notes.split() if x.replace('.', '', 1).isdigit()]
+                                if liste_chiffres:
+                                    st.session_state.data.at[real_idx, 'Note'] = round(sum(liste_chiffres) / len(liste_chiffres), 1)
+                            except:
+                                pass
+                        elif chaine_notes.replace('.', '', 1).isdigit():
+                            st.session_state.data.at[real_idx, 'Note'] = float(chaine_notes)
                 
-                # Envoi vers ton Google Sheets via ta fonction existante
-                save_all_to_sheet(st.session_state.data, st.session_state.config)
-                st.success("Toutes les moyennes ont été calculées et sauvegardées avec succès ! 🎉")
+                st.success("Données enregistrées et moyennes calculées ! 🎉")
                 st.rerun()
-                
             except Exception as e:
                 st.error(f"Erreur d'enregistrement : {e}")
 
