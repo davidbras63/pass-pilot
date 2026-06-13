@@ -335,28 +335,38 @@ elif page == "Planning & Saisie":
         if st.button("💾 Enregistrer et Calculer les Moyennes", use_container_width=True, type="primary"):
             if edited_df is not None:
                 try:
-                    # LA LIGNE CORRIGÉE : On boucle directement sur les vrais index (real_idx)
+                    # Parcours sécurisé par les vrais index
                     for real_idx, row in edited_df.iterrows():
                         
                         # 1. Mise à jour du Statut (Fait / À faire)
                         st.session_state.data.at[real_idx, 'Statut'] = row['Statut']
                         
-                        # 2. Extraction et calcul de la moyenne
+                        # 2. Extraction et calcul de la moyenne (Nettoyage à 0.0 et non plus 20)
                         raw_notes = str(row['Note']).strip().replace(',', '.')
                         if raw_notes and raw_notes != "nan" and raw_notes != "":
                             try:
                                 list_nums = [float(n) for n in raw_notes.split() if n.replace('.', '', 1).isdigit()]
                                 if list_nums:
                                     st.session_state.data.at[real_idx, 'Note'] = round(sum(list_nums) / len(list_nums), 2)
+                                else:
+                                    st.session_state.data.at[real_idx, 'Note'] = 0.0
                             except:
-                                pass
+                                st.session_state.data.at[real_idx, 'Note'] = 0.0
                         else:
                             st.session_state.data.at[real_idx, 'Note'] = 0.0
 
-                    # Sauvegarde globale et rafraîchissement
+                    # Sauvegarde globale
                     save_all_to_sheet(st.session_state.data, st.session_state.config)
+                    
+                    # 1. On affiche le message vert
                     st.success("Toutes les moyennes ont été calculées et sauvegardées ! 🎉")
+                    
+                    # 2. On attend 3 petite seconde pour que tu puisses lire le message
+                    time.sleep(3)
+                    
+                    # 3. On relance pour rafraîchir les moyennes partout sur l'écran
                     st.rerun()
+
                 except Exception as e:
                     st.error(f"Erreur d'enregistrement : {e}")   
        
