@@ -289,7 +289,7 @@ elif page == "Planning & Saisie":
                         #save_all_to_sheet(st.session_state.data, st.session_state.config)
                 with c2:
                     if r['J_Type'] != 'J0':
-                        new_date = st.date_input("", value=dt.datetime.strptime(r['Date'], '%Y-%m-%d'), key=f"cal_{r['ID']}", label_visibility="collapsed")
+                        new_date = st.date_input("📅", value=dt.datetime.strptime(r['Date'], '%Y-%m-%d'), key=f"cal_{r['ID']}", label_visibility="collapsed")
                         if str(new_date) != r['Date']:
                             st.session_state.data.loc[st.session_state.data['ID'] == r['ID'], 'Date'] = str(new_date)
                             save_all_to_sheet(st.session_state.data, st.session_state.config)
