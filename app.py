@@ -295,67 +295,86 @@ elif page == "Planning & Saisie":
                             #save_all_to_sheet(st.session_state.data, st.session_state.config)
                             st.rerun()
    
-    # --- GRILLE DE SUIVI ET SAISIE ---
-    st.subheader("📊 Grille de Suivi & Saisie (Journée)")
-
-    st.session_state.data['Note'] = pd.to_numeric(st.session_state.data['Note'].astype(str).str.replace(',', '.'), errors='coerce')
-    mask = (st.session_state.data['Date'] == str(dt.date.today())) & (st.session_state.data['Dossier'] == choix_dos)
-
-    # Préparation des données pour l'affichage dans la grille style Excel
-    df_saisie = st.session_state.data[mask].copy()
-
-    if not df_saisie.empty:
-        st.write("💡 *Double-cliquez sur une case. Utilisez **Entrée** ou **Tab** pour descendre à la ligne suivante.*")
-        
-        # Affichage de la grille interactive (zéro blocage, saut de ligne fluide)
-        edited_df = st.data_editor(
-            df_saisie[['Chapitre', 'Statut', 'Note']],
-            column_config={
-                "Chapitre": st.column_config.TextColumn("Chapitre / Cours", disabled=True),
-                "Statut": st.column_config.SelectboxColumn("Statut", options=["À faire", "Fait"]),
-                "Note": st.column_config.TextColumn("Notes (Ex: 12 14)")
-            },
-            hide_index=True,
-            use_container_width=True,
-            key="grille_saisie_clavier_fluide"
-        )
-
-        # Sauvegarde des modifications temporaires dans l'état de l'application
-        for idx_edit, row in edited_df.iterrows():
-            real_idx = df_saisie.index[idx_edit]
-            st.session_state.data.loc[real_idx, 'Statut'] = row['Statut']
-            # On stocke temporairement ce que tu as tapé (chiffres ou texte)
-            st.session_state.data.loc[real_idx, 'Note'] = row['Note']
-    else:
-        st.info("Aucune donnée à saisir pour aujourd'hui.")
-
-    # --- LE BOUTON ENREGISTRER (CALCUL + SHEET) ---
+    # --- GRILLE DE SAISIE INTERACTIVE (VERSION STABLE) ---
     st.write("---")
-    if st.button("💾 Enregistrer et Calculer les Moyennes", use_container_width=True):
-        try:
-            # C'est ICI, au moment du clic, qu'on calcule toutes les moyennes d'un coup
-            for idx_edit, row in edited_df.iterrows():
-                real_idx = df_saisie.index[idx_edit]
-                note_saisie = str(row['Note']).strip() if row['Note'] not in [None, "", 0.0, "0.0"] else ""
-                
-                if note_saisie:
-                    raw = note_saisie.replace(',', '.').replace(';', ' ')
-                    nums = [float(n) for n in raw.split() if n.replace('.', '', 1).isdigit()]
-                    if nums:
-                        # On remplace la saisie par la vraie moyenne calculée
-                        st.session_state.data.loc[real_idx, 'Note'] = round(sum(nums) / len(nums), 2)
-                    else:
-                        st.session_state.data.loc[real_idx, 'Note'] = 0.0
+    st.subheader("📝 Grille de Saisie Rapide")
 
-            # Envoi direct vers Google Sheets
-            save_all_to_sheet(st.session_state.data, st.session_state.config)
-            
-            # Message de succès et rafraîchissement unique de l'écran pour afficher les moyennes
-            st.success("Toutes les moyennes ont été calculées et sauvegardées avec succès ! 🎉")
-            st.rerun()
-            
-        except Exception as e:
-            st.error(f"Erreur d'enregistrement : {e}")
+    # 1. Sécurisation et préparation des données pour éviter les conflits de types
+    df_saisie = st.session_state.data.copy()
+    
+    if 'Note' in df_saisie.columns:
+        df_saisie['Note'] = df_saisie['Note'].fillna('').astype(str)
+    else:
+        df_saisie['Note'] = ''
+
+    if 'Statut' not in df_saisie.columns:
+        df_saisie['Statut'] = 'À faire'
+    else:
+        df_saisie['Statut'] = df_saisie['Statut'].fillna('À faire').astype(str)
+
+    # 2. Configuration visuelle du tableau style Excel
+    config_colonnes = {
+        "Chapitre_Complet": st.column_config.TextColumn("📚 Chapitre", disabled=True), 
+        "Statut": st.column_config.SelectboxColumn(
+            "🔄 Statut",
+            options=["À faire", "Fait"],
+            required=True
+        ),
+        "Note": st.column_config.TextColumn(
+            "✍️ Saisie Notes (Ex: 12 14.5 11)",
+            help="Double-cliquez, tapez vos notes séparées par un espace, puis appuyez sur TAB pour descendre."
+        )
+    }
+
+    # On sélectionne uniquement les colonnes indispensables à afficher pour la saisie
+    colonnes_utiles = [c for c in ['Chapitre_Complet', 'Statut', 'Note'] if c in df_saisie.columns]
+
+    # 3. Affichage du tableau éditable sans clignotement intempestif
+    edited_df = st.data_editor(
+        df_saisie[colonnes_utiles],
+        column_config=config_colonnes,
+        use_container_width=True,
+        hide_index=True,
+        key="grille_saisie_clavier_fluide"
+    )
+
+    # 4. LE BOUTON ENREGISTRER (CALCUL + SHEET)
+    st.write("")
+    if st.button("💾 Enregistrer et Calculer les Moyennes", use_container_width=True, type="primary"):
+        if edited_df is not None:
+            try:
+                for idx_edit, row in edited_df.iterrows():
+                    real_idx = df_saisie.index[idx_edit]
+                    
+                    # Mise à jour du Statut
+                    if 'Statut' in row:
+                        st.session_state.data.at[real_idx, 'Statut'] = row['Statut']
+                    
+                    # Calcul de la moyenne s'il y a des notes saisies
+                    if 'Note' in row:
+                        chaine_notes = str(row['Note']).strip()
+                        
+                        # Si l'utilisateur a tapé une série de notes avec des espaces (ex: "12 15 11")
+                        if chaine_notes and chaine_notes != "nan" and not chaine_notes.replace('.', '', 1).isdigit():
+                            try:
+                                liste_chiffres = [float(x) for x in chaine_notes.split() if x.replace('.', '', 1).isdigit()]
+                                if liste_chiffres:
+                                    st.session_state.data.at[real_idx, 'Note'] = round(sum(liste_chiffres) / len(liste_chiffres), 1)
+                                    st.session_state.data.at[real_idx, 'Nbre_QCM'] = len(liste_chiffres)
+                            except Exception:
+                                pass
+                        # Si c'est un chiffre unique direct
+                        elif chaine_notes.replace('.', '', 1).isdigit():
+                            st.session_state.data.at[real_idx, 'Note'] = float(chaine_notes)
+                
+                # 5. Envoi immédiat vers ton Google Sheets via ta fonction existante
+                save_all_to_sheet(st.session_state.data, st.session_state.config)
+                st.success("Toutes les moyennes ont été calculées et sauvegardées avec succès ! 🎉")
+                st.rerun()
+                
+            except Exception as e:
+                st.error(f"Erreur d'enregistrement : {e}")
+
 
 elif page == "Graphiques":
     st.title("📊 Analyse Graphique de tes Notes")
