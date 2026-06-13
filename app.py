@@ -307,23 +307,22 @@ elif page == "Planning & Saisie":
             # 1. Affichage du Chapitre / Cours
             cols[0].write(f"({row['Chapitre']}) ({row['J_Type']})")
             
-            # 2. Case à cocher "Fait" (Elle enregistre direct si on clique)
-            is_done = cols[1].checkbox("Fait", value=(row['Statut'] == 'Fait'), key=f"grid_chk_{row['ID']}")
+            # 2. Case à cocher "Fait" (Sécurisée avec idx pour éviter l'erreur de doublon)
+            is_done = cols[1].checkbox("Fait", value=(row['Statut'] == 'Fait'), key=f"grid_chk_{idx}")
             if is_done != (row['Statut'] == 'Fait'):
                 st.session_state.data.loc[st.session_state.data['ID'] == row['ID'], 'Statut'] = 'Fait' if is_done else 'À faire'
                 save_all_to_sheet(st.session_state.data, st.session_state.config)
                 st.rerun()
             
-            # 3. Sécurité anti "0.0" : si c'est vide ou égal à 0, la case reste blanche
+            # 3. Sécurité anti "0.0"
             valeur_actuelle = str(row['Note']) if row['Note'] not in [0.0, "0.0", "", None] else ""
             
-            # 4. Saisie de la Note
-            note_in = cols[2].text_input("", value=valeur_actuelle, key=f"grid_note_{row['ID']}", label_visibility="collapsed")
+            # 4. Saisie de la Note (Sécurisée avec idx également)
+            note_in = cols[2].text_input("", value=valeur_actuelle, key=f"grid_note_{idx}", label_visibility="collapsed")
             
-            # 5. CALCUL AUTOMATIQUE AU "ENTRÉE" (Plus besoin du bouton Σ !)
+            # 5. Calcul automatique si la note change
             if note_in != valeur_actuelle:
                 try:
-                    # Nettoyage de la saisie comme sur ta ligne 319
                     raw = note_in.replace(',', '.').replace(';', ' ')
                     nums = [float(n) for n in raw.split() if n.is_num()]
                     
@@ -333,12 +332,11 @@ elif page == "Planning & Saisie":
                     else:
                         st.session_state.data.loc[st.session_state.data['ID'] == row['ID'], 'Note'] = 0.0
                     
-                    # On force le rafraîchissement pour afficher la note calculée
                     st.rerun()
                 except Exception as e:
                     pass
 
-        # --- LE GROS BOUTON ENREGISTRER (Placé juste avant les Graphiques) ---
+        # --- LE GROS BOUTON ENREGISTRER (Aligné sous le for) ---
         st.write("---")
         if st.button("💾 Enregistrer toutes les notes dans Google Sheets", use_container_width=True):
             try:
@@ -346,6 +344,7 @@ elif page == "Planning & Saisie":
                 st.success("Toutes les notes ont bien été sauvegardées ! 🎉")
             except Exception as e:
                 st.error(f"Erreur d'enregistrement : {e}")
+
 
       
        
