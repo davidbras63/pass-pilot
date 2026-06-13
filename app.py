@@ -346,6 +346,7 @@ elif page == "Planning & Saisie":
                 st.success("Toutes les notes ont bien été sauvegardées ! 🎉")
             except Exception as e:
                 st.error(f"Erreur d'enregistrement : {e}")
+
       
        
 
