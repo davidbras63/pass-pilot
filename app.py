@@ -299,80 +299,78 @@ elif page == "Planning & Saisie":
     st.write("---")
     st.subheader("📝 Grille de Saisie des Notes")
 
-    # 1. Copie locale pour sécuriser l'affichage
-    df_saisie = st.session_state.data.copy()
+    # 1. On récupère le filtre exact de ton code d'origine pour charger le planning du jour
+    if 'Note' in st.session_state.data.columns:
+        st.session_state.data['Note'] = pd.to_numeric(st.session_state.data['Note'].astype(str).str.replace(',', '.'), errors='coerce')
     
-    # Sécurité absolue : on s'assure que les 4 colonnes demandées existent dans le tableau
-    if 'Chapitre_Complet' not in df_saisie.columns:
-        df_saisie['Chapitre_Complet'] = 'Sans nom'
-    else:
-        df_saisie['Chapitre_Complet'] = df_saisie['Chapitre_Complet'].fillna('Sans nom').astype(str)
+    # Masque d'origine basé sur la date du jour et le dossier choisi
+    mask = (st.session_state.data['Date'].astype(str) == str(dt.date.today())) & (st.session_state.data['Dossier'] == choix_dos)
+    
+    # Extraction des données filtrées
+    df_saisie = st.session_state.data[mask].copy()
 
-    if 'Type' not in df_saisie.columns:
-        df_saisie['Type'] = 'J0'
-    else:
-        df_saisie['Type'] = df_saisie['Type'].fillna('J0').astype(str)
+    if not df_saisie.empty:
+        st.info("💡 Double-cliquez sur une case, tapez vos notes séparées par un espace, puis appuyez sur TAB pour vous déplacer.")
+        
+        # Sécurisation mineure pour éviter le KeyError sur le Statut et la Note sans écraser le reste
+        if 'Statut' not in df_saisie.columns:
+            df_saisie['Statut'] = 'À faire'
+        else:
+            df_saisie['Statut'] = df_saisie['Statut'].fillna('À faire').astype(str)
+            
+        df_saisie['Note'] = df_saisie['Note'].fillna('').astype(str)
 
-    if 'Statut' not in df_saisie.columns:
-        df_saisie['Statut'] = 'À faire'
-    else:
-        df_saisie['Statut'] = df_saisie['Statut'].fillna('À faire').astype(str)
+        # 2. Configuration de la grille (Chapitre, Échéance, Statut, Note)
+        config_colonnes = {
+            "Chapitre_Complet": st.column_config.TextColumn("📚 Chapitre", disabled=True), 
+            "Type": st.column_config.TextColumn("⏳ Échéance (J)", disabled=True),
+            "Statut": st.column_config.SelectboxColumn("🔄 Statut", options=["À faire", "Fait"], required=True),
+            "Note": st.column_config.TextColumn("✍️ Saisie Notes (Ex: 12 14.5 11)")
+        }
 
-    if 'Note' not in df_saisie.columns:
-        df_saisie['Note'] = ''
-    df_saisie['Note'] = df_saisie['Note'].fillna('').astype(str)
+        # 3. Affichage du tableau interactif
+        edited_df = st.data_editor(
+            df_saisie[['Chapitre_Complet', 'Type', 'Statut', 'Note']],
+            column_config=config_colonnes,
+            use_container_width=True,
+            hide_index=True,
+            key="grille_saisie_clavier_fluide"
+        )
 
-    # 2. Configuration de l'éditeur (Ordre : Chapitre, Échéance, Statut, Note)
-    config_colonnes = {
-        "Chapitre_Complet": st.column_config.TextColumn("📚 Chapitre", disabled=True), 
-        "Type": st.column_config.TextColumn("⏳ Échéance (J)", disabled=True),
-        "Statut": st.column_config.SelectboxColumn("🔄 Statut", options=["À faire", "Fait"], required=True),
-        "Note": st.column_config.TextColumn("✍️ Saisie Notes (Ex: 12 14.5 11)", help="Tapez vos notes séparées par un espace, puis TAB.")
-    }
-
-    # 3. Affichage de la grille interactive
-    edited_df = st.data_editor(
-        df_saisie[['Chapitre_Complet', 'Type', 'Statut', 'Note']],
-        column_config=config_colonnes,
-        use_container_width=True,
-        hide_index=True,
-        key="grille_saisie_clavier_fluide"
-    )
-
-    # 4. Bouton unique d'enregistrement et de calcul sous le tableau
-    st.write("")
-    if st.button("💾 Enregistrer et Calculer les Moyennes", use_container_width=True, type="primary"):
-        if edited_df is not None:
-            try:
-                for idx_edit, row in edited_df.iterrows():
-                    real_idx = df_saisie.index[idx_edit]
+        # 4. Le bouton d'enregistrement et de calcul des moyennes
+        st.write("")
+        if st.button("💾 Enregistrer et Calculer les Moyennes", use_container_width=True, type="primary"):
+            if edited_df is not None:
+                try:
+                    for idx_edit, row in edited_df.iterrows():
+                        real_idx = df_saisie.index[idx_edit]
+                        
+                        # Mise à jour du Statut (Fait / À faire)
+                        st.session_state.data.at[real_idx, 'Statut'] = row['Statut']
+                        
+                        # Calcul de la moyenne
+                        chaine_notes = str(row['Note']).strip()
+                        if chaine_notes and chaine_notes != "nan" and chaine_notes != "":
+                            # Si plusieurs notes (ex: "12 14 11")
+                            if not chaine_notes.replace('.', '', 1).isdigit():
+                                try:
+                                    liste_chiffres = [float(x) for x in chaine_notes.split() if x.replace('.', '', 1).isdigit()]
+                                    if liste_chiffres:
+                                        st.session_state.data.at[real_idx, 'Note'] = round(sum(liste_chiffres) / len(liste_chiffres), 1)
+                                except:
+                                    pass
+                            # Si note unique
+                            elif chaine_notes.replace('.', '', 1).isdigit():
+                                st.session_state.data.at[real_idx, 'Note'] = float(chaine_notes)
                     
-                    # Sauvegarde des choix de l'utilisateur dans la vraie base
-                    st.session_state.data.at[real_idx, 'Statut'] = row['Statut']
-                    
-                    # Extraction et calcul de la moyenne de la chaîne de notes
-                    chaine_notes = str(row['Note']).strip()
-                    if chaine_notes and chaine_notes != "nan":
-                        # Si l'utilisateur a entré plusieurs chiffres séparés par des espaces
-                        if not chaine_notes.replace('.', '', 1).isdigit():
-                            try:
-                                liste_chiffres = [float(x) for x in chaine_notes.split() if x.replace('.', '', 1).isdigit()]
-                                if liste_chiffres:
-                                    st.session_state.data.at[real_idx, 'Note'] = round(sum(liste_chiffres) / len(liste_chiffres), 1)
-                            except:
-                                pass
-                        # Si c'est une note unique déjà calculée ou modifiée en direct
-                        elif chaine_notes.replace('.', '', 1).isdigit():
-                            st.session_state.data.at[real_idx, 'Note'] = float(chaine_notes)
-                
-                # Sauvegarde vers Google Sheets
-                save_all_to_sheet(st.session_state.data, st.session_state.config)
-                st.success("Toutes les données et moyennes ont été enregistrées avec succès ! 🎉")
-                st.rerun()
-            except Exception as e:
-                st.error(f"Erreur lors de la sauvegarde : {e}")
-
-
+                    # Envoi vers ton Google Sheets
+                    save_all_to_sheet(st.session_state.data, st.session_state.config)
+                    st.success("Données enregistrées et moyennes calculées ! 🎉")
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"Erreur d'enregistrement : {e}")
+    else:
+        st.info("Aucune donnée à saisir pour aujourd'hui.")
 
 elif page == "Graphiques":
     st.title("📊 Analyse Graphique de tes Notes")
