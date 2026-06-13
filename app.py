@@ -301,51 +301,46 @@ elif page == "Planning & Saisie":
     st.session_state.data['Note'] = pd.to_numeric(st.session_state.data['Note'].astype(str).str.replace(',', '.'), errors='coerce')
     mask = (st.session_state.data['Date'] == str(dt.date.today())) & (st.session_state.data['Dossier'] == choix_dos)
 
-    # On isole les lignes filtrées pour l'affichage
-    df_saisie = st.session_state.data[mask].copy()
-
-    if not df_saisie.empty:
-        # Affichage du tableau interactif propre (style Excel)
-        edited_df = st.data_editor(
-            df_saisie[['ID', 'Chapitre', 'J_Type', 'Statut', 'Note']],
-            column_config={
-                "ID": None, # On cache l'ID technique
-                "Chapitre": st.column_config.TextColumn("Chapitre / Cours", disabled=True, width="medium"),
-                "J_Type": st.column_config.TextColumn("Type", disabled=True, width="small"),
-                "Statut": st.column_config.SelectboxColumn("Statut", options=["À faire", "Fait"], required=True),
-                "Note": st.column_config.TextColumn("Notes / Saisie", help="Saisissez vos notes séparées par un espace")
-            },
-            disabled=["Chapitre", "J_Type"],
-            hide_index=True,
-            use_container_width=True,
-            key="editeur_notes"
-        )
-
-        # On applique les modifications directement dans le session_state technique sans recharger
-        for _, row in edited_df.iterrows():
-            idx_original = st.session_state.data['ID'] == row['ID']
-            st.session_state.data.loc[idx_original, 'Statut'] = row['Statut']
+    # On boucle sur les lignes filtrées
+    for idx, row in st.session_state.data[mask].reset_index().iterrows():
+        # Le container force la ligne à rester unie et évite tout décalage visuel
+        with st.container():
+            cols = st.columns([0.45, 0.15, 0.40])
             
-            # Recalcul de la moyenne en tâche de fond si la case Note a changé
-            note_saisie = str(row['Note']).strip() if row['Note'] not in [None, "", 0.0, "0.0"] else ""
-            if note_saisie:
-                raw = note_saisie.replace(',', '.').replace(';', ' ')
-                nums = [float(n) for n in raw.split() if n.replace('.', '', 1).isdigit()]
-                if nums:
-                    st.session_state.data.loc[idx_original, 'Note'] = round(sum(nums) / len(nums), 2)
-                else:
-                    st.session_state.data.loc[idx_original, 'Note'] = 0.0
-    else:
-        st.info("Aucune donnée à saisir pour aujourd'hui.")
+            # 1. Affichage du Chapitre / Cours
+            cols[0].write(f"({row['Chapitre']}) ({row['J_Type']})")
+            
+            # 2. Case à cocher "Fait"
+            is_done = cols[1].checkbox("Fait", value=(row['Statut'] == 'Fait'), key=f"grid_chk_{idx}")
+            if is_done != (row['Statut'] == 'Fait'):
+                st.session_state.data.loc[st.session_state.data['ID'] == row['ID'], 'Statut'] = 'Fait' if is_done else 'À faire'
+            
+            # 3. Sécurité anti "0.0" et Saisie de la Note
+            valeur_actuelle = str(row['Note']) if row['Note'] not in [0.0, "0.0", "", None] else ""
+            note_in = cols[2].text_input("Notes (séparées par un espace)", value=valeur_actuelle, key=f"grid_note_{idx}", label_visibility="collapsed")
+            
+            # 4. Calcul de la moyenne en mémoire vive si tu as modifié la case
+            if note_in != valeur_actuelle:
+                try:
+                    raw = note_in.replace(',', '.').replace(';', ' ')
+                    nums = [float(n) for n in raw.split() if n.replace('.', '', 1).isdigit()]
+                    if nums:
+                        st.session_state.data.loc[st.session_state.data['ID'] == row['ID'], 'Note'] = round(sum(nums) / len(nums), 2)
+                    else:
+                        st.session_state.data.loc[st.session_state.data['ID'] == row['ID'], 'Note'] = 0.0
+                except Exception as e:
+                    pass
 
     # --- LE BOUTON ENREGISTRER ---
     st.write("---")
     if st.button("💾 Enregistrer toutes les notes dans Google Sheets", use_container_width=True):
         try:
             save_all_to_sheet(st.session_state.data, st.session_state.config)
-            st.success("Toutes les notes ont bien été sauvegardées ! 🎉")
+            st.success("Toutes les notes et statuts ont bien été sauvegardés ! 🎉")
+            st.rerun()
         except Exception as e:
             st.error(f"Erreur d'enregistrement : {e}")
+
 
 elif page == "Graphiques":
     st.title("📊 Analyse Graphique de tes Notes")
