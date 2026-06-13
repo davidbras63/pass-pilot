@@ -299,9 +299,10 @@ elif page == "Planning & Saisie":
     st.write("---")
     st.subheader("📝 Grille de Saisie Rapide")
 
-    # 1. Sécurisation et préparation des données pour éviter les conflits de types
+    # 1. Sécurisation et préparation des données
     df_saisie = st.session_state.data.copy()
     
+    # On s'assure que les colonnes indispensables sont bien au format texte
     if 'Note' in df_saisie.columns:
         df_saisie['Note'] = df_saisie['Note'].fillna('').astype(str)
     else:
@@ -311,6 +312,10 @@ elif page == "Planning & Saisie":
         df_saisie['Statut'] = 'À faire'
     else:
         df_saisie['Statut'] = df_saisie['Statut'].fillna('À faire').astype(str)
+
+    # Sécurité pour forcer l'affichage du nom du chapitre
+    if 'Chapitre_Complet' in df_saisie.columns:
+        df_saisie['Chapitre_Complet'] = df_saisie['Chapitre_Complet'].fillna('Sans nom').astype(str)
 
     # 2. Configuration visuelle du tableau style Excel
     config_colonnes = {
@@ -326,12 +331,9 @@ elif page == "Planning & Saisie":
         )
     }
 
-    # On sélectionne uniquement les colonnes indispensables à afficher pour la saisie
-    colonnes_utiles = [c for c in ['Chapitre_Complet', 'Statut', 'Note'] if c in df_saisie.columns]
-
-    # 3. Affichage du tableau éditable sans clignotement intempestif
+    # 3. Affichage du tableau avec le nom du chapitre bien visible à gauche
     edited_df = st.data_editor(
-        df_saisie[colonnes_utiles],
+        df_saisie[['Chapitre_Complet', 'Statut', 'Note']],
         column_config=config_colonnes,
         use_container_width=True,
         hide_index=True,
@@ -347,27 +349,25 @@ elif page == "Planning & Saisie":
                     real_idx = df_saisie.index[idx_edit]
                     
                     # Mise à jour du Statut
-                    if 'Statut' in row:
-                        st.session_state.data.at[real_idx, 'Statut'] = row['Statut']
+                    st.session_state.data.at[real_idx, 'Statut'] = row['Statut']
                     
                     # Calcul de la moyenne s'il y a des notes saisies
-                    if 'Note' in row:
-                        chaine_notes = str(row['Note']).strip()
-                        
-                        # Si l'utilisateur a tapé une série de notes avec des espaces (ex: "12 15 11")
-                        if chaine_notes and chaine_notes != "nan" and not chaine_notes.replace('.', '', 1).isdigit():
-                            try:
-                                liste_chiffres = [float(x) for x in chaine_notes.split() if x.replace('.', '', 1).isdigit()]
-                                if liste_chiffres:
-                                    st.session_state.data.at[real_idx, 'Note'] = round(sum(liste_chiffres) / len(liste_chiffres), 1)
-                                    st.session_state.data.at[real_idx, 'Nbre_QCM'] = len(liste_chiffres)
-                            except Exception:
-                                pass
-                        # Si c'est un chiffre unique direct
-                        elif chaine_notes.replace('.', '', 1).isdigit():
-                            st.session_state.data.at[real_idx, 'Note'] = float(chaine_notes)
+                    chaine_notes = str(row['Note']).strip()
+                    
+                    # Si l'utilisateur a tapé une série de notes avec des espaces (ex: "12 15 11")
+                    if chaine_notes and chaine_notes != "nan" and not chaine_notes.replace('.', '', 1).isdigit():
+                        try:
+                            liste_chiffres = [float(x) for x in chaine_notes.split() if x.replace('.', '', 1).isdigit()]
+                            if liste_chiffres:
+                                st.session_state.data.at[real_idx, 'Note'] = round(sum(liste_chiffres) / len(liste_chiffres), 1)
+                                st.session_state.data.at[real_idx, 'Nbre_QCM'] = len(liste_chiffres)
+                        except Exception:
+                            pass
+                    # Si c'est un chiffre unique direct
+                    elif chaine_notes.replace('.', '', 1).isdigit():
+                        st.session_state.data.at[real_idx, 'Note'] = float(chaine_notes)
                 
-                # 5. Envoi immédiat vers ton Google Sheets via ta fonction existante
+                # Envoi vers ton Google Sheets via ta fonction existante
                 save_all_to_sheet(st.session_state.data, st.session_state.config)
                 st.success("Toutes les moyennes ont été calculées et sauvegardées avec succès ! 🎉")
                 st.rerun()
