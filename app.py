@@ -301,58 +301,54 @@ elif page == "Planning & Saisie":
     st.session_state.data['Note'] = pd.to_numeric(st.session_state.data['Note'].astype(str).str.replace(',', '.'), errors='coerce')
     mask = (st.session_state.data['Date'] == str(dt.date.today())) & (st.session_state.data['Dossier'] == choix_dos)
 
-    # On boucle sur les lignes filtrées
-    for idx, row in st.session_state.data[mask].reset_index().iterrows():
-        with st.container():
-            cols = st.columns([0.45, 0.15, 0.40])
-            
-            # 1. Affichage du Chapitre / Cours
-            cols[0].write(f"({row['Chapitre']}) ({row['J_Type']})")
-            
-            # 2. Case à cocher "Fait"
-            is_done = cols[1].checkbox("Fait", value=(row['Statut'] == 'Fait'), key=f"grid_chk_{idx}")
-            if is_done != (row['Statut'] == 'Fait'):
-                st.session_state.data.loc[st.session_state.data['ID'] == row['ID'], 'Statut'] = 'Fait' if is_done else 'À faire'
-            
-            # 3. Saisie de la Note avec calcul instantané
-            valeur_actuelle = str(row['Note']) if row['Note'] not in [0.0, "0.0", "", None] else ""
-            
-            # On écoute le changement de case (quand on appuie sur Entrée ou Tabulation)
-            note_in = cols[2].text_input("Notes", value=valeur_actuelle, key=f"grid_note_{idx}", label_visibility="collapsed")
-            
-            if note_in != valeur_actuelle:
-                try:
-                    raw = note_in.replace(',', '.').replace(';', ' ')
+    # On enferme TOUT dans un formulaire pour bloquer les boucles de chargement
+    with st.form(key="formulaire_saisie_notes"):
+        
+        # On boucle sur les lignes filtrées
+        for idx, row in st.session_state.data[mask].reset_index().iterrows():
+            with st.container():
+                cols = st.columns([0.45, 0.15, 0.40])
+                
+                # 1. Affichage du Chapitre / Cours
+                cols[0].write(f"({row['Chapitre']}) ({row['J_Type']})")
+                
+                # 2. Case à cocher "Fait"
+                is_done = cols[1].checkbox("Fait", value=(row['Statut'] == 'Fait'), key=f"grid_chk_{idx}")
+                
+                # 3. Saisie de la Note
+                valeur_actuelle = str(row['Note']) if row['Note'] not in [0.0, "0.0", "", None] else ""
+                note_in = cols[2].text_input("Notes", value=valeur_actuelle, key=f"grid_note_{idx}", label_visibility="collapsed")
+
+        # --- LE BOUTON D'ENREGISTREMENT (Obligatoire dans un formulaire) ---
+        st.write("---")
+        bouton_soumettre = st.form_submit_button("💾 Calculer les moyennes et Enregistrer dans Google Sheets", use_container_width=True)
+
+    # Une fois le bouton cliqué, on traite toutes les données d'un seul coup
+    if bouton_soumettre:
+        try:
+            # On ré-analyse les données du formulaire pour mettre à jour le tableau
+            for idx, row in st.session_state.data[mask].reset_index().iterrows():
+                # Récupération de la case à cocher
+                statut_form = 'Fait' if st.session_state[f"grid_chk_{idx}"] else 'À faire'
+                st.session_state.data.loc[st.session_state.data['ID'] == row['ID'], 'Statut'] = statut_form
+                
+                # Récupération et calcul de la note
+                note_form = st.session_state[f"grid_note_{idx}"]
+                if note_form != valeur_actuelle:
+                    raw = note_form.replace(',', '.').replace(';', ' ')
                     nums = [float(n) for n in raw.split() if n.replace('.', '', 1).isdigit()]
                     if nums:
                         st.session_state.data.loc[st.session_state.data['ID'] == row['ID'], 'Note'] = round(sum(nums) / len(nums), 2)
                     else:
                         st.session_state.data.loc[st.session_state.data['ID'] == row['ID'], 'Note'] = 0.0
-                    st.rerun() # Rafraîchit l'affichage de la moyenne INSTANTANÉMENT
-                except Exception as e:
-                    pass
 
-    # --- LE BOUTON ENREGISTRER ---
-    st.write("---")
-    
-    # On utilise un état pour maintenir le message de succès affiché
-    if "sauvegarde_reussie" not in st.session_state:
-        st.session_state.sauvegarde_reussie = False
-
-    if st.button("💾 Enregistrer toutes les notes dans Google Sheets", use_container_width=True):
-        try:
+            # Sauvegarde finale et unique dans le Sheets
             save_all_to_sheet(st.session_state.data, st.session_state.config)
-            st.session_state.sauvegarde_reussie = True
+            st.success("Toutes les notes ont bien été calculées et sauvegardées ! 🎉")
+            st.rerun()
+            
         except Exception as e:
             st.error(f"Erreur d'enregistrement : {e}")
-
-    # Le message reste affiché à l'écran de manière stable
-    if st.session_state.sauvegarde_reussie:
-        st.success("Toutes les notes et statuts ont bien été sauvegardés ! 🎉")
-        # Petit message éphémère en plus dans le coin de l'écran
-        st.toast("Données synchronisées avec Google Sheets !", icon="✅")
-        # On réinitialise l'état pour la prochaine saisie
-        st.session_state.sauvegarde_reussie = False
 
 
 elif page == "Graphiques":
