@@ -299,22 +299,30 @@ elif page == "Planning & Saisie":
     st.write("---")
     st.subheader("📝 Grille de Saisie des Notes")
 
-    # 1. Préparation et sécurisation des données pour l'éditeur
+    # 1. Copie locale pour sécuriser l'affichage
     df_saisie = st.session_state.data.copy()
     
-    # Sécurité anti-KeyError : On injecte la colonne de coche manquante si elle n'existe pas
+    # Sécurité absolue : on s'assure que les 4 colonnes demandées existent dans le tableau
+    if 'Chapitre_Complet' not in df_saisie.columns:
+        df_saisie['Chapitre_Complet'] = 'Sans nom'
+    else:
+        df_saisie['Chapitre_Complet'] = df_saisie['Chapitre_Complet'].fillna('Sans nom').astype(str)
+
+    if 'Type' not in df_saisie.columns:
+        df_saisie['Type'] = 'J0'
+    else:
+        df_saisie['Type'] = df_saisie['Type'].fillna('J0').astype(str)
+
     if 'Statut' not in df_saisie.columns:
         df_saisie['Statut'] = 'À faire'
     else:
         df_saisie['Statut'] = df_saisie['Statut'].fillna('À faire').astype(str)
-        
-    # Sécurisation de la colonne Note pour éviter les conflits de types
-    if 'Note' in df_saisie.columns:
-        df_saisie['Note'] = df_saisie['Note'].fillna('').astype(str)
-    else:
-        df_saisie['Note'] = ''
 
-    # 2. Configuration visuelle du tableau (Ordre : Chapitre, J, Statut, Notes)
+    if 'Note' not in df_saisie.columns:
+        df_saisie['Note'] = ''
+    df_saisie['Note'] = df_saisie['Note'].fillna('').astype(str)
+
+    # 2. Configuration de l'éditeur (Ordre : Chapitre, Échéance, Statut, Note)
     config_colonnes = {
         "Chapitre_Complet": st.column_config.TextColumn("📚 Chapitre", disabled=True), 
         "Type": st.column_config.TextColumn("⏳ Échéance (J)", disabled=True),
@@ -322,7 +330,7 @@ elif page == "Planning & Saisie":
         "Note": st.column_config.TextColumn("✍️ Saisie Notes (Ex: 12 14.5 11)", help="Tapez vos notes séparées par un espace, puis TAB.")
     }
 
-    # 3. Affichage du tableau éditable
+    # 3. Affichage de la grille interactive
     edited_df = st.data_editor(
         df_saisie[['Chapitre_Complet', 'Type', 'Statut', 'Note']],
         column_config=config_colonnes,
@@ -331,7 +339,7 @@ elif page == "Planning & Saisie":
         key="grille_saisie_clavier_fluide"
     )
 
-    # 4. Le bouton unique qui valide tout et calcule les moyennes
+    # 4. Bouton unique d'enregistrement et de calcul sous le tableau
     st.write("")
     if st.button("💾 Enregistrer et Calculer les Moyennes", use_container_width=True, type="primary"):
         if edited_df is not None:
@@ -339,30 +347,30 @@ elif page == "Planning & Saisie":
                 for idx_edit, row in edited_df.iterrows():
                     real_idx = df_saisie.index[idx_edit]
                     
-                    # Enregistrement du Statut de travail
+                    # Sauvegarde des choix de l'utilisateur dans la vraie base
                     st.session_state.data.at[real_idx, 'Statut'] = row['Statut']
                     
-                    # Découpage au clavier et calcul de la moyenne
+                    # Extraction et calcul de la moyenne de la chaîne de notes
                     chaine_notes = str(row['Note']).strip()
                     if chaine_notes and chaine_notes != "nan":
-                        # Traitement si plusieurs notes séparées par un espace (ex: "12 15")
+                        # Si l'utilisateur a entré plusieurs chiffres séparés par des espaces
                         if not chaine_notes.replace('.', '', 1).isdigit():
                             try:
                                 liste_chiffres = [float(x) for x in chaine_notes.split() if x.replace('.', '', 1).isdigit()]
                                 if liste_chiffres:
                                     st.session_state.data.at[real_idx, 'Note'] = round(sum(liste_chiffres) / len(liste_chiffres), 1)
-                                    st.session_state.data.at[real_idx, 'Nbre_QCM'] = len(liste_chiffres)
                             except:
                                 pass
-                        # Traitement si note unique directe
+                        # Si c'est une note unique déjà calculée ou modifiée en direct
                         elif chaine_notes.replace('.', '', 1).isdigit():
                             st.session_state.data.at[real_idx, 'Note'] = float(chaine_notes)
-                            st.session_state.data.at[real_idx, 'Nbre_QCM'] = 1
                 
-                st.success("Toutes les modifications et les moyennes ont été appliquées ! 🎉")
+                # Sauvegarde vers Google Sheets
+                save_all_to_sheet(st.session_state.data, st.session_state.config)
+                st.success("Toutes les données et moyennes ont été enregistrées avec succès ! 🎉")
                 st.rerun()
             except Exception as e:
-                st.error(f"Erreur d'enregistrement : {e}")
+                st.error(f"Erreur lors de la sauvegarde : {e}")
 
 
 
