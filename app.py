@@ -299,21 +299,22 @@ elif page == "Planning & Saisie":
     st.write("---")
     st.subheader("📝 Grille de Saisie des Notes")
 
-    # 1. On prépare les données réelles issues de ton fichier
+    # 1. Préparation et sécurisation des données pour l'éditeur
     df_saisie = st.session_state.data.copy()
     
-    # Sécurisation des formats pour l'éditeur
+    # Sécurité anti-KeyError : On injecte la colonne de coche manquante si elle n'existe pas
+    if 'Statut' not in df_saisie.columns:
+        df_saisie['Statut'] = 'À faire'
+    else:
+        df_saisie['Statut'] = df_saisie['Statut'].fillna('À faire').astype(str)
+        
+    # Sécurisation de la colonne Note pour éviter les conflits de types
     if 'Note' in df_saisie.columns:
         df_saisie['Note'] = df_saisie['Note'].fillna('').astype(str)
     else:
         df_saisie['Note'] = ''
 
-    if 'Statut' not in df_saisie.columns:
-        df_saisie['Statut'] = 'À faire'
-    else:
-        df_saisie['Statut'] = df_saisie['Statut'].fillna('À faire').astype(str)
-
-    # 2. Configuration visuelle dans l'ordre exact de ton message
+    # 2. Configuration visuelle du tableau (Ordre : Chapitre, J, Statut, Notes)
     config_colonnes = {
         "Chapitre_Complet": st.column_config.TextColumn("📚 Chapitre", disabled=True), 
         "Type": st.column_config.TextColumn("⏳ Échéance (J)", disabled=True),
@@ -321,7 +322,7 @@ elif page == "Planning & Saisie":
         "Note": st.column_config.TextColumn("✍️ Saisie Notes (Ex: 12 14.5 11)", help="Tapez vos notes séparées par un espace, puis TAB.")
     }
 
-    # 3. Affichage du tableau interactif avec les 4 colonnes
+    # 3. Affichage du tableau éditable
     edited_df = st.data_editor(
         df_saisie[['Chapitre_Complet', 'Type', 'Statut', 'Note']],
         column_config=config_colonnes,
@@ -330,7 +331,7 @@ elif page == "Planning & Saisie":
         key="grille_saisie_clavier_fluide"
     )
 
-    # 4. Le bouton final sous le tableau qui enregistre tout et calcule
+    # 4. Le bouton unique qui valide tout et calcule les moyennes
     st.write("")
     if st.button("💾 Enregistrer et Calculer les Moyennes", use_container_width=True, type="primary"):
         if edited_df is not None:
@@ -338,26 +339,31 @@ elif page == "Planning & Saisie":
                 for idx_edit, row in edited_df.iterrows():
                     real_idx = df_saisie.index[idx_edit]
                     
-                    # Sauvegarde du choix Fait / À faire
+                    # Enregistrement du Statut de travail
                     st.session_state.data.at[real_idx, 'Statut'] = row['Statut']
                     
-                    # Découpage et calcul de la moyenne des notes
+                    # Découpage au clavier et calcul de la moyenne
                     chaine_notes = str(row['Note']).strip()
                     if chaine_notes and chaine_notes != "nan":
+                        # Traitement si plusieurs notes séparées par un espace (ex: "12 15")
                         if not chaine_notes.replace('.', '', 1).isdigit():
                             try:
                                 liste_chiffres = [float(x) for x in chaine_notes.split() if x.replace('.', '', 1).isdigit()]
                                 if liste_chiffres:
                                     st.session_state.data.at[real_idx, 'Note'] = round(sum(liste_chiffres) / len(liste_chiffres), 1)
+                                    st.session_state.data.at[real_idx, 'Nbre_QCM'] = len(liste_chiffres)
                             except:
                                 pass
+                        # Traitement si note unique directe
                         elif chaine_notes.replace('.', '', 1).isdigit():
                             st.session_state.data.at[real_idx, 'Note'] = float(chaine_notes)
+                            st.session_state.data.at[real_idx, 'Nbre_QCM'] = 1
                 
-                st.success("Données enregistrées et moyennes calculées ! 🎉")
+                st.success("Toutes les modifications et les moyennes ont été appliquées ! 🎉")
                 st.rerun()
             except Exception as e:
                 st.error(f"Erreur d'enregistrement : {e}")
+
 
 
 elif page == "Graphiques":
