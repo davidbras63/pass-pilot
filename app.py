@@ -303,7 +303,6 @@ elif page == "Planning & Saisie":
 
     # On boucle sur les lignes filtrées
     for idx, row in st.session_state.data[mask].reset_index().iterrows():
-        # Le container force la ligne à rester unie et évite tout décalage visuel
         with st.container():
             cols = st.columns([0.45, 0.15, 0.40])
             
@@ -315,11 +314,12 @@ elif page == "Planning & Saisie":
             if is_done != (row['Statut'] == 'Fait'):
                 st.session_state.data.loc[st.session_state.data['ID'] == row['ID'], 'Statut'] = 'Fait' if is_done else 'À faire'
             
-            # 3. Sécurité anti "0.0" et Saisie de la Note
+            # 3. Saisie de la Note avec calcul instantané
             valeur_actuelle = str(row['Note']) if row['Note'] not in [0.0, "0.0", "", None] else ""
-            note_in = cols[2].text_input("Notes (séparées par un espace)", value=valeur_actuelle, key=f"grid_note_{idx}", label_visibility="collapsed")
             
-            # 4. Calcul de la moyenne en mémoire vive si tu as modifié la case
+            # On écoute le changement de case (quand on appuie sur Entrée ou Tabulation)
+            note_in = cols[2].text_input("Notes", value=valeur_actuelle, key=f"grid_note_{idx}", label_visibility="collapsed")
+            
             if note_in != valeur_actuelle:
                 try:
                     raw = note_in.replace(',', '.').replace(';', ' ')
@@ -328,18 +328,31 @@ elif page == "Planning & Saisie":
                         st.session_state.data.loc[st.session_state.data['ID'] == row['ID'], 'Note'] = round(sum(nums) / len(nums), 2)
                     else:
                         st.session_state.data.loc[st.session_state.data['ID'] == row['ID'], 'Note'] = 0.0
+                    st.rerun() # Rafraîchit l'affichage de la moyenne INSTANTANÉMENT
                 except Exception as e:
                     pass
 
     # --- LE BOUTON ENREGISTRER ---
     st.write("---")
+    
+    # On utilise un état pour maintenir le message de succès affiché
+    if "sauvegarde_reussie" not in st.session_state:
+        st.session_state.sauvegarde_reussie = False
+
     if st.button("💾 Enregistrer toutes les notes dans Google Sheets", use_container_width=True):
         try:
             save_all_to_sheet(st.session_state.data, st.session_state.config)
-            st.success("Toutes les notes et statuts ont bien été sauvegardés ! 🎉")
-            st.rerun()
+            st.session_state.sauvegarde_reussie = True
         except Exception as e:
             st.error(f"Erreur d'enregistrement : {e}")
+
+    # Le message reste affiché à l'écran de manière stable
+    if st.session_state.sauvegarde_reussie:
+        st.success("Toutes les notes et statuts ont bien été sauvegardés ! 🎉")
+        # Petit message éphémère en plus dans le coin de l'écran
+        st.toast("Données synchronisées avec Google Sheets !", icon="✅")
+        # On réinitialise l'état pour la prochaine saisie
+        st.session_state.sauvegarde_reussie = False
 
 
 elif page == "Graphiques":
