@@ -289,13 +289,10 @@ elif page == "Planning & Saisie":
                         #save_all_to_sheet(st.session_state.data, st.session_state.config)
                 with c2:
                     if r['J_Type'] != 'J0':
-                        # Remplacement du pavé par un bouton popover discret avec un émoji
-                        with st.popover("📅", use_container_width=False):
-                            new_date = st.date_input("Déplacer le cours :", value=dt.datetime.strptime(r['Date'], '%Y-%m-%d'), key=f"cal_{r['ID']}")
-
+                        new_date = st.date_input("", value=dt.datetime.strptime(r['Date'], '%Y-%m-%d'), key=f"cal_{r['ID']}", label_visibility="collapsed")
                         if str(new_date) != r['Date']:
                             st.session_state.data.loc[st.session_state.data['ID'] == r['ID'], 'Date'] = str(new_date)
-                            #save_all_to_sheet(st.session_state.data, st.session_state.config)
+                            save_all_to_sheet(st.session_state.data, st.session_state.config)
                             st.rerun()
    
     st.write("---")
