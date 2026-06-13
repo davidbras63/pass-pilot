@@ -295,82 +295,41 @@ elif page == "Planning & Saisie":
                             #save_all_to_sheet(st.session_state.data, st.session_state.config)
                             st.rerun()
    
-    # --- GRILLE DE SAISIE INTERACTIVE (VERSION STABLE) ---
-    st.write("---")
-    st.subheader("📝 Grille de Saisie des Notes")
-
-    # 1. On récupère le filtre exact de ton code d'origine pour charger le planning du jour
-    if 'Note' in st.session_state.data.columns:
-        st.session_state.data['Note'] = pd.to_numeric(st.session_state.data['Note'].astype(str).str.replace(',', '.'), errors='coerce')
+    st.subheader("🗓️ Grille de Suivi & Saisie (Journée)")
     
-    # Masque d'origine basé sur la date du jour et le dossier choisi
-    mask = (st.session_state.data['Date'].astype(str) == str(dt.date.today())) & (st.session_state.data['Dossier'] == choix_dos)
-    
-    # Extraction des données filtrées
-    df_saisie = st.session_state.data[mask].copy()
-
-    if not df_saisie.empty:
-        st.info("💡 Double-cliquez sur une case, tapez vos notes séparées par un espace, puis appuyez sur TAB pour vous déplacer.")
+    # AJOUTE JUSTE CETTE LIGNE ICI :
+    st.session_state.data['Note'] = pd.to_numeric(st.session_state.data['Note'].astype(str).str.replace(',', '.'), errors='coerce')
+    mask = (st.session_state.data['Date'] == str(dt.date.today())) & (st.session_state.data['Dossier'] == choix_dos)
+    for idx, row in st.session_state.data[mask].iterrows():
+        cols = st.columns([0.4, 0.15, 0.35, 0.1])
+        cols[0].write(f"{row['Chapitre']} ({row['J_Type']})")
+       
+        is_done = cols[1].checkbox("Fait", value=(row['Statut'] == 'Fait'), key=f"grid_chk_{row['ID']}")
+        if is_done != (row['Statut'] == 'Fait'):
+            st.session_state.data.loc[st.session_state.data['ID'] == row['ID'], 'Statut'] = 'Fait' if is_done else 'À faire'
+            #save_all_to_sheet(st.session_state.data, st.session_state.config)
+            st.rerun()
+           
+        note_in = cols[2].text_input("", value=str(row['Note']), key=f"grid_note_{row['ID']}", label_visibility="collapsed")
+       
+        # Ton bloc actuel de calcul avec le bouton "∑"
+        if cols[3].button("∑", key=f"grid_calc_{row['ID']}"):
+            try:
+                # 1. On nettoie la saisie brute
+                raw = note_in.replace(',', '.').replace(';', ' ')
+                nums = [float(n) for n in raw.split() if n.strip()]
+                
+                # 2. Si on a des nombres, on calcule
+                if nums:
+                    moyenne = round(sum(nums) / len(nums), 2)
+                    st.session_state.data.loc[st.session_state.data['ID'] == row['ID'], 'Note'] = moyenne
+                    # On force le rafraîchissement ici pour que Streamlit affiche la nouvelle valeur immédiatement
+                    st.rerun() 
+            except Exception as e:
+                # Si ça plante, on affiche l'erreur pour comprendre pourquoi
+                cols[3].error(f"Erreur : {e}")
         
-        # Sécurisation mineure pour éviter le KeyError sur le Statut et la Note sans écraser le reste
-        if 'Statut' not in df_saisie.columns:
-            df_saisie['Statut'] = 'À faire'
-        else:
-            df_saisie['Statut'] = df_saisie['Statut'].fillna('À faire').astype(str)
-            
-        df_saisie['Note'] = df_saisie['Note'].fillna('').astype(str)
-
-        # 2. Configuration de la grille (Chapitre, Échéance, Statut, Note)
-        config_colonnes = {
-            "Chapitre_Complet": st.column_config.TextColumn("📚 Chapitre", disabled=True), 
-            "Type": st.column_config.TextColumn("⏳ Échéance (J)", disabled=True),
-            "Statut": st.column_config.SelectboxColumn("🔄 Statut", options=["À faire", "Fait"], required=True),
-            "Note": st.column_config.TextColumn("✍️ Saisie Notes (Ex: 12 14.5 11)")
-        }
-
-        # 3. Affichage du tableau interactif
-        edited_df = st.data_editor(
-            df_saisie[['Chapitre_Complet', 'Type', 'Statut', 'Note']],
-            column_config=config_colonnes,
-            use_container_width=True,
-            hide_index=True,
-            key="grille_saisie_clavier_fluide"
-        )
-
-        # 4. Le bouton d'enregistrement et de calcul des moyennes
-        st.write("")
-        if st.button("💾 Enregistrer et Calculer les Moyennes", use_container_width=True, type="primary"):
-            if edited_df is not None:
-                try:
-                    for idx_edit, row in edited_df.iterrows():
-                        real_idx = df_saisie.index[idx_edit]
-                        
-                        # Mise à jour du Statut (Fait / À faire)
-                        st.session_state.data.at[real_idx, 'Statut'] = row['Statut']
-                        
-                        # Calcul de la moyenne
-                        chaine_notes = str(row['Note']).strip()
-                        if chaine_notes and chaine_notes != "nan" and chaine_notes != "":
-                            # Si plusieurs notes (ex: "12 14 11")
-                            if not chaine_notes.replace('.', '', 1).isdigit():
-                                try:
-                                    liste_chiffres = [float(x) for x in chaine_notes.split() if x.replace('.', '', 1).isdigit()]
-                                    if liste_chiffres:
-                                        st.session_state.data.at[real_idx, 'Note'] = round(sum(liste_chiffres) / len(liste_chiffres), 1)
-                                except:
-                                    pass
-                            # Si note unique
-                            elif chaine_notes.replace('.', '', 1).isdigit():
-                                st.session_state.data.at[real_idx, 'Note'] = float(chaine_notes)
-                    
-                    # Envoi vers ton Google Sheets
-                    save_all_to_sheet(st.session_state.data, st.session_state.config)
-                    st.success("Données enregistrées et moyennes calculées ! 🎉")
-                    st.rerun()
-                except Exception as e:
-                    st.error(f"Erreur d'enregistrement : {e}")
-    else:
-        st.info("Aucune donnée à saisir pour aujourd'hui.")
+       
 
 elif page == "Graphiques":
     st.title("📊 Analyse Graphique de tes Notes")
