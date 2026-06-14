@@ -252,7 +252,44 @@ if page == "Dashboard":
                 if place_trouvee: 
                     st.rerun()
                 else: 
-                    st.error("❌ Aucune place disponible pour réintégrer.")
+                    # On active le mode "échec" pour afficher le menu de secours
+                    st.session_state[f"erreur_place_{row['ID']}"] = True
+
+            # --- ZONE DE SECOURS (Alignée avec le "if c2.button") ---
+            if st.session_state.get(f"erreur_place_{row['ID']}", False):
+                st.error("❌ Aucune place trouvée automatiquement avec les règles actuelles.")
+                
+                # Case à cocher pour décider de forcer
+                forcer_choix = st.checkbox("🙋‍♂️ Voulez-vous forcer une date manuellement ?", key=f"chk_forcer_{row['ID']}")
+                
+                if forcer_choix:
+                    date_forcee = st.date_input(
+                        "Sélectionne la date de repli :", 
+                        value=dt.date.today(), 
+                        key=f"input_date_forcee_{row['ID']}"
+                    )
+                    
+                    c_valider, c_annuler = st.columns(2)
+                    
+                    if c_valider.button("✅ Confirmer le forçage", key=f"btn_valider_force_{row['ID']}"):
+                        new_row = row.copy()
+                        new_row['ID'] = str(uuid.uuid4())
+                        new_row['J_Type'] = f"{row['J_Type'].replace('R','')}R"
+                        new_row['Date'] = str(date_forcee)
+                        new_row['Note'] = 0
+                        new_row['Statut'] = 'À faire'
+                        
+                        st.session_state.data = pd.concat([st.session_state.data, pd.DataFrame([new_row])], ignore_index=True)
+                        st.session_state.data.loc[st.session_state.data['ID'] == row['ID'], 'Statut'] = 'Traité'
+                        
+                        del st.session_state[f"erreur_place_{row['ID']}"]
+                        st.rerun()
+                        
+                    if c_annuler.button("Abandonner", key=f"btn_annuler_force_{row['ID']}"):
+                        del st.session_state[f"erreur_place_{row['ID']}"]
+                        st.rerun()
+
+            # --- LA POUBELLE (Toujours alignée avec le "if c2.button") ---
             if c3.button("🗑️ Supprimer", key=f"trash_{row['ID']}"):
                 st.session_state.data.loc[st.session_state.data['ID'] == row['ID'], 'Statut'] = 'Traité'
                 st.rerun()
