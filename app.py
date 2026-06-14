@@ -206,21 +206,53 @@ if page == "Dashboard":
             if c2.button("Réintégrer", key=f"btn_{row['ID']}"):
                 date_debut = dt.datetime.strptime(row['Date'], '%Y-%m-%d')
                 all_dates = sorted(st.session_state.data[(st.session_state.data['Chapitre'] == row['Chapitre']) & (st.session_state.data['Dossier'] == choix_dos)]['Date'].unique())
-                next_date_str = all_dates[all_dates.index(row['Date']) + 1] if (all_dates.index(row['Date']) + 1) < len(all_dates) else (date_debut + dt.timedelta(days=365)).strftime('%Y-%m-%d')
-                date_limite = dt.datetime.strptime(next_date_str, '%Y-%m-%d')
+                
+                # Trouver la date du J suivant dans le planning de ce chapitre
+                if (all_dates.index(row['Date']) + 1) < len(all_dates):
+                    next_date_str = all_dates[all_dates.index(row['Date']) + 1]
+                    # RÈGLE : Borne stricte à l'avant-veille (J-2) du cours suivant
+                    date_limite = dt.datetime.strptime(next_date_str, '%Y-%m-%d') - dt.timedelta(days=2)
+                else:
+                    date_limite = date_debut + dt.timedelta(days=365)
+                
                 place_trouvee = False
+                cours_max = int(st.session_state.config.get('cours_max', 5))
+                
                 for delta in range(1, 60):
-                    test_date = (date_debut + dt.timedelta(days=delta)).strftime('%Y-%m-%d')
-                    if dt.datetime.strptime(test_date, '%Y-%m-%d') >= date_limite: break
+                    test_date_dt = date_debut + dt.timedelta(days=delta)
+                    test_date = test_date_dt.strftime('%Y-%m-%d')
+                    
+                    # Arrêt si on dépasse l'avant-veille du J suivant
+                    if test_date_dt > date_limite: 
+                        break
+                        
+                    # CONDITION : Exclusion stricte du dimanche (6 = dimanche)
+                    if test_date_dt.weekday() == 6:
+                        continue
+                        
+                    # CONDITION : Vérification du quota max de cours (dynamique selon les réglages)
+                    cours_ce_jour = len(st.session_state.data[(st.session_state.data['Date'] == test_date) & (st.session_state.data['Dossier'] == choix_dos)])
+                    if cours_ce_jour >= cours_max:
+                        continue
+                    
+                    # Vérification d'origine : que le chapitre ne soit pas déjà là ce jour-là
                     if test_date not in st.session_state.data[(st.session_state.data['Chapitre'] == row['Chapitre']) & (st.session_state.data['Dossier'] == choix_dos)]['Date'].values:
                         new_row = row.copy()
-                        new_row['ID'], new_row['J_Type'], new_row['Date'] = str(uuid.uuid4()), f"{row['J_Type'].replace('R','')}R", test_date
-                        new_row['Note'], new_row['Statut'] = 0, 'À faire'
+                        new_row['ID'] = str(uuid.uuid4())
+                        new_row['J_Type'] = f"{row['J_Type'].replace('R','')}R"
+                        new_row['Date'] = test_date
+                        new_row['Note'] = 0
+                        new_row['Statut'] = 'À faire'
+                        
                         st.session_state.data = pd.concat([st.session_state.data, pd.DataFrame([new_row])], ignore_index=True)
                         st.session_state.data.loc[st.session_state.data['ID'] == row['ID'], 'Statut'] = 'Traité'
-                        place_trouvee = True; break
-                if place_trouvee: st.rerun()
-                else: st.error("❌ Aucune place disponible pour réintégrer.")
+                        place_trouvee = True
+                        break
+                        
+                if place_trouvee: 
+                    st.rerun()
+                else: 
+                    st.error("❌ Aucune place disponible pour réintégrer.")
             if c3.button("🗑️ Supprimer", key=f"trash_{row['ID']}"):
                 st.session_state.data.loc[st.session_state.data['ID'] == row['ID'], 'Statut'] = 'Traité'
                 st.rerun()
