@@ -89,11 +89,6 @@ def reset_matiere():
 
 st.sidebar.title("⚙️ Pilot Expert")
 
-# BOUTON PRIORITAIRE : Il est en haut de tout, impossible à manquer
-if st.sidebar.button("💾 SAUVEGARDER TOUT"):
-    save_all_to_sheet(st.session_state.data, st.session_state.config)
-    st.sidebar.success("Enregistré !")
-
 # Ensuite, tes réglages en dessous
 with st.sidebar.expander("🛠️ Réglages", expanded=False):
     st.session_state.config['cours_max'] = st.number_input("Max cours/jour", 1, 20, int(st.session_state.config.get('cours_max', 5)))
