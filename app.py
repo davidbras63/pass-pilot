@@ -335,40 +335,31 @@ elif page == "Planning & Saisie":
         if st.button("💾 Enregistrer et Calculer les Moyennes", use_container_width=True, type="primary"):
             if edited_df is not None:
                 try:
-                    # Parcours sécurisé par les vrais index
-                    for real_idx, row in edited_df.iterrows():
+                    # On parcourt chaque ligne du tableau édité
+                    for _, row in edited_df.iterrows():
+                        # On récupère l'ID réel de la ligne originale pour être sûr de la cible
+                        # (On le cherche dans le df_saisie original)
+                        row_id = df_saisie.loc[df_saisie.index[df_saisie['Chapitre'] == row['Chapitre']], 'ID'].values[0]
                         
-                        # 1. Mise à jour du Statut (Fait / À faire)
-                        st.session_state.data.at[real_idx, 'Statut'] = row['Statut']
+                        # 1. Mise à jour du Statut
+                        st.session_state.data.loc[st.session_state.data['ID'] == row_id, 'Statut'] = row['Statut']
                         
-                        # 2. Extraction et calcul de la moyenne (Nettoyage à 0.0 et non plus 20)
+                        # 2. Calcul sécurisé de la moyenne via l'ID
                         raw_notes = str(row['Note']).strip().replace(',', '.')
                         if raw_notes and raw_notes != "nan" and raw_notes != "":
                             try:
                                 list_nums = [float(n) for n in raw_notes.split() if n.replace('.', '', 1).isdigit()]
-                                if list_nums:
-                                    moyenne = round(sum(list_nums) / len(list_nums), 2)
-                                    # ON UTILISE L'INDEX UNIQUE DE LA LIGNE POUR NE PAS MÉLANGER
-                                    st.session_state.data.at[real_idx, 'Note'] = moyenne
-                                else:
-                                    st.session_state.data.at[real_idx, 'Note'] = 0.0
+                                moyenne = round(sum(list_nums) / len(list_nums), 2) if list_nums else 0.0
+                                st.session_state.data.loc[st.session_state.data['ID'] == row_id, 'Note'] = moyenne
                             except:
-                                st.session_state.data.at[real_idx, 'Note'] = 0.0
+                                st.session_state.data.loc[st.session_state.data['ID'] == row_id, 'Note'] = 0.0
                         else:
-                            st.session_state.data.at[real_idx, 'Note'] = 0.0
+                            st.session_state.data.loc[st.session_state.data['ID'] == row_id, 'Note'] = 0.0
 
-                    # Sauvegarde globale
                     save_all_to_sheet(st.session_state.data, st.session_state.config)
-                    
-                    # 1. On affiche le message vert
-                    st.success("Toutes les moyennes ont été calculées et sauvegardées ! 🎉")
-                    
-                    # 2. On attend 3 petite seconde pour que tu puisses lire le message
-                    time.sleep(3)
-                    
-                    # 3. On relance pour rafraîchir les moyennes partout sur l'écran
+                    st.success("Moyennes calculées et sauvegardées par ID ! 🎉")
+                    time.sleep(2)
                     st.rerun()
-
                 except Exception as e:
                     st.error(f"Erreur d'enregistrement : {e}")   
        
