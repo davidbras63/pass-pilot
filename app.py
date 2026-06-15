@@ -430,56 +430,64 @@ elif page == "Planning & Saisie":
 
 elif page == "Graphiques":
     st.title("📊 Analyse Graphique de tes Notes")
-    
+   
     if "data" in st.session_state and not st.session_state.data.empty:
-        df_graphes = st.session_state.data[st.session_state.data['Dossier'] == choix_dos].copy()
+        # --- SÉCURITÉ ET NETTOYAGE DES DONNÉES POUR LE GRAPHIQUE ---
+        # 1. On ne prend que le dossier en cours
+        df_brut = st.session_state.data[st.session_state.data['Dossier'] == choix_dos].copy()
         
-        # Détection automatique de la colonne Matière
+        # 2. On convertit proprement la colonne Note en nombre (gestion des virgules)
+        df_brut['Note_Num'] = pd.to_numeric(df_brut['Note'].astype(str).str.replace(',', '.'), errors='coerce')
+        
+        # 3. FILTRE CRITIQUE : On ignore les cases vides (NaN) ET les zéros par défaut (cours non faits).
+        # On ne garde QUE les lignes où elle a réellement bossé et validé une note.
+        df_graphes = df_brut[(df_brut['Note_Num'].notna()) & (df_brut['Note_Num'] > 0)].copy()
+       
+        # Détection automatique de la colonne Matière (sécurité orthographe)
         liste_matieres = sorted(df_graphes['Matière'].unique()) if 'Matière' in df_graphes.columns else []
         if not liste_matieres and 'Matiere' in df_graphes.columns:
             liste_matieres = sorted(df_graphes['Matiere'].unique())
-            
+           
         if liste_matieres:
-            # Menu déroulant pour verrouiller une seule matière
+            # Menu déroulant pour choisir la matière
             sel_mat_graph = st.selectbox("📚 Choisis la matière à analyser :", options=liste_matieres)
-            
-            # Filtrage étanche sur la matière choisie
+           
             col_mat = 'Matière' if 'Matière' in df_graphes.columns else 'Matiere'
             df_mat_graph = df_graphes[df_graphes[col_mat] == sel_mat_graph].copy()
-            
-            # Nettoyage local des notes (virgules en points)
-            df_mat_graph['Note_Num'] = pd.to_numeric(df_mat_graph['Note'].astype(str).str.replace(',', '.'), errors='coerce')
-            df_mat_graph = df_mat_graph.dropna(subset=['Note_Num'])
-            
+           
             if not df_mat_graph.empty:
                 # --- 1. GRAPHIQUE MOYENNE GÉNÉRALE DE LA MATIÈRE ---
-                st.subheader(f"📈 Évolution de la moyenne ({sel_mat_graph})")
+                st.subheader(f"📈 Évolution de la moyenne réelle ({sel_mat_graph})")
+                
+                # Tri intelligent des J (J3, J7, J14...) pour que la courbe soit dans le bon ordre chronologique
                 df_mat_graph['Sort_Val'] = df_mat_graph['J_Type'].astype(str).str.extract('(\d+)').fillna(0).astype(float)
                 df_mat_graph.loc[df_mat_graph['J_Type'].astype(str).str.contains('R', case=False, na=False), 'Sort_Val'] += 0.5
-                
+               
                 df_moy_regroupee = df_mat_graph.groupby(['J_Type', 'Sort_Val'])['Note_Num'].mean().reset_index()
                 df_moy_regroupee = df_moy_regroupee.sort_values('Sort_Val')
-                
+               
+                # IMPORTANT : Comme df_graphes n'a plus les lignes à "0" des jours futurs, 
+                # le graphique Altair va s'arrêter net au dernier J saisi (ex: J3 ou J7) !
                 chart_moyenne = alt.Chart(df_moy_regroupee).mark_line(point=True, color='blue').encode(
-                    x=alt.X('J_Type', sort=alt.EncodingSortField(field='Sort_Val', order='ascending'), title='Échéance'),
-                    y=alt.Y('Note_Num', scale=alt.Scale(domain=[0, 20]), title='Note Moyenne')
+                    x=alt.X('J_Type', sort=alt.EncodingSortField(field='Sort_Val', order='ascending'), title='Échéance (Arrêt au dernier J complété)'),
+                    y=alt.Y('Note_Num', scale=alt.Scale(domain=[0, 20]), title='Note Moyenne Réelle')
                 ).properties(height=220)
                 st.altair_chart(chart_moyenne, use_container_width=True)
-                
+               
                 st.write("---")
-                
-                # --- 2. GRAPHES CÔTE À CÔTE FILTRÉS SUR LES THÈMES DE CETTE MATIÈRE ---
+               
+                # --- 2. GRAPHES CÔTE À CÔTE PAR THÈMES (JUSQU'À 3) ---
                 st.subheader("📋 Comparaison individuelle des grands thèmes")
                 df_mat_graph['Theme'] = df_mat_graph['Chapitre'].astype(str).str.replace(r'^\d+[\s-]*', '', regex=True).str.strip()
                 liste_themes = sorted(df_mat_graph['Theme'].unique())
-                
+               
                 themes_selectionnes = st.multiselect(
-                    f"Sélectionne jusqu'à 3 thèmes de {sel_mat_graph} :", 
-                    options=liste_themes, 
-                    default=[liste_themes[0]] if liste_themes else None, 
+                    f"Sélectionne jusqu'à 3 thèmes de {sel_mat_graph} :",
+                    options=liste_themes,
+                    default=[liste_themes[0]] if liste_themes else None,
                     max_selections=3
                 )
-                
+               
                 if themes_selectionnes:
                     cols = st.columns(len(themes_selectionnes))
                     for i, nom_theme in enumerate(themes_selectionnes):
@@ -489,18 +497,19 @@ elif page == "Graphiques":
                             if not df_un_theme.empty:
                                 df_theme_regroupe = df_un_theme.groupby(['J_Type', 'Sort_Val'])['Note_Num'].mean().reset_index()
                                 df_theme_regroupe = df_theme_regroupe.sort_values('Sort_Val')
+                                
                                 chart_chapitre = alt.Chart(df_theme_regroupe).mark_line(point=True, color='orange').encode(
                                     x=alt.X('J_Type', sort=alt.EncodingSortField(field='Sort_Val', order='ascending'), title='Échéance'),
                                     y=alt.Y('Note_Num', scale=alt.Scale(domain=[0, 20]), title='Note Moyenne')
-                                ).properties(height=180, title="Progression globale")
+                                ).properties(height=180, title="Progression réelle")
                                 st.altair_chart(chart_chapitre, use_container_width=True)
                             else:
-                                st.caption("Aucune note.")
+                                st.caption("Aucune note saisie pour ce thème.")
                 else:
-                    st.info("Sélectionne au moins un thème.")
+                    st.info("Sélectionne au moins un thème pour afficher les mini-graphes.")
             else:
-                st.info(f"Aucune note numérique valide pour {sel_mat_graph}.")
+                st.info(f"Aucune note supérieure à 0 enregistrée pour {sel_mat_graph}.")
         else:
-            st.info("Aucune matière trouvée dans le fichier.")
+            st.info("Aucune matière avec des notes valides trouvée pour le moment.")
     else:
         st.info("Pas de données disponibles.")
